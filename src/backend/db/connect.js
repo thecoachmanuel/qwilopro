@@ -13,15 +13,14 @@ const connectDB = async () => {
   try {
     const conn = await mongoose.connect(uri, {
       bufferCommands: false,
-      serverSelectionTimeoutMS: 3000,
-      connectTimeoutMS: 3000,
+      serverSelectionTimeoutMS: 15000,
+      connectTimeoutMS: 15000,
     });
     isConnected = true;
     console.log(`✅ MongoDB Connected: ${conn.connection.host}/${conn.connection.name}`);
     return conn.connection;
   } catch (error) {
     console.error("❌ MongoDB Connection Error:", error.message);
-    // Don't kill process immediately so server can start and display diagnostic logs
     return null;
   }
 };
