@@ -40,13 +40,12 @@ export default function SettingDetailsPage() {
   const isFeedbackEnabledRef = useRef();
   const { theme } = useTheme();
   const user = getUserDetailsInLocalStorage();
-  const { planFeautures } = user;
-  const userPlanFeatures = Array.isArray(planFeautures)
-    ? planFeautures
-    : planFeautures?.split(",") || [];
+  const rawFeatures = user?.planFeatures || user?.planFeautures || user?.plan_features || user?.features;
+  const userPlanFeatures = Array.isArray(rawFeatures)
+    ? rawFeatures.map(f => String(f).toUpperCase())
+    : (typeof rawFeatures === 'string' ? rawFeatures.split(",").map(f => f.trim().toUpperCase()) : []);
 
-  const isQrMenuAccess = userPlanFeatures?.includes(PLAN_FEATURES?.QRMENU);
-  console.log(isQrMenuAccess);
+  const isQrMenuAccess = userPlanFeatures.includes(PLAN_FEATURES?.QRMENU || 'QRMENU');
 
   const { APIURL, data, error, isLoading } = useStoreSettings();
 
@@ -73,7 +72,7 @@ export default function SettingDetailsPage() {
     isQROrderEnabled,
     isFeedbackEnabled,
     uniqueId,
-  } = data;
+  } = data || {};
 
   const QR_MENU_LINK = getQRMenuLink(uniqueQRCode);
 
@@ -118,14 +117,21 @@ export default function SettingDetailsPage() {
 
   const btnDownloadMenuQR = async () => {
     try {
-      const qrDataURL = await QRCode.toDataURL(QR_MENU_LINK, { width: 1080 });
+      if (!uniqueQRCode) {
+        toast.error("QR code not configured. Please save your store settings first.");
+        return;
+      }
+      const qrDataURL = await QRCode.toDataURL(QR_MENU_LINK, { width: 1080, margin: 2 });
       const link = document.createElement("a");
-      link.download = "qr.png";
+      const safeName = (storeName || 'qr').replace(/[^a-z0-9]/gi, '_').toLowerCase();
+      link.download = `${safeName}-menu-qr.png`;
       link.href = qrDataURL;
       link.click();
       link.remove();
+      toast.success("QR code downloaded!");
     } catch (error) {
       console.error(error);
+      toast.error("Failed to generate QR code.");
     }
   };
 

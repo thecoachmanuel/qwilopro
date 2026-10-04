@@ -1,6 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
+import AppErrorBoundary from '../../components/AppErrorBoundary';
 
 const App = dynamic(() => import('../../App'), {
   ssr: false,
@@ -15,5 +16,9 @@ const App = dynamic(() => import('../../App'), {
 });
 
 export default function CatchAllPage() {
-  return <App />;
+  return (
+    <AppErrorBoundary>
+      <App />
+    </AppErrorBoundary>
+  );
 }
