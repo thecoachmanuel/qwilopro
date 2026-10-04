@@ -1,16 +1,28 @@
 import ApiClient from "../helpers/ApiClient";
 import useSWR from "swr";
+import { getUserDetailsInLocalStorage } from "../helpers/UserDetails";
 
 const fetcher = (url) => ApiClient.get(url).then((res) => res.data);
 
+// Returns the current tenant's ID to namespace all SWR cache keys.
+// This prevents cross-tenant data bleed when multiple tenants use the same browser.
+function useTenantId() {
+  const user = getUserDetailsInLocalStorage();
+  return user?.tenant_id ?? "guest";
+}
+
 export function useStoreSettings() {
+  const tenantId = useTenantId();
+  // Key includes tenantId → each tenant has an isolated SWR cache bucket
   const APIURL = `/settings/store-setting`;
-  const { data, error, isLoading } = useSWR(APIURL, fetcher);
+  const cacheKey = `${APIURL}?t=${tenantId}`;
+  const { data, error, isLoading, mutate } = useSWR(cacheKey, () => fetcher(APIURL));
   return {
     data,
     error,
     isLoading,
-    APIURL,
+    mutate,
+    APIURL: cacheKey, // used by callers to invalidate via mutate(APIURL)
   };
 }
 
@@ -68,13 +80,16 @@ export async function updateServiceCharge(serviceCharge) {
 };
 
 export function usePrintSettings() {
+  const tenantId = useTenantId();
   const APIURL = `/settings/print-setting`;
-  const { data, error, isLoading } = useSWR(APIURL, fetcher);
+  const cacheKey = `${APIURL}?t=${tenantId}`;
+  const { data, error, isLoading, mutate } = useSWR(cacheKey, () => fetcher(APIURL));
   return {
     data,
     error,
     isLoading,
-    APIURL,
+    mutate,
+    APIURL: cacheKey,
   };
 }
 
@@ -90,13 +105,16 @@ export async function savePrintSettings(pageFormat, header, footer, showNotes, i
 }
 
 export function usePaymentTypes() {
+  const tenantId = useTenantId();
   const APIURL = `/settings/payment-types`;
-  const { data, error, isLoading } = useSWR(APIURL, fetcher);
+  const cacheKey = `${APIURL}?t=${tenantId}`;
+  const { data, error, isLoading, mutate } = useSWR(cacheKey, () => fetcher(APIURL));
   return {
     data,
     error,
     isLoading,
-    APIURL,
+    mutate,
+    APIURL: cacheKey,
   };
 }
 
@@ -148,13 +166,16 @@ export async function updatePaymentType(id, title, isActive, icon) {
 
 
 export function useTaxes() {
+  const tenantId = useTenantId();
   const APIURL = `/settings/taxes`;
-  const { data, error, isLoading } = useSWR(APIURL, fetcher);
+  const cacheKey = `${APIURL}?t=${tenantId}`;
+  const { data, error, isLoading, mutate } = useSWR(cacheKey, () => fetcher(APIURL));
   return {
     data,
     error,
     isLoading,
-    APIURL,
+    mutate,
+    APIURL: cacheKey,
   };
 }
 
@@ -192,13 +213,16 @@ export async function updateTax(id, title, rate, type) {
 };
 
 export function useStoreTables() {
+  const tenantId = useTenantId();
   const APIURL = `/settings/store-tables`;
-  const { data, error, isLoading } = useSWR(APIURL, fetcher);
+  const cacheKey = `${APIURL}?t=${tenantId}`;
+  const { data, error, isLoading, mutate } = useSWR(cacheKey, () => fetcher(APIURL));
   return {
     data,
     error,
     isLoading,
-    APIURL,
+    mutate,
+    APIURL: cacheKey,
   };
 }
 
@@ -234,13 +258,16 @@ export async function updateStoreTable(id, title, floor, seatingCapacity) {
 };
 
 export function useCategories() {
+  const tenantId = useTenantId();
   const APIURL = `/settings/categories`;
-  const { data, error, isLoading } = useSWR(APIURL, fetcher);
+  const cacheKey = `${APIURL}?t=${tenantId}`;
+  const { data, error, isLoading, mutate } = useSWR(cacheKey, () => fetcher(APIURL));
   return {
     data,
     error,
     isLoading,
-    APIURL,
+    mutate,
+    APIURL: cacheKey,
   };
 }
 
@@ -287,13 +314,16 @@ export async function changeCategoryVisibilty(id, isEnabled) {
 };
 
 export function useDevices() {
+  const tenantId = useTenantId();
   const APIURL = `/auth/devices`;
-  const { data, error, isLoading } = useSWR(APIURL, fetcher);
+  const cacheKey = `${APIURL}?t=${tenantId}`;
+  const { data, error, isLoading, mutate } = useSWR(cacheKey, () => fetcher(APIURL));
   return {
     data,
     error,
     isLoading,
-    APIURL,
+    mutate,
+    APIURL: cacheKey,
   };
 }
 
@@ -307,3 +337,6 @@ export async function removeDevice(deviceId) {
     throw error;
   }
 };
+
+
+
