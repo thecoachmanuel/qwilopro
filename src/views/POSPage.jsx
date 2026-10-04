@@ -54,8 +54,6 @@ export default function POSPage() {
   const searchCustomerRef = useRef(null);
   // dialog: search customer
 
-  const tapSound = new Audio("/tap.mp3");
-
   const [state, setState] = useState({
     view:"detailed",
     categories: [],
@@ -136,17 +134,21 @@ export default function POSPage() {
   const { categories, menuItems, paymentTypes, printSettings, storeSettings, storeTables, currency, cartItems, searchQuery, selectedCategory, selectedItemId, drafts, customer, customerType, isLoading } = state;
 
   const sendNewOrderEvent = (tokenNo, orderId) => {
-    if (isSocketConnected) {
-      socket.emit('new_order_backend', {tokenNo, orderId}, user.tenant_id);
+    const tenantId = user?.tenant_id;
+    if (!tenantId) return;
+    if (isSocketConnected && socket?.emit) {
+      socket.emit('new_order_backend', {tokenNo, orderId}, tenantId);
     } else {
-      // Handle disconnected state (optional)
       initSocket();
-      socket.emit('new_order_backend', {tokenNo, orderId}, user.tenant_id);
+      socket?.emit?.('new_order_backend', {tokenNo, orderId}, tenantId);
     }
   }
 
   const playTapSound = () => {
-    tapSound.play();
+    try {
+      const sound = new Audio("/tap.mp3");
+      sound.play().catch(() => {});
+    } catch {}
   }
 
   const _loadCachedPOSData = (data) => {
@@ -239,35 +241,37 @@ export default function POSPage() {
     }
   }
   const _initSocket = () => {
-    if(isSocketConnected) {
-      socket.emit("authenticate", user.tenant_id);
-      socket.on('new_qrorder', async (payload)=>{
+    const tenantId = user?.tenant_id;
+    if (!tenantId || !socket) return;
+    if (isSocketConnected) {
+      socket.emit("authenticate", tenantId);
+      socket.on('new_qrorder', async (payload) => {
         try {
           const totalQROrders = await _getQROrdersCount();
 
-          setState((prevState)=>({
+          setState((prevState) => ({
             ...prevState,
             qrOrdersCount: totalQROrders || 0
-          }))
+          }));
         } catch (error) {
           console.log(error);
         }
-      })
+      });
     } else {
       initSocket();
-      socket.emit("authenticate", user.tenant_id);
-      socket.on('new_qrorder', async (payload)=>{
+      socket?.emit?.("authenticate", tenantId);
+      socket?.on?.('new_qrorder', async (payload) => {
         try {
           const totalQROrders = await _getQROrdersCount();
 
-          setState((prevState)=>({
+          setState((prevState) => ({
             ...prevState,
             qrOrdersCount: totalQROrders || 0
-          }))
+          }));
         } catch (error) {
           console.log(error);
         }
-      })
+      });
     }
   }
 
@@ -283,9 +287,10 @@ export default function POSPage() {
 
   // cart
   function canPrepareMenuItem(menuItem, quantity = 1, selectedVariantId = null, selectedAddonIds = []) {
+    if (!menuItem) return true;
     const usageMap = {};
 
-    menuItem.recipeItems.forEach((recipe) => {
+    (menuItem.recipeItems || []).forEach((recipe) => {
       const appliesToBase = recipe.variant_id === 0 && recipe.addon_id === 0;
       const appliesToVariant = recipe.variant_id > 0 && recipe.variant_id == selectedVariantId;
       const appliesToAddon = recipe.addon_id > 0 && selectedAddonIds.includes(recipe.addon_id.toString());

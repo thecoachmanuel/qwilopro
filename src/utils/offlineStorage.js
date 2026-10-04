@@ -12,6 +12,27 @@ const ORDERS_CACHE_KEY = "RESTROPROSAAS__ORDERS_CACHE";
 const OFFLINE_ORDERS_QUEUE_KEY = "RESTROPROSAAS__OFFLINE_ORDERS_QUEUE";
 const OFFLINE_TOKEN_COUNTER_KEY = "RESTROPROSAAS__OFFLINE_TOKEN_COUNTER";
 
+function getTenantSuffix() {
+  const user = getUserDetailsInLocalStorage();
+  return user?.tenant_id ? `_t${user.tenant_id}` : "";
+}
+
+function getPosCacheKey() {
+  return POS_CACHE_KEY + getTenantSuffix();
+}
+
+function getOrdersCacheKey() {
+  return ORDERS_CACHE_KEY + getTenantSuffix();
+}
+
+function getOfflineQueueKey() {
+  return OFFLINE_ORDERS_QUEUE_KEY + getTenantSuffix();
+}
+
+function getTokenCounterKey() {
+  return OFFLINE_TOKEN_COUNTER_KEY + getTenantSuffix();
+}
+
 // Anti-tamper: Maximum 7 days offline lease allowed before requiring online server check
 const MAX_OFFLINE_LEASE_DAYS = 7;
 
@@ -116,7 +137,7 @@ export function savePOSSnapshot(data) {
       ...data,
       cachedAt: new Date().toISOString(),
     };
-    localStorage.setItem(POS_CACHE_KEY, JSON.stringify(payload));
+    localStorage.setItem(getPosCacheKey(), JSON.stringify(payload));
   } catch (err) {
     console.warn("Failed to cache POS snapshot:", err);
   }
@@ -128,7 +149,7 @@ export function savePOSSnapshot(data) {
 export function getPOSSnapshot() {
   if (typeof localStorage === "undefined") return null;
   try {
-    const raw = localStorage.getItem(POS_CACHE_KEY);
+    const raw = localStorage.getItem(getPosCacheKey()) || localStorage.getItem(POS_CACHE_KEY);
     return raw ? JSON.parse(raw) : null;
   } catch (err) {
     console.warn("Failed to parse cached POS snapshot:", err);
@@ -147,7 +168,7 @@ export function saveOrdersSnapshot(orders, ordersInit) {
       ordersInit: ordersInit || {},
       cachedAt: new Date().toISOString(),
     };
-    localStorage.setItem(ORDERS_CACHE_KEY, JSON.stringify(payload));
+    localStorage.setItem(getOrdersCacheKey(), JSON.stringify(payload));
   } catch (err) {
     console.warn("Failed to cache orders snapshot:", err);
   }
@@ -159,7 +180,7 @@ export function saveOrdersSnapshot(orders, ordersInit) {
 export function getOrdersSnapshot() {
   if (typeof localStorage === "undefined") return null;
   try {
-    const raw = localStorage.getItem(ORDERS_CACHE_KEY);
+    const raw = localStorage.getItem(getOrdersCacheKey()) || localStorage.getItem(ORDERS_CACHE_KEY);
     return raw ? JSON.parse(raw) : null;
   } catch (err) {
     console.warn("Failed to parse cached orders snapshot:", err);
@@ -173,7 +194,7 @@ export function getOrdersSnapshot() {
 export function getOfflineOrdersQueue() {
   if (typeof localStorage === "undefined") return [];
   try {
-    const raw = localStorage.getItem(OFFLINE_ORDERS_QUEUE_KEY);
+    const raw = localStorage.getItem(getOfflineQueueKey()) || localStorage.getItem(OFFLINE_ORDERS_QUEUE_KEY);
     return raw ? JSON.parse(raw) : [];
   } catch (err) {
     console.warn("Failed to read offline orders queue:", err);
@@ -194,10 +215,11 @@ export function getOfflineOrdersCount() {
 function getNextOfflineToken() {
   if (typeof localStorage === "undefined") return "OFF-001";
   try {
-    let current = parseInt(localStorage.getItem(OFFLINE_TOKEN_COUNTER_KEY) || "100", 10);
+    const key = getTokenCounterKey();
+    let current = parseInt(localStorage.getItem(key) || localStorage.getItem(OFFLINE_TOKEN_COUNTER_KEY) || "100", 10);
     if (isNaN(current) || current > 9999) current = 100;
     const next = current + 1;
-    localStorage.setItem(OFFLINE_TOKEN_COUNTER_KEY, String(next));
+    localStorage.setItem(key, String(next));
     return `OFF-${next}`;
   } catch {
     return `OFF-${Math.floor(100 + Math.random() * 900)}`;
@@ -234,7 +256,7 @@ export function saveOfflineOrder(orderData) {
 
   if (typeof localStorage !== "undefined") {
     try {
-      localStorage.setItem(OFFLINE_ORDERS_QUEUE_KEY, JSON.stringify(queue));
+      localStorage.setItem(getOfflineQueueKey(), JSON.stringify(queue));
     } catch (err) {
       console.error("Failed to save offline order to localStorage:", err);
     }
@@ -271,7 +293,7 @@ export function removeOfflineOrder(localOrderId) {
   const queue = getOfflineOrdersQueue().filter((o) => o.localOrderId !== localOrderId);
   if (typeof localStorage !== "undefined") {
     try {
-      localStorage.setItem(OFFLINE_ORDERS_QUEUE_KEY, JSON.stringify(queue));
+      localStorage.setItem(getOfflineQueueKey(), JSON.stringify(queue));
     } catch (err) {}
   }
   if (typeof window !== "undefined") {
@@ -289,6 +311,7 @@ export function removeOfflineOrder(localOrderId) {
  */
 export function clearOfflineOrdersQueue() {
   if (typeof localStorage !== "undefined") {
+    localStorage.removeItem(getOfflineQueueKey());
     localStorage.removeItem(OFFLINE_ORDERS_QUEUE_KEY);
   }
   if (typeof window !== "undefined") {

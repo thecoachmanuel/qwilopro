@@ -1,19 +1,28 @@
 import ApiClient from "../helpers/ApiClient";
 import useSWR from "swr";
 
+import { getUserDetailsInLocalStorage } from "../helpers/UserDetails";
+
 const fetcher = (url) => ApiClient.get(url).then((res) => res.data);
 
+function useTenantId() {
+  const user = getUserDetailsInLocalStorage();
+  return user?.tenant_id ?? "guest";
+}
 
 export function useUsers() {
-    const APIURL = `/users`;
-    const { data, error, isLoading } = useSWR(APIURL, fetcher);
-    return {
-      data,
-      error,
-      isLoading,
-      APIURL,
-    };
-  }
+  const tenantId = useTenantId();
+  const APIURL = `/users`;
+  const cacheKey = `${APIURL}?t=${tenantId}`;
+  const { data, error, isLoading, mutate } = useSWR(cacheKey, () => fetcher(APIURL));
+  return {
+    data,
+    error,
+    isLoading,
+    mutate,
+    APIURL: cacheKey,
+  };
+}
   
 
 export async function addNewUser(

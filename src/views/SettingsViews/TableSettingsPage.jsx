@@ -45,7 +45,7 @@ export default function TableSettingsPage() {
     return <Page className="px-8 py-6">{t('table_settings.please_wait')}</Page>;
   }
 
-  const { uniqueQRCode, isQRMenuEnabled } = storeSettings
+  const { uniqueQRCode, isQRMenuEnabled } = storeSettings || {};
 
   const btnDelete = async (id) => {
     const isConfirm = window.confirm(t('table_settings.are_you_sure'));

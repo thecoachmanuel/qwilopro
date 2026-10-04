@@ -105,6 +105,7 @@ exports.getUserDB = async (username, tenantId) => {
   user.plan_features = parsedFeatures;
   user.planFeatures = parsedFeatures;
   user.planFeautures = parsedFeatures;
+  user.features = parsedFeatures;
   return user;
 };
 

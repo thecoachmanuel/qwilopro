@@ -95,13 +95,13 @@ export default function OrdersPage() {
 
     return () => {
       // socket.disconnect()
-      socket.off('new_order')
-      socket.off('order_update')
+      socket?.off?.('new_order');
+      socket?.off?.('order_update');
       window.removeEventListener("restro_offline_orders_changed", handleQueueChange);
       window.removeEventListener("restro_offline_orders_synced", handleQueueChange);
       window.removeEventListener("online", handleQueueChange);
       window.removeEventListener("offline", handleQueueChange);
-    }
+    };
   }, []);
 
   const {
@@ -185,7 +185,7 @@ export default function OrdersPage() {
           kitchenOrders: [...offlineGroups, ...orders],
           printSettings: ordersInit.printSettings || {},
           storeSettings: ordersInit.storeSettings || {},
-          paymentTypes: ordersInit.paymentTypes || {},
+          paymentTypes: Array.isArray(ordersInit.paymentTypes) ? ordersInit.paymentTypes : [],
           currency: currency?.symbol || "₦",
           isLoading: false,
         });
@@ -202,7 +202,7 @@ export default function OrdersPage() {
         kitchenOrders: [...offlineGroups, ...(cached?.orders || [])],
         printSettings: cached?.ordersInit?.printSettings || {},
         storeSettings: cached?.ordersInit?.storeSettings || {},
-        paymentTypes: cached?.ordersInit?.paymentTypes || {},
+        paymentTypes: Array.isArray(cached?.ordersInit?.paymentTypes) ? cached.ordersInit.paymentTypes : [],
         currency: currency?.symbol || "₦",
         isLoading: false,
       });
@@ -249,46 +249,50 @@ export default function OrdersPage() {
   };
 
   const _initSocket = () => {
-    const audio = new Audio("/new_order_sound.mp3");
+    const tenantId = user?.tenant_id;
+    if (!tenantId || !socket) return;
+
+    const playNewOrderAudio = () => {
+      try {
+        const audio = new Audio("/new_order_sound.mp3");
+        audio.play().catch(() => {});
+      } catch {}
+    };
+
     if (isSocketConnected) {
-      socket.emit("authenticate", user.tenant_id);
+      socket.emit("authenticate", tenantId);
       socket.on("new_order", (payload) => {
-        console.log(payload);
-        // textToSpeech(`New order received, token number: ${payload}`)
-        audio.play();
+        playNewOrderAudio();
         refreshOrders();
       });
 
       socket.on("order_update", () => {
-        console.log("Order update");
         refreshOrders();
       });
     } else {
       initSocket();
-      socket.emit("authenticate", user.tenant_id);
-      socket.on("new_order", (payload) => {
-        console.log(payload);
-        // textToSpeech(`New order received, token number: ${payload}`);
-        audio.play();
+      socket?.emit?.("authenticate", tenantId);
+      socket?.on?.("new_order", (payload) => {
+        playNewOrderAudio();
         refreshOrders();
       });
 
-      socket.on("order_update", () => {
-        console.log("Order update");
+      socket?.on?.("order_update", () => {
         refreshOrders();
       });
     }
   };
 
   const sendOrderUpdateEvent = () => {
-    const user = getUserDetailsInLocalStorage();
+    const u = getUserDetailsInLocalStorage();
+    const tenantId = u?.tenant_id;
+    if (!tenantId) return;
 
-    if (isSocketConnected) {
-      socket.emit("order_update_backend", {}, user.tenant_id);
+    if (isSocketConnected && socket?.emit) {
+      socket.emit("order_update_backend", {}, tenantId);
     } else {
-      // Handle disconnected state (optional)
       initSocket();
-      socket.emit("order_update_backend", {}, user.tenant_id);
+      socket?.emit?.("order_update_backend", {}, tenantId);
     }
   };
 
@@ -685,12 +689,12 @@ export default function OrdersPage() {
       {kitchenOrders?.length > 0 && (
         <div className={`mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4 `}>
           {kitchenOrders.map((order, index) => {
-            const { table_id, table_title, floor, orders, order_ids } = order;
+            const { table_id, table_title, floor, orders = [], order_ids = [] } = order || {};
 
-            const tokenNoArray = orders.map(o=>o.token_no);
-            const tokens = tokenNoArray.join(",")
+            const tokenNoArray = (orders || []).map((o) => o?.token_no).filter(Boolean);
+            const tokens = tokenNoArray.join(",");
 
-            const isPaid = orders.every((o)=>o.payment_status=='paid');
+            const isPaid = (orders || []).length > 0 && orders.every((o) => o?.payment_status == 'paid');
 
             return (
               <div

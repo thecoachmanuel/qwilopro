@@ -37,14 +37,14 @@ export default function KitchenPage() {
 
     return () => {
       // socket.disconnect()
-      socket.off('new_order')
-      socket.off('order_update')
+      socket?.off?.('new_order');
+      socket?.off?.('order_update');
       window.removeEventListener("restro_offline_orders_changed", handleQueueChange);
       window.removeEventListener("restro_offline_orders_synced", handleQueueChange);
       window.removeEventListener("online", handleQueueChange);
       window.removeEventListener("offline", handleQueueChange);
-    }
-  },[])
+    };
+  }, []);
 
   const { kitchenOrders, isLoading } = state;
 
@@ -62,6 +62,7 @@ export default function KitchenPage() {
       items: (o.cart || []).map((c) => ({
         id: c.id,
         order_item_id: `OFF-ITEM-${c.id}-${Date.now()}`,
+        item_title: c.title,
         title: c.title,
         quantity: c.quantity,
         status: "pending",
@@ -88,7 +89,7 @@ export default function KitchenPage() {
     try {
       const res = await getKitchenOrders();
 
-      if(res.status == 200) {
+      if (res.status == 200) {
         const orders = res?.data || [];
 
         setState({
@@ -105,51 +106,55 @@ export default function KitchenPage() {
         isLoading: false,
       });
     }
-  }
+  };
 
   const _initSocket = () => {
-    const audio = new Audio("/new_order_sound.mp3");
-    if(isSocketConnected) {
-      socket.emit("authenticate", user.tenant_id);
-      socket.on('new_order', (payload)=>{
-        console.log(payload);
-        // textToSpeech(`New order received, token number: ${payload}`)
-        audio.play();
-        btnRefresh();
-      })
+    const tenantId = user?.tenant_id;
+    if (!tenantId || !socket) return;
 
-      socket.on("order_update", ()=>{
-        console.log("Order update");
-        btnRefresh();
-      });
-    } else {
-      initSocket();
-      socket.emit("authenticate", user.tenant_id);
-      socket.on('new_order', (payload)=>{
-        console.log(payload);
-        // textToSpeech(`New order received, token number: ${payload}`)
-        audio.play();
-        btnRefresh();
-      })
-
-      socket.on("order_update", ()=>{
-        console.log("Order update");
-        btnRefresh();
-      });
-    }
-  }
-
-  const sendOrderUpdateEvent = () => {
-    const user = getUserDetailsInLocalStorage();
+    const playNewOrderSound = () => {
+      try {
+        const audio = new Audio("/new_order_sound.mp3");
+        audio.play().catch(() => {});
+      } catch {}
+    };
 
     if (isSocketConnected) {
-      socket.emit('order_update_backend', {}, user.tenant_id);
+      socket.emit("authenticate", tenantId);
+      socket.on('new_order', (payload) => {
+        playNewOrderSound();
+        btnRefresh();
+      });
+
+      socket.on("order_update", () => {
+        btnRefresh();
+      });
     } else {
-      // Handle disconnected state (optional)
       initSocket();
-      socket.emit('order_update_backend', {}, user.tenant_id);
+      socket?.emit?.("authenticate", tenantId);
+      socket?.on?.('new_order', (payload) => {
+        playNewOrderSound();
+        btnRefresh();
+      });
+
+      socket?.on?.("order_update", () => {
+        btnRefresh();
+      });
     }
-  }
+  };
+
+  const sendOrderUpdateEvent = () => {
+    const u = getUserDetailsInLocalStorage();
+    const tenantId = u?.tenant_id;
+    if (!tenantId) return;
+
+    if (isSocketConnected && socket?.emit) {
+      socket.emit('order_update_backend', {}, tenantId);
+    } else {
+      initSocket();
+      socket?.emit?.('order_update_backend', {}, tenantId);
+    }
+  };
 
   async function btnRefresh() {
     const offlineQueue = getOfflineOrdersQueue();
@@ -226,8 +231,9 @@ export default function KitchenPage() {
     }
   }
 
-  const filteredOrders = kitchenOrders.filter(order => {
-    return !order.items.every(item => item.status === 'completed' || item.status === 'delivered');
+  const filteredOrders = (kitchenOrders || []).filter((order) => {
+    const items = order?.items || [];
+    return items.length > 0 && !items.every((item) => item?.status === 'completed' || item?.status === 'delivered');
   });
 
   return (
@@ -244,9 +250,7 @@ export default function KitchenPage() {
 
       {isLoading && <p>{t('kitchen.loading_message')}</p>}
 
-      {filteredOrders?.filter(order => {
-            return !order.items.every(item => item.status === 'completed' || item.status === 'delivered');
-          })?.length == 0 && (
+      {!isLoading && filteredOrders.length === 0 && (
         <div className="w-full h-[calc(100vh-15vh)] flex gap-4 flex-col items-center justify-center">
           <img
             src="/assets/illustrations/kitchen-order-not-found.webp"
@@ -257,15 +261,9 @@ export default function KitchenPage() {
         </div>
       )}
 
-      {
-        filteredOrders?.filter(order => {
-          return !order.items.every(item => item.status === 'completed' || item.status === 'delivered');
-        })?.length > 0 && <div className="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4">
-
-        {
-          kitchenOrders.filter(order => {
-            return !order.items.every(item => item.status === 'completed' || item.status === 'delivered');
-          })?.map((order, index)=>{
+      {!isLoading && filteredOrders.length > 0 && (
+        <div className="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4">
+          {filteredOrders.map((order, index) => {
 
             const {
               id,
@@ -283,7 +281,8 @@ export default function KitchenPage() {
               items,
             } = order;
 
-            return <div key={index} className='border  rounded-2xl px-4 py-5 flex flex-col border-restro-border-green'>
+            return (
+              <div key={index} className='border  rounded-2xl px-4 py-5 flex flex-col border-restro-border-green'>
               <div className="flex items-center flex-col md:flex-row md:justify-between text-center gap-2">
                 <div className="flex items-center gap-2">
                   <div className='flex w-12 h-12 rounded-full items-center justify-center bg-restro-gray text-restro-text'>
@@ -302,7 +301,7 @@ export default function KitchenPage() {
               {/* order items */}
               <div className="mt-4 flex flex-col divide-y dark:divide-restro-gray">
                 {
-                  items.map((item, index)=>{
+                  (items || []).map((item, index) => {
                     const {
                       id: orderItemId,
                       order_id,
@@ -346,12 +345,10 @@ export default function KitchenPage() {
               </div>
               {/* order items */}
             </div>
-
-          })
-        }
-
+          );
+        })}
       </div>
-      }
-    </Page>
-  );
+    )}
+  </Page>
+);
 }

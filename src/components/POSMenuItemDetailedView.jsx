@@ -40,15 +40,15 @@ const POSMenuItemDetailedView = ({ menuItems, selectedCategory, categories, sear
             const imageURL = image ? getImageURL(image) : null;
             const hasVariantOrAddon = variants?.length > 0 || addons?.length > 0;
 
-            const baseRecipeItems = menuItem.recipeItems?.filter(
+            const baseRecipeItems = (menuItem.recipeItems || []).filter(
               (r) => r.variant_id === 0 && r.addon_id === 0
             );
 
-            const isLowStock = baseRecipeItems?.some(
+            const isLowStock = baseRecipeItems.some(
               (r) => parseFloat(r.current_quantity) <= parseFloat(r.min_quantity_threshold)
             );
 
-            const quantitiesPossible = baseRecipeItems.map(r => {
+            const quantitiesPossible = baseRecipeItems.map((r) => {
               const currentQty = parseFloat(r.current_quantity || "0");
               const requiredQty = parseFloat(r.recipe_quantity || "1");
               return Math.floor(currentQty / requiredQty);

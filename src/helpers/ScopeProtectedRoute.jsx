@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { getUserDetailsInLocalStorage, saveUserDetailsInLocalStorage } from "./UserDetails";
 import { PLAN_FEATURES, SCOPES } from "../config/scopes";
@@ -45,9 +45,8 @@ function parseFeatures(raw) {
 
 const ScopeProtectedRoute = ({ children, scopes }) => {
   const [user, setUser] = useState(getUserDetailsInLocalStorage());
-  // useRef instead of useState — doesn't reset on re-render/re-mount in same mount cycle
-  const refreshFiredRef = useRef(false);
-  const [refreshDone, setRefreshDone] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [checkedServer, setCheckedServer] = useState(false);
 
   useEffect(() => {
     const handleUserUpdated = () => {
@@ -90,7 +89,7 @@ const ScopeProtectedRoute = ({ children, scopes }) => {
     return children;
   }
 
-  // 1. Check Plan Features Access
+  // Check Plan Features Access
   const hasPlanAccess = scopes.some((scope) => {
     const normalized = String(scope).trim().toUpperCase();
     const parentFeature = SCOPE_TO_PLAN_FEATURE[normalized] || normalized;
@@ -100,37 +99,36 @@ const ScopeProtectedRoute = ({ children, scopes }) => {
     );
   });
 
-  // If tenant admin has plan access, let them in
-  if (hasPlanAccess && role === "admin") {
-    return children;
-  }
+  // Determine if user has permission
+  let hasAccess = false;
+  if (hasPlanAccess) {
+    if (role === "admin") {
+      hasAccess = true;
+    } else {
+      // Staff user: check specific permissions in user.scope
+      const userScopes = (user?.scope || "")
+        .split(",")
+        .map((s) => s.trim().toUpperCase());
 
-  // If staff user, check granular permissions in user.scope
-  if (hasPlanAccess && role !== "admin") {
-    const userScopes = (user.scope || "")
-      .split(",")
-      .map((s) => s.trim().toUpperCase());
-
-    const hasStaffAccess = scopes.some((scope) =>
-      userScopes.includes(String(scope).trim().toUpperCase())
-    );
-
-    if (hasStaffAccess) {
-      return children;
+      hasAccess = scopes.some((scope) =>
+        userScopes.includes(String(scope).trim().toUpperCase())
+      );
     }
   }
 
-  // If access not recognized yet, try one server verification to get fresh plan data.
-  // Use a ref so this only fires ONCE per component mount (not on every re-render).
-  if (!refreshFiredRef.current && typeof navigator !== "undefined" && navigator.onLine) {
-    refreshFiredRef.current = true; // mark immediately so concurrent renders don't double-fire
-    const timeout = setTimeout(() => setRefreshDone(true), 8000); // max 8s spinner
+  // Async server verification if access not recognized yet (in case plan was just upgraded)
+  useEffect(() => {
+    if (hasAccess) return;
+    if (checkedServer || typeof navigator === "undefined" || !navigator.onLine) return;
+
+    let isMounted = true;
+    setIsVerifying(true);
 
     apiClient
       .post("/auth/refresh-token")
       .then((res) => {
         const freshUser = res.data?.userDetails;
-        if (freshUser) {
+        if (freshUser && isMounted) {
           saveUserDetailsInLocalStorage(freshUser);
           setUser(freshUser);
         }
@@ -139,11 +137,24 @@ const ScopeProtectedRoute = ({ children, scopes }) => {
         console.warn("Permission sync check:", err?.response?.status || err?.message);
       })
       .finally(() => {
-        clearTimeout(timeout);
-        setRefreshDone(true);
+        if (isMounted) {
+          setIsVerifying(false);
+          setCheckedServer(true);
+        }
       });
 
-    // Render smooth transition loader while verifying with server
+    return () => {
+      isMounted = false;
+    };
+  }, [hasAccess, checkedServer]);
+
+  // If access is confirmed, render children immediately
+  if (hasAccess) {
+    return children;
+  }
+
+  // If verifying with server, show smooth spinner
+  if (isVerifying) {
     return (
       <div className="min-h-[50vh] flex flex-col items-center justify-center gap-3">
         <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
@@ -152,17 +163,18 @@ const ScopeProtectedRoute = ({ children, scopes }) => {
     );
   }
 
-  // If refresh already fired but we're still waiting, keep spinner
-  if (refreshFiredRef.current && !refreshDone) {
-    return (
-      <div className="min-h-[50vh] flex flex-col items-center justify-center gap-3">
-        <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
-        <p className="text-xs font-medium text-slate-500 dark:text-neutral-400">Verifying plan permissions...</p>
-      </div>
-    );
+  // If verification completed and still no access, redirect to /no-access
+  if (checkedServer || (typeof navigator !== "undefined" && !navigator.onLine)) {
+    return <Navigate to="/no-access" replace />;
   }
 
-  return <Navigate to="/no-access" replace />;
+  // Default while initial check runs
+  return (
+    <div className="min-h-[50vh] flex flex-col items-center justify-center gap-3">
+      <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+      <p className="text-xs font-medium text-slate-500 dark:text-neutral-400">Verifying plan permissions...</p>
+    </div>
+  );
 };
 
 export default ScopeProtectedRoute;

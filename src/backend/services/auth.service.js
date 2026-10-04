@@ -69,7 +69,7 @@ exports.signInDB = async (username, password) => {
       is_trial: plan?.is_trial || 0,
       trial_days: plan?.trial_days || 0,
       features_description: plan?.features_description || null,
-      features: plan?.features || null,
+      features: parsedPlanFeatures,
       planFeatures: parsedPlanFeatures,
       planFeautures: parsedPlanFeatures,
       plan_features: parsedPlanFeatures,

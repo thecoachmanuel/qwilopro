@@ -7,6 +7,7 @@ import { useTranslation } from "react-i18next";
 import AvatarImg from "../assets/avatar.svg";
 import {
   IconChevronDown,
+  IconCreditCard,
   IconDevices,
   IconLanguage,
   IconLifebuoy,
@@ -60,7 +61,7 @@ export default function AppBarDropdown() {
           )}
         >
           <img src={AvatarImg?.src || AvatarImg} alt="avatar" className="w-10 h-10 rounded-full p-1" />
-          <p className="font-medium hidden md:block">{user.name}</p>
+          <p className="font-medium hidden md:block">{user?.name || "Account"}</p>
           <IconChevronDown stroke={iconStroke} className="mr-1" size={18} />
         </Menu.Button>
       </div>
@@ -87,6 +88,15 @@ export default function AppBarDropdown() {
                 icon: <IconUser stroke={iconStroke} />,
                 to: "/dashboard/profile"
               },
+              ...(user?.role === "admin"
+                ? [
+                    {
+                      label: "Subscription",
+                      icon: <IconCreditCard stroke={iconStroke} />,
+                      to: "/dashboard/profile"
+                    }
+                  ]
+                : []),
               {
                 label: t("appbar.my_devices"),
                 icon: <IconDevices stroke={iconStroke} />,
