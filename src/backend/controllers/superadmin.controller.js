@@ -208,8 +208,19 @@ exports.getSuperAdminDashboardData = async (req, res) => {
             getARRValueDB()
         ]);
 
+        const NAIRA_PER_USD = 1350;
+        const subscriptionAmountUsd = 5;
+        const mrrUsd = Number(mrr || 0) * subscriptionAmountUsd;
+        const arrUsd = Number(arr || 0) * subscriptionAmountUsd * 12;
+        const mrrNgn = Math.round(mrrUsd * NAIRA_PER_USD);
+        const arrNgn = Math.round(arrUsd * NAIRA_PER_USD);
+        const salesVolumeTodayNgn = Math.round(Number(salesVolumeToday || 0) * NAIRA_PER_USD);
+
         return res.status(200).json({
-            activeTenants, ordersProcessedToday, salesVolumeToday, mrr, arr
+            activeTenants, ordersProcessedToday, salesVolumeToday, mrr, arr,
+            mrrUsd, arrUsd, mrrNgn, arrNgn, salesVolumeTodayNgn,
+            currency: "NGN",
+            currencySymbol: "₦"
         });
     } catch (error) {
         console.error(error);
@@ -385,8 +396,11 @@ exports.getTenantSubscriptionHistory = async (req, res) => {
 
 exports.getSuperAdminReportsData = async (req, res) => {
     try {
-        const from = req.query.from || null;
-        const to = req.query.to || null;
+        let from = req.query.from || null;
+        let to = req.query.to || null;
+        if (from === "null" || from === "undefined") from = null;
+        if (to === "null" || to === "undefined") to = null;
+
         const type = req.query.type;
 
         if (!type) {
@@ -415,9 +429,20 @@ exports.getSuperAdminReportsData = async (req, res) => {
             getSuperAdminOrdersProcessedDB(type, from, to)
         ]);
 
+        const NAIRA_PER_USD = 1350;
+        const subscriptionAmountUsd = 5;
+        const mrrUsd = Number(mrr || 0) * subscriptionAmountUsd;
+        const arrUsd = Number(arr || 0) * subscriptionAmountUsd * 12;
+        const mrrNgn = Math.round(mrrUsd * NAIRA_PER_USD);
+        const arrNgn = Math.round(arrUsd * NAIRA_PER_USD);
+        const salesVolumeNgn = Math.round(Number(salesVolume || 0) * NAIRA_PER_USD);
+
         return res.status(200).json({
             activeTenants, mrr, arr, totalCustomers, topSellingItems,
-            salesVolume, ordersProcessed
+            salesVolume, ordersProcessed,
+            mrrUsd, arrUsd, mrrNgn, arrNgn, salesVolumeNgn,
+            currency: "NGN",
+            currencySymbol: "₦"
         });
     } catch (error) {
         console.error(error);

@@ -29,10 +29,16 @@ const buildDateFilter = (field, type, from, to) => {
     return copy;
   };
 
+  const isValidDate = (d) => {
+    if (!d || d === "null" || d === "undefined") return false;
+    const dateObj = new Date(d);
+    return !isNaN(dateObj.getTime());
+  };
+
   switch (type) {
     case "custom": {
-      const start = from ? startOfDay(new Date(from)) : new Date(0);
-      const end = to ? endOfDay(new Date(to)) : new Date();
+      const start = isValidDate(from) ? startOfDay(new Date(from)) : new Date(0);
+      const end = isValidDate(to) ? endOfDay(new Date(to)) : new Date();
       return { [field]: { $gte: start, $lte: end } };
     }
     case "today": {

@@ -8,7 +8,8 @@ export async function signIn(username, password) {
   axios.defaults.withCredentials = true;
   try {
     const response = await axios.post(`${API}/superadmin/signin`, {
-      username, password
+      username,
+      password,
     });
 
     return response;
@@ -17,13 +18,15 @@ export async function signIn(username, password) {
   }
 }
 
-
 export async function signOut() {
   axios.defaults.withCredentials = true;
   try {
-    const response = await ApiClient.post(`${API}/superadmin/signout`);
+    const response = await ApiClient.post(`/superadmin/signout`);
 
     clearUserDetailsInLocalStorage();
+    if (typeof localStorage !== "undefined") {
+      localStorage.removeItem("restroprosaas_token");
+    }
 
     return response;
   } catch (error) {
@@ -64,9 +67,30 @@ export async function getSuperAdminTenantsData() {
     throw error;
   }
 }
-export async function getTenantsData({ page, perPage, search, status, type, from, to }) {
+
+export async function getTenantsData({
+  page,
+  perPage,
+  search,
+  status,
+  type,
+  from,
+  to,
+}) {
   try {
-    const response = await ApiClient.get(`${API}/superadmin/tenants?page=${page}&perPage=${perPage}&search=${search}&status=${status}&type=${type}&from=${from}&to=${to}`);
+    const query = new URLSearchParams();
+    if (page) query.append("page", page);
+    if (perPage) query.append("perPage", perPage);
+    if (search) query.append("search", search);
+    if (status) query.append("status", status);
+    if (type) query.append("type", type);
+    if (from && from !== "null" && from !== "undefined")
+      query.append("from", from);
+    if (to && to !== "null" && to !== "undefined") query.append("to", to);
+
+    const response = await ApiClient.get(
+      `/superadmin/tenants?${query.toString()}`
+    );
     return response;
   } catch (error) {
     throw error;
@@ -75,8 +99,11 @@ export async function getTenantsData({ page, perPage, search, status, type, from
 
 export async function addTenant(name, email, password, isActive) {
   try {
-    const response = await ApiClient.post(`${API}/superadmin/tenants/add`, {
-      name, email, password, isActive
+    const response = await ApiClient.post(`/superadmin/tenants/add`, {
+      name,
+      email,
+      password,
+      isActive,
     });
 
     return response;
@@ -87,8 +114,10 @@ export async function addTenant(name, email, password, isActive) {
 
 export async function updateTenant(name, email, isActive, id) {
   try {
-    const response = await ApiClient.patch(`${API}/superadmin/tenants/update/${id}`, {
-      name, email, isActive
+    const response = await ApiClient.patch(`/superadmin/tenants/update/${id}`, {
+      name,
+      email,
+      isActive,
     });
     return response;
   } catch (error) {
@@ -98,7 +127,7 @@ export async function updateTenant(name, email, isActive, id) {
 
 export async function deleteTenant(id) {
   try {
-    const response = await ApiClient.delete(`${API}/superadmin/tenants/delete/${id}`);
+    const response = await ApiClient.delete(`/superadmin/tenants/delete/${id}`);
 
     return response;
   } catch (error) {
@@ -108,7 +137,7 @@ export async function deleteTenant(id) {
 
 export async function getTenantsDataByStatus(status) {
   try {
-    const response = await ApiClient.get(`${API}/superadmin/tenantsData/${status}`);
+    const response = await ApiClient.get(`/superadmin/tenantsData/${status}`);
 
     return response;
   } catch (error) {
@@ -117,7 +146,13 @@ export async function getTenantsDataByStatus(status) {
 }
 
 export function useSuperAdminReports({ type, from = null, to = null }) {
-  const APIURL = `/superadmin/reports?type=${type}&from=${from}&to=${to}`;
+  const query = new URLSearchParams();
+  if (type) query.append("type", type);
+  if (from && from !== "null" && from !== "undefined")
+    query.append("from", from);
+  if (to && to !== "null" && to !== "undefined") query.append("to", to);
+
+  const APIURL = `/superadmin/reports?${query.toString()}`;
   const { data, error, isLoading } = useSWR(APIURL, fetcher);
   return {
     data,
@@ -141,7 +176,7 @@ export function useSuperAdminTenantSubscriptionHistory(tenantId) {
 // Payment Gateway Functions
 export async function getPaymentGateways() {
   try {
-    const response = await ApiClient.get(`${API}/superadmin/payment-gateways`);
+    const response = await ApiClient.get(`/superadmin/payment-gateways`);
     return response;
   } catch (error) {
     throw error;
@@ -150,7 +185,7 @@ export async function getPaymentGateways() {
 
 export async function getPaymentGatewayById(id) {
   try {
-    const response = await ApiClient.get(`${API}/superadmin/payment-gateways/${id}`);
+    const response = await ApiClient.get(`/superadmin/payment-gateways/${id}`);
     return response;
   } catch (error) {
     throw error;
@@ -159,9 +194,9 @@ export async function getPaymentGatewayById(id) {
 
 export async function updatePaymentGatewayStatus(gatewayName, isEnabled) {
   try {
-    const response = await ApiClient.put(`${API}/superadmin/payment-gateway/status`, {
+    const response = await ApiClient.put(`/superadmin/payment-gateway/status`, {
       name: gatewayName,
-      status: isEnabled
+      status: isEnabled,
     });
     return response;
   } catch (error) {
@@ -171,7 +206,9 @@ export async function updatePaymentGatewayStatus(gatewayName, isEnabled) {
 
 export async function activatePaymentGateway() {
   try {
-    const response = await ApiClient.get(`${API}/superadmin/payment-gateway/activate`);
+    const response = await ApiClient.get(
+      `/superadmin/payment-gateway/activate`
+    );
     return response;
   } catch (error) {
     throw error;
@@ -180,10 +217,13 @@ export async function activatePaymentGateway() {
 
 export async function updatePaymentGatewayCredentials(gatewayName, credentials) {
   try {
-    const response = await ApiClient.put(`${API}/superadmin/payment-gateway/credentials`, {
-      gateway_name: gatewayName,
-      credentials: credentials
-    });
+    const response = await ApiClient.put(
+      `/superadmin/payment-gateway/credentials`,
+      {
+        gateway_name: gatewayName,
+        credentials: credentials,
+      }
+    );
     return response;
   } catch (error) {
     throw error;

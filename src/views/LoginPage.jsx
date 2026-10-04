@@ -92,6 +92,10 @@ export default function LoginPage() {
         };
         saveUserDetailsInLocalStorage(user);
 
+        if (res.data.accessToken) {
+          localStorage.setItem("restroprosaas_token", res.data.accessToken);
+        }
+
         const { role, scope } = getUserDetailsInLocalStorage();
         if (role == "admin") {
           navigate("/dashboard/home", {

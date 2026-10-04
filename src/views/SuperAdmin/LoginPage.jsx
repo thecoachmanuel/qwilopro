@@ -63,6 +63,10 @@ export default function SuperAdminLoginPage() {
         const user = res.data.user;
         saveUserDetailsInLocalStorage(user);
 
+        if (res.data.accessToken) {
+          localStorage.setItem("restroprosaas_token", res.data.accessToken);
+        }
+
         navigate("/admin/dashboard/home", {
           replace: true,
         });

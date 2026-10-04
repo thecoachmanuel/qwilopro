@@ -63,12 +63,12 @@ export default function SuperAdminTenantsPage() {
   const [isAddingPlan, setIsAddingPlan] = useState(false);
   const [currencies, setCurrencies] = useState([
     {
-      country: "",
-      currency: "",
-      symbol: "",
+      country: "Nigeria",
+      currency: "NGN",
+      symbol: "₦",
       monthly: "",
       yearly: "",
-      is_default: false,
+      is_default: true,
     },
   ]);
   const selectedCountries = currencies.map((c) => c.country).filter(Boolean);
@@ -178,12 +178,12 @@ export default function SuperAdminTenantsPage() {
     setYearlyDiscount("");
     setCurrencies([
       {
-        country: "",
-        currency: "",
-        symbol: "",
+        country: "Nigeria",
+        currency: "NGN",
+        symbol: "₦",
         monthly: "",
         yearly: "",
-        is_default: false,
+        is_default: true,
       },
     ]);
   };

@@ -10,12 +10,27 @@ const apiClient = axios.create({
 
 apiClient.interceptors.request.use(
   (config) => {
+    // If URL starts with /api/v1, strip it so baseURL is not duplicated
+    if (config.url && config.url.startsWith("/api/v1")) {
+      config.url = config.url.replace(/^\/api\/v1/, "") || "/";
+    }
+
+    // Attach Bearer token from localStorage or cookie for bulletproof authentication
+    const token =
+      (typeof localStorage !== "undefined" &&
+        localStorage.getItem("restroprosaas_token")) ||
+      Cookie.get("accessToken");
+    if (token) {
+      config.headers = config.headers || {};
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+
     // Add 'lang' as a query parameter from localStorage
-    const lang = getLanguage();  // Get 'lang' from localStorage
+    const lang = getLanguage(); // Get 'lang' from localStorage
 
     if (lang) {
-      const separator = config.url.includes('?') ? '&' : '?'; // Check if the URL already has query params
-      config.url = `${config.url}${separator}lang=${lang}`;  // Append the 'lang' query param
+      const separator = config.url.includes("?") ? "&" : "?"; // Check if the URL already has query params
+      config.url = `${config.url}${separator}lang=${lang}`; // Append the 'lang' query param
     }
 
     config.withCredentials = true;

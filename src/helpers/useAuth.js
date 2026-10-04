@@ -17,23 +17,33 @@ export default function useAuth() {
     if (!user) return;
     try {
       if (role === "superadmin") {
-        await apiClient.post("/superadmin/refresh-token");
+        const res = await apiClient.post("/superadmin/refresh-token");
+        if (res?.data?.accessToken) {
+          localStorage.setItem("restroprosaas_token", res.data.accessToken);
+        }
       } else {
         const res = await apiClient.post("/auth/refresh-token");
-        const updatedUser = res.data.userDetails;
+        const updatedUser = res.data?.userDetails;
         if (updatedUser) {
           saveUserDetailsInLocalStorage(updatedUser);
+        }
+        if (res?.data?.newAccessToken) {
+          localStorage.setItem("restroprosaas_token", res.data.newAccessToken);
         }
       }
     } catch (error) {
       console.error("Token refresh failed:", error);
 
-      // Only redirect on actual 401 Unauthorized errors
+      // Only redirect on actual 401 Unauthorized errors if we have no valid token in storage
       if (error?.response?.status === 401) {
-        if (role === "superadmin") {
-          navigate("/admin", { replace: true });
-        } else {
-          navigate("/refresh", { replace: true });
+        const existingToken = localStorage.getItem("restroprosaas_token");
+        // If there's an existing token, give it a chance rather than immediately booting the user
+        if (!existingToken) {
+          if (role === "superadmin") {
+            navigate("/admin", { replace: true });
+          } else {
+            navigate("/refresh", { replace: true });
+          }
         }
       }
     }

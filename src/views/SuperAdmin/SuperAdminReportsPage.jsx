@@ -62,8 +62,13 @@ export default function SuperAdminReportsPage() {
     salesVolume, ordersProcessed
   } = data;
 
-  const mrrValue = mrr * subscriptionAmount
-  const arrValue = arr * subscriptionAmount*12
+  const nairaRate = 0.00074; // 1 USD = 1350 NGN
+  const mrrValue = data.mrrUsd ?? (mrr * subscriptionAmount);
+  const arrValue = data.arrUsd ?? (arr * subscriptionAmount * 12);
+
+  const mrrNgn = data.mrrNgn ?? Math.round(mrrValue / nairaRate);
+  const arrNgn = data.arrNgn ?? Math.round(arrValue / nairaRate);
+  const salesVolumeNgn = data.salesVolumeNgn ?? Math.round((salesVolume || 0) / nairaRate);
 
   return (
     <Page className='px-4 py-3 overflow-x-hidden h-full'>
@@ -123,22 +128,46 @@ export default function SuperAdminReportsPage() {
         </div>
 
         <div className='rounded-[42px] border px-8 py-5 flex flex-col justify-center dark:text-white border-restro-border-green text-restro-superadmin-text-black'>
-          <p className='font-bold'>{t("superadmin_reports.mrr")}</p>
-          <p className='font-black text-5xl  mt-2'>${Number(mrrValue).toLocaleString('en',{notation: "compact"})}</p>
-        </div>
-
-        <div className='rounded-[42px] border px-8 py-5 flex flex-col justify-center dark:text-white border-restro-border-green text-restro-superadmin-text-black'>
-          <p className='font-bold'>{t("superadmin_reports.arr")}</p>
-          <p className='font-black text-5xl text-restro-green mt-2'>${Number(arrValue).toLocaleString('en',{notation: "compact"})}</p>
-        </div>
-
-        <div className='rounded-[42px] border px-8 py-5 flex flex-col justify-center dark:text-white border-restro-border-green text-restro-superadmin-text-black'>
-          <div className="flex items-center gap-1">
-            <p className='font-bold'>{t("superadmin_reports.store_sales_volume")}</p>
-            <div className='tooltip cursor-pointer tooltip-top' data-tip={t("superadmin_reports.store_sales_info")}><IconInfoCircleFilled size={18} stroke={iconStroke}/></div>
+          <div className="flex items-center justify-between">
+            <p className='font-bold'>{t("superadmin_reports.mrr")}</p>
+            <span className='badge badge-success badge-sm font-semibold text-white bg-restro-green'>₦ NGN</span>
           </div>
-          <p className='font-black text-5xl mt-2'>
-            ${Number(salesVolume).toLocaleString("en", {notation: "compact"})}
+          <p className='font-black text-4xl lg:text-5xl mt-2'>
+            ₦{Number(mrrNgn).toLocaleString('en-NG', { notation: "compact" })}
+          </p>
+          <p className='text-xs opacity-60 mt-1 font-medium'>
+            ≈ ${Number(mrrValue).toLocaleString('en', { notation: "compact" })} USD
+          </p>
+        </div>
+
+        <div className='rounded-[42px] border px-8 py-5 flex flex-col justify-center dark:text-white border-restro-border-green text-restro-superadmin-text-black'>
+          <div className="flex items-center justify-between">
+            <p className='font-bold'>{t("superadmin_reports.arr")}</p>
+            <span className='badge badge-success badge-sm font-semibold text-white bg-restro-green'>₦ NGN</span>
+          </div>
+          <p className='font-black text-4xl lg:text-5xl text-restro-green mt-2'>
+            ₦{Number(arrNgn).toLocaleString('en-NG', { notation: "compact" })}
+          </p>
+          <p className='text-xs opacity-60 mt-1 font-medium'>
+            ≈ ${Number(arrValue).toLocaleString('en', { notation: "compact" })} USD
+          </p>
+        </div>
+
+        <div className='rounded-[42px] border px-8 py-5 flex flex-col justify-center dark:text-white border-restro-border-green text-restro-superadmin-text-black'>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1">
+              <p className='font-bold'>{t("superadmin_reports.store_sales_volume")}</p>
+              <div className='tooltip cursor-pointer tooltip-top' data-tip={t("superadmin_reports.store_sales_info")}>
+                <IconInfoCircleFilled size={18} stroke={iconStroke}/>
+              </div>
+            </div>
+            <span className='badge badge-success badge-sm font-semibold text-white bg-restro-green'>₦ NGN</span>
+          </div>
+          <p className='font-black text-4xl lg:text-5xl mt-2'>
+            ₦{Number(salesVolumeNgn).toLocaleString('en-NG', { notation: "compact" })}
+          </p>
+          <p className='text-xs opacity-60 mt-1 font-medium'>
+            ≈ ${Number(salesVolume).toLocaleString('en', { notation: "compact" })} USD
           </p>
         </div>
 
