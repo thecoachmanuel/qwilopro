@@ -236,6 +236,16 @@ exports.resetQRMenuSettings = async (tenantId) => {
 };
 
 exports.getPlansDB = async (page = 1, perPage = 10) => {
+  const existingCount = await Plan.countDocuments({ is_deleted: false });
+  if (existingCount === 0) {
+    try {
+      const { seedPlans } = require("../db/seed");
+      await seedPlans();
+    } catch (e) {
+      console.error("Auto-seed plans error:", e);
+    }
+  }
+
   const activeGateways = await PaymentGateway.find({ status: true }, { gateway_name: 1 }).lean();
   let activeGatewayNames = activeGateways.map((g) => g.gateway_name);
   if (activeGatewayNames.length === 0) {
@@ -246,11 +256,12 @@ exports.getPlansDB = async (page = 1, perPage = 10) => {
     is_deleted: false,
     $or: [
       { payment_gateway: { $in: activeGatewayNames } },
+      { payment_gateway: "paystack" },
       { payment_gateway: null },
       { payment_gateway: { $exists: false } },
     ],
   })
-    .sort({ id: -1 })
+    .sort({ id: 1 })
     .lean();
 
   const planIds = plans.map((p) => p.id);
@@ -270,6 +281,11 @@ exports.getPlansDB = async (page = 1, perPage = 10) => {
       payment_gateway_price_id: pr.payment_gateway_price_id,
       is_active: pr.is_active ? 1 : 0,
     });
+  }
+
+  // Ensure default currency (NGN) is sorted first in prices array
+  for (const pId in pricesByPlan) {
+    pricesByPlan[pId].sort((a, b) => (b.is_default || 0) - (a.is_default || 0));
   }
 
   return plans.map((p) => {

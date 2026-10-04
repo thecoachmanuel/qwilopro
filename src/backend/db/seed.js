@@ -1,7 +1,263 @@
 const bcrypt = require("bcrypt");
 const mongoose = require("mongoose");
-const { SuperAdmin, ExchangeRate, PaymentGateway } = require("../models");
+const { SuperAdmin, ExchangeRate, PaymentGateway, Plan, PlanPrice } = require("../models");
 const { CONFIG } = require("../config");
+
+const seedPlans = async () => {
+  const plansCount = await Plan.countDocuments({ is_deleted: false });
+  if (plansCount > 0) {
+    return;
+  }
+
+  console.log("[Seed] Seeding default SaaS plans with Nigerian Naira as primary...");
+
+  const initialPlans = [
+    {
+      id: 1,
+      title: "Starter",
+      payment_gateway: "paystack",
+      payment_gateway_product_id: "plan_starter_ngn",
+      is_recommended: false,
+      is_trial: true,
+      trial_days: 14,
+      features_description: JSON.stringify([
+        "Complete Point of Sale (POS)",
+        "Order & Table Management",
+        "Receipt & Kitchen Token Printing",
+        "Basic Sales Reports & Daily Insights",
+        "Up to 3 Staff Accounts",
+        "Standard Email Support"
+      ]),
+      features: JSON.stringify([
+        "DASHBOARD",
+        "POS",
+        "ORDERS",
+        "INVOICES",
+        "SETTINGS",
+        "REPORTS",
+        "USER"
+      ]),
+      discount: 0,
+      yearly_discount: 15,
+      prices: [
+        {
+          country: "Nigeria",
+          currency: "NGN",
+          symbol: "₦",
+          frequency: "monthly",
+          amount: 15000,
+          is_default: true,
+          is_active: true,
+          payment_gateway_price_id: "PLN_starter_m_ngn"
+        },
+        {
+          country: "Nigeria",
+          currency: "NGN",
+          symbol: "₦",
+          frequency: "yearly",
+          amount: 153000,
+          is_default: true,
+          is_active: true,
+          payment_gateway_price_id: "PLN_starter_y_ngn"
+        },
+        {
+          country: "United States",
+          currency: "USD",
+          symbol: "$",
+          frequency: "monthly",
+          amount: 15,
+          is_default: false,
+          is_active: true,
+          payment_gateway_price_id: "price_starter_m_usd"
+        },
+        {
+          country: "United States",
+          currency: "USD",
+          symbol: "$",
+          frequency: "yearly",
+          amount: 153,
+          is_default: false,
+          is_active: true,
+          payment_gateway_price_id: "price_starter_y_usd"
+        }
+      ]
+    },
+    {
+      id: 2,
+      title: "Professional",
+      payment_gateway: "paystack",
+      payment_gateway_product_id: "plan_professional_ngn",
+      is_recommended: true,
+      is_trial: true,
+      trial_days: 14,
+      features_description: JSON.stringify([
+        "Everything in Starter, plus:",
+        "Kitchen Display System (KDS)",
+        "Table Reservation & Booking System",
+        "Customer Loyalty & Membership CRM",
+        "Live Inventory & Ingredient Tracking",
+        "Customer Feedback & Ratings",
+        "Digital QR Code Menu & Contactless Ordering",
+        "Unlimited Staff Accounts",
+        "Priority 24/7 Support"
+      ]),
+      features: JSON.stringify([
+        "DASHBOARD",
+        "POS",
+        "ORDERS",
+        "KITCHEN",
+        "RESERVATIONS",
+        "CUSTOMERS",
+        "INVOICES",
+        "MEMBERSHIP",
+        "INVENTORY",
+        "SETTINGS",
+        "REPORTS",
+        "FEEDBACK",
+        "USER",
+        "QRMENU"
+      ]),
+      discount: 0,
+      yearly_discount: 20,
+      prices: [
+        {
+          country: "Nigeria",
+          currency: "NGN",
+          symbol: "₦",
+          frequency: "monthly",
+          amount: 35000,
+          is_default: true,
+          is_active: true,
+          payment_gateway_price_id: "PLN_pro_m_ngn"
+        },
+        {
+          country: "Nigeria",
+          currency: "NGN",
+          symbol: "₦",
+          frequency: "yearly",
+          amount: 336000,
+          is_default: true,
+          is_active: true,
+          payment_gateway_price_id: "PLN_pro_y_ngn"
+        },
+        {
+          country: "United States",
+          currency: "USD",
+          symbol: "$",
+          frequency: "monthly",
+          amount: 35,
+          is_default: false,
+          is_active: true,
+          payment_gateway_price_id: "price_pro_m_usd"
+        },
+        {
+          country: "United States",
+          currency: "USD",
+          symbol: "$",
+          frequency: "yearly",
+          amount: 336,
+          is_default: false,
+          is_active: true,
+          payment_gateway_price_id: "price_pro_y_usd"
+        }
+      ]
+    },
+    {
+      id: 3,
+      title: "Enterprise",
+      payment_gateway: "paystack",
+      payment_gateway_product_id: "plan_enterprise_ngn",
+      is_recommended: false,
+      is_trial: false,
+      trial_days: 0,
+      features_description: JSON.stringify([
+        "Everything in Professional, plus:",
+        "Multi-Outlet & Central Kitchen Sync",
+        "Purchase Orders & Supplier Management",
+        "Custom Domain & White-Label Receipts",
+        "Dedicated Account Manager",
+        "99.9% Uptime SLA & Priority Phone Support"
+      ]),
+      features: JSON.stringify([
+        "DASHBOARD",
+        "POS",
+        "ORDERS",
+        "KITCHEN",
+        "RESERVATIONS",
+        "CUSTOMERS",
+        "INVOICES",
+        "MEMBERSHIP",
+        "INVENTORY",
+        "SETTINGS",
+        "REPORTS",
+        "FEEDBACK",
+        "USER",
+        "QRMENU"
+      ]),
+      discount: 0,
+      yearly_discount: 25,
+      prices: [
+        {
+          country: "Nigeria",
+          currency: "NGN",
+          symbol: "₦",
+          frequency: "monthly",
+          amount: 75000,
+          is_default: true,
+          is_active: true,
+          payment_gateway_price_id: "PLN_ent_m_ngn"
+        },
+        {
+          country: "Nigeria",
+          currency: "NGN",
+          symbol: "₦",
+          frequency: "yearly",
+          amount: 675000,
+          is_default: true,
+          is_active: true,
+          payment_gateway_price_id: "PLN_ent_y_ngn"
+        },
+        {
+          country: "United States",
+          currency: "USD",
+          symbol: "$",
+          frequency: "monthly",
+          amount: 75,
+          is_default: false,
+          is_active: true,
+          payment_gateway_price_id: "price_ent_m_usd"
+        },
+        {
+          country: "United States",
+          currency: "USD",
+          symbol: "$",
+          frequency: "yearly",
+          amount: 675,
+          is_default: false,
+          is_active: true,
+          payment_gateway_price_id: "price_ent_y_usd"
+        }
+      ]
+    }
+  ];
+
+  for (const pData of initialPlans) {
+    const { prices, ...planFields } = pData;
+    const createdPlan = await Plan.create(planFields);
+    const planId = createdPlan.id || pData.id;
+
+    for (const priceData of prices) {
+      await PlanPrice.create({
+        plan_id: planId,
+        ...priceData
+      });
+    }
+  }
+
+  console.log("[Seed] Successfully initialized 3 default plans with Naira pricing.");
+};
+
+exports.seedPlans = seedPlans;
 
 exports.seedDatabase = async () => {
   if (mongoose.connection.readyState !== 1) {
@@ -77,6 +333,9 @@ exports.seedDatabase = async () => {
 
     // Clean up razorpay if present in database
     await PaymentGateway.deleteOne({ gateway_name: "razorpay" });
+
+    // 4. Ensure default SaaS plans exist with Naira as primary currency
+    await seedPlans();
 
   } catch (error) {
     console.error("[Seed] Error seeding initial database data:", error);

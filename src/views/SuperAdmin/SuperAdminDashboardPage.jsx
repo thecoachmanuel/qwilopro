@@ -1,7 +1,7 @@
 import React from 'react'
 import Page from "../../components/Page";
-import ImgGirlSmiling from "../../assets/girl-smiling.webp"
-import ImgUiflowLogo from "../../assets/uiflow-logo.svg"
+import ImgGirlSmiling from "../../assets/girl-smiling.webp";
+import Logo from "../../assets/logo.svg";
 import { Link } from 'react-router-dom';
 import { IconArrowRight, IconInfoCircleFilled } from '@tabler/icons-react';
 import { appVersion, iconStroke, subscriptionAmount } from '../../config/config';
@@ -110,15 +110,17 @@ export default function SuperAdminDashboardPage() {
 
       </div>
 
-      <a href='https://uiflow.in' target='_blank' className="mt-16 flex flex-col md:flex-row items-center justify-center gap-4 text-[#A5A5A5]">
-        <img src={ImgUiflowLogo?.src || ImgUiflowLogo} alt="logo" className='block shadow w-16 h-16 rounded-2xl' />
-        <div>
-          <p>
-            Developed by UIFLOW<sup>TM</sup><br/>
-            Version {appVersion}
+      <div className="mt-16 flex flex-col md:flex-row items-center justify-center gap-4 text-[#A5A5A5]">
+        <img src={Logo?.src || Logo} alt="Qwilo Pro" className='block shadow w-12 h-12 rounded-2xl object-contain p-2 bg-white dark:bg-zinc-800' />
+        <div className="text-center md:text-left">
+          <p className="font-bold text-restro-text">
+            Qwilo Pro POS<sup>TM</sup>
+          </p>
+          <p className="text-xs">
+            Powered by Qwilo Pro • Version {appVersion}
           </p>
         </div>
-      </a>
+      </div>
 
     </Page>
   )
