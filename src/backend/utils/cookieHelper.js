@@ -7,7 +7,14 @@ const { CONFIG } = require("../config");
  */
 function getCookieDomain() {
   const domain = process.env.FRONTEND_DOMAIN_COOKIE || CONFIG.FRONTEND_DOMAIN_COOKIE;
-  if (!domain || domain === "localhost" || domain === "127.0.0.1" || domain.trim() === "") {
+  if (
+    !domain ||
+    domain === "localhost" ||
+    domain === "127.0.0.1" ||
+    domain.trim() === "" ||
+    domain.endsWith(".vercel.app") ||
+    domain === "vercel.app"
+  ) {
     return undefined;
   }
   return domain;

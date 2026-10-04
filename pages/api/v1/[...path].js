@@ -1,14 +1,12 @@
 /**
  * Next.js Pages Router API catch-all for Express backend.
- * Wraps the entire Express app via serverless-http so all /api/v1/* routes
- * work on Vercel serverless without any rewriting of controllers/services.
+ * Routes all /api/v1/* requests directly into Express on Vercel serverless.
  */
 
 // Polyfill: Node.js v25+ removed SlowBuffer (jsonwebtoken dep)
 const buf = require('buffer');
 if (!buf.SlowBuffer) buf.SlowBuffer = Buffer;
 
-const serverlessHttp = require('serverless-http');
 const expressApp = require('../../../src/backend/app');
 const { connectDB } = require('../../../src/backend/db/connect');
 const { seedDatabase } = require('../../../src/backend/db/seed');
@@ -21,27 +19,40 @@ async function ensureDB() {
   const conn = await connectDB();
   if (conn && !_dbReady) {
     _dbReady = true;
-    await seedDatabase().catch(() => {});
+    await seedDatabase().catch((err) => console.error("Database seed error:", err));
   }
 }
 
-// Create the serverless handler once (cached across warm invocations)
-const handler = serverlessHttp(expressApp, {
-  request(req) {
-    // Restore full URL path so Express router sees /api/v1/...
-    req.url = req.originalUrl || req.url;
-  },
-});
+async function apiRoute(req, res) {
+  try {
+    await ensureDB();
+  } catch (err) {
+    console.error("Database connection error in API route:", err);
+  }
 
-export default async function apiRoute(req, res) {
-  await ensureDB();
-  return handler(req, res);
+  // Ensure Express router sees the full /api/v1 path
+  if (req.url && !req.url.startsWith('/api/v1')) {
+    req.url = '/api/v1' + (req.url.startsWith('/') ? req.url : '/' + req.url);
+  }
+
+  return new Promise((resolve, reject) => {
+    res.on('finish', resolve);
+    res.on('close', resolve);
+    expressApp(req, res, (err) => {
+      if (err) return reject(err);
+      resolve();
+    });
+  });
 }
 
-export const config = {
+apiRoute.config = {
   api: {
     bodyParser: false,        // Express handles body parsing
     responseLimit: false,     // Allow large responses (reports, exports)
     externalResolver: true,
   },
 };
+
+module.exports = apiRoute;
+module.exports.default = apiRoute;
+module.exports.config = apiRoute.config;

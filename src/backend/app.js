@@ -58,12 +58,21 @@ var corsOptions = {
   origin: true,
 };
 
+const fs = require("fs");
+const localesDir = [
+  path.join(process.cwd(), 'translations', 'locales'),
+  path.join(__dirname, '../../translations', 'locales'),
+  path.join(__dirname, '../translations', 'locales'),
+].find(p => fs.existsSync(p)) || path.join(process.cwd(), 'translations', 'locales');
+
 i18n.configure({
   locales: LANGUAGES,
-  directory: path.join(__dirname, '../translations' , 'locales'),
+  directory: localesDir,
   defaultLocale: 'en',
   cookie: 'lang',
   queryParameter: 'lang',
+  updateFiles: false,
+  syncFiles: false,
 });
 
 app.use(cors(corsOptions));
@@ -109,9 +118,22 @@ app.use("/api/v1/inventory", inventoryRoutes);
 app.use("/api/v1/plans", planRoutes);
 // routes
 
+app.get("/api/v1/health", (req, res) => {
+  const isDbConnected = require("mongoose").connection.readyState === 1;
+  res.json({
+    status: "ok",
+    database: isDbConnected ? "connected" : "disconnected",
+    databaseReadyState: require("mongoose").connection.readyState,
+    hasMongoUri: !!process.env.MONGODB_URI,
+    nodeEnv: process.env.NODE_ENV,
+    timestamp: new Date().toISOString(),
+  });
+});
+
 app.get("/", (req, res)=>{
   res.send("⚡️");
 });
 
 
 module.exports = app;
+
