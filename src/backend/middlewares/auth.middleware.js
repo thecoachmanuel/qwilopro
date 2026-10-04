@@ -4,6 +4,7 @@ const { ROLES } = require("../config/user.config");
 const { getAdminUserDB } = require("../services/superadmin.service");
 const { getTenantById, addRefreshTokenDB } = require("../services/auth.service");
 const { CONFIG } = require("../config");
+const { getClearCookieOptions } = require("../utils/cookieHelper");
 
 exports.isLoggedIn = (req, res, next) => {
     let token;
@@ -146,29 +147,9 @@ exports.hasRefreshToken = (req, res, next) => {
     } catch (error) {
         console.error(error);
 
-        res.clearCookie('accessToken',{
-            expires: new Date(Date.now() ),
-            httpOnly: true,
-            domain: CONFIG.FRONTEND_DOMAIN_COOKIE,
-            sameSite: false,
-            secure: process.env.NODE_ENV == "production",
-            path: "/"
-        });
-        res.clearCookie('refreshToken', {
-            expires: new Date(Date.now()),
-            httpOnly: true,
-            domain: CONFIG.FRONTEND_DOMAIN_COOKIE,
-            sameSite: false,
-            secure: process.env.NODE_ENV == "production",
-            path: "/"
-        }); 
-        res.clearCookie('restro__authenticated', {
-            expires: new Date(Date.now()),
-            domain: CONFIG.FRONTEND_DOMAIN_COOKIE,
-            sameSite: false,
-            secure: process.env.NODE_ENV == "production",
-            path: "/"
-        });
+        res.clearCookie('accessToken', getClearCookieOptions(true));
+        res.clearCookie('refreshToken', getClearCookieOptions(true));
+        res.clearCookie('restroprosaas__authenticated', getClearCookieOptions(false));
 
         return res.status(401).json({
             success: false,

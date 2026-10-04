@@ -53,20 +53,9 @@ const app = express();
 // });
 
 
-var corsWhitelist = [
-  CONFIG.FRONTEND_DOMAIN,
-];
-
 var corsOptions = {
   credentials: true,
-  origin: function (origin, callback) {
-    // Allow same-origin (Vercel serverless), no-origin (server-to-server), and whitelisted
-    if (!origin || corsWhitelist.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      callback(new Error("Not allowed by CORS"));
-    }
-  },
+  origin: true,
 };
 
 i18n.configure({

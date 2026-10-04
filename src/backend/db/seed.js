@@ -8,13 +8,12 @@ exports.seedDatabase = async () => {
     return;
   }
   try {
-    // 1. Ensure at least one SuperAdmin exists
-    const superAdminCount = await SuperAdmin.countDocuments();
-    if (superAdminCount === 0) {
-      const defaultEmail = process.env.DEFAULT_SUPERADMIN_EMAIL || "superadmin@qwilopro.com";
-      const defaultPass = process.env.DEFAULT_SUPERADMIN_PASSWORD || "admin123";
+    // 1. Ensure SuperAdmin exists
+    const defaultEmail = process.env.DEFAULT_SUPERADMIN_EMAIL || "superadmin@qwilopro.com";
+    const defaultPass = process.env.DEFAULT_SUPERADMIN_PASSWORD || "admin123";
+    const existingSuperAdmin = await SuperAdmin.findOne({ email: defaultEmail });
+    if (!existingSuperAdmin) {
       const hashedPassword = await bcrypt.hash(defaultPass, CONFIG.PASSWORD_SALT);
-
       await SuperAdmin.create({
         email: defaultEmail,
         password: hashedPassword,

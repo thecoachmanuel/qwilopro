@@ -1,5 +1,6 @@
 const Stripe = require("stripe");
 const { CONFIG } = require("../config");
+const { getCookieOptions, getClearCookieOptions } = require("../utils/cookieHelper");
 const { removeRefreshTokenDB, addRefreshTokenDB, verifyRefreshTokenDB } = require("../services/auth.service");
 const { signInDB, getAdminUserDB, getActiveTenantsDB, getInActiveTenantsDB, getAllTenantsDB, getOrdersProcessedTodayDB, getSalesVolumeTodayDB, getMRRValueDB, getARRValueDB, getRestaurantsTotalCustomersDB, getSuperAdminTopSellingItemsDB, getSuperAdminSalesVolumeDB, getSuperAdminOrdersProcessedDB, getTenantsDB, addTenantDB, updateTenantDB, getTenantCntByIdDB, getTenantDetailsByIdDB, logoutAllUsersOfTenantDB, deleteTenantDB, getTenantsDataByStatusDB, getTenantSubscriptionHistoryDB, getTenantTotalUsersDB, getTenantDetailsDB, getTenantStoreDetailsDB, upsertGatewayDB, getGatewayDB, updateGatewayStatusDB, getAllPaymentGatewaysDB, activatePaymentGatewayDB } = require("../services/superadmin.service")
 const { generateAccessToken, generateRefreshToken } = require("../utils/jwt");
@@ -23,24 +24,10 @@ exports.signIn = async (req, res) => {
 
         if (result) {
             // set cookie
-            const cookieOptions = {
-                expires: new Date(Date.now() + parseInt(CONFIG.COOKIE_EXPIRY)),
-                httpOnly: true,
-                domain: CONFIG.FRONTEND_DOMAIN_COOKIE,
-                sameSite: false,
-                secure: process.env.NODE_ENV == "production",
-                path: "/"
-            };
-
-            const refreshTokenExpiry = new Date(Date.now() + parseInt(CONFIG.COOKIE_EXPIRY_REFRESH));
-            const cookieRefreshTokenOptions = {
-                expires: refreshTokenExpiry,
-                httpOnly: true,
-                domain: CONFIG.FRONTEND_DOMAIN_COOKIE,
-                sameSite: false,
-                secure: process.env.NODE_ENV == "production",
-                path: "/"
-            };
+            const cookieOptions = getCookieOptions(CONFIG.COOKIE_EXPIRY, true);
+            const cookieRefreshTokenOptions = getCookieOptions(CONFIG.COOKIE_EXPIRY_REFRESH, true);
+            const cookieAuthStatusOptions = getCookieOptions(CONFIG.COOKIE_EXPIRY_REFRESH, false);
+            const refreshTokenExpiry = cookieRefreshTokenOptions.expires;
 
             result.password = undefined;
 
@@ -54,13 +41,7 @@ exports.signIn = async (req, res) => {
 
             res.cookie('accessToken', accessToken, cookieOptions);
             res.cookie('refreshToken', refreshToken, cookieRefreshTokenOptions);
-            res.cookie('restroprosaas__authenticated', true, {
-                expires: new Date(Date.now() + parseInt(CONFIG.COOKIE_EXPIRY_REFRESH)),
-                domain: CONFIG.FRONTEND_DOMAIN_COOKIE,
-                sameSite: false,
-                secure: process.env.NODE_ENV == "production",
-                path: "/"
-            })
+            res.cookie('restroprosaas__authenticated', 'true', cookieAuthStatusOptions);
 
             // set refresh token in DB.
             const deviceDetails = req.useragent;
@@ -98,24 +79,9 @@ exports.signOut = async (req, res) => {
         const user = req.user;
         const refreshToken = req.cookies.refreshToken;
 
-        const cookieOptions = {
-            expires: new Date(Date.now()),
-            httpOnly: true,
-            domain: CONFIG.FRONTEND_DOMAIN_COOKIE,
-            sameSite: false,
-            secure: process.env.NODE_ENV == "production",
-            path: "/"
-        };
-
-        res.clearCookie('accessToken', cookieOptions);
-        res.clearCookie('refreshToken', cookieOptions);
-        res.clearCookie('restroprosaas__authenticated', {
-            expires: new Date(Date.now()),
-            domain: CONFIG.FRONTEND_DOMAIN_COOKIE,
-            sameSite: false,
-            secure: process.env.NODE_ENV == "production",
-            path: "/"
-        });
+        res.clearCookie('accessToken', getClearCookieOptions(true));
+        res.clearCookie('refreshToken', getClearCookieOptions(true));
+        res.clearCookie('restroprosaas__authenticated', getClearCookieOptions(false));
 
         // remove refreshToken in DB.
         await removeRefreshTokenDB(user.username, refreshToken);
@@ -143,16 +109,7 @@ exports.getNewAccessToken = async (req, res) => {
         const isExist = await verifyRefreshTokenDB(refreshToken);
 
         if (isExist) {
-            // generate new access token
-            // set cookie
-            const cookieOptions = {
-                expires: new Date(Date.now() + parseInt(CONFIG.COOKIE_EXPIRY)),
-                httpOnly: true,
-                domain: CONFIG.FRONTEND_DOMAIN_COOKIE,
-                sameSite: false,
-                secure: process.env.NODE_ENV == "production",
-                path: "/"
-            };
+            const cookieOptions = getCookieOptions(CONFIG.COOKIE_EXPIRY, true);
             const u = await getAdminUserDB(user.username);
             const payload = {
                 username: u.email,
@@ -169,29 +126,9 @@ exports.getNewAccessToken = async (req, res) => {
                 accessToken
             });
         } else {
-            res.clearCookie('accessToken', {
-                expires: new Date(Date.now()),
-                httpOnly: true,
-                domain: CONFIG.FRONTEND_DOMAIN_COOKIE,
-                sameSite: false,
-                secure: process.env.NODE_ENV == "production",
-                path: "/"
-            });
-            res.clearCookie('refreshToken', {
-                expires: new Date(Date.now()),
-                httpOnly: true,
-                domain: CONFIG.FRONTEND_DOMAIN_COOKIE,
-                sameSite: false,
-                secure: process.env.NODE_ENV == "production",
-                path: "/"
-            });
-            res.clearCookie('restroprosaas__authenticated', {
-                expires: new Date(Date.now()),
-                domain: CONFIG.FRONTEND_DOMAIN_COOKIE,
-                sameSite: false,
-                secure: process.env.NODE_ENV == "production",
-                path: "/"
-            });
+            res.clearCookie('accessToken', getClearCookieOptions(true));
+            res.clearCookie('refreshToken', getClearCookieOptions(true));
+            res.clearCookie('restroprosaas__authenticated', getClearCookieOptions(false));
             return res.status(401).json({
                 success: false,
                 loginNeeded: true,

@@ -14,23 +14,28 @@ export default function useAuth() {
   const role = user?.role || "";
 
   const safeRefresh = async () => {
+    if (!user) return;
     try {
-      if (role == "superadmin") {
+      if (role === "superadmin") {
         await apiClient.post("/superadmin/refresh-token");
       } else {
         const res = await apiClient.post("/auth/refresh-token");
-        const user = res.data.userDetails;
-        saveUserDetailsInLocalStorage(user);
+        const updatedUser = res.data.userDetails;
+        if (updatedUser) {
+          saveUserDetailsInLocalStorage(updatedUser);
+        }
       }
     } catch (error) {
       console.error("Token refresh failed:", error);
 
-      // optional: clear auth state / storage
-      // localStorage.clear();
-
-      // redirect to signin (or reload)
-      navigate("/refresh", { replace: true });
-      // OR: window.location.reload();
+      // Only redirect on actual 401 Unauthorized errors
+      if (error?.response?.status === 401) {
+        if (role === "superadmin") {
+          navigate("/superadmin", { replace: true });
+        } else {
+          navigate("/refresh", { replace: true });
+        }
+      }
     }
   };
 
