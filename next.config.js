@@ -17,6 +17,7 @@ const nextConfig = {
   // ─── Performance & Cache Headers ────────────────────────────────────
   async headers() {
     return [
+      // Static JS/CSS/fonts — content-addressed, safe to cache forever
       {
         source: '/_next/static/:path*',
         headers: [
@@ -26,12 +27,27 @@ const nextConfig = {
           },
         ],
       },
+      // Images
       {
         source: '/images/:path*',
         headers: [
           {
             key: 'Cache-Control',
             value: 'public, max-age=86400, stale-while-revalidate=604800',
+          },
+        ],
+      },
+      // ALL HTML pages — must never be stale so every deploy is instant
+      {
+        source: '/((?!_next/static|_next/image|favicon.ico|images/).*)',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'no-store, no-cache, must-revalidate',
+          },
+          {
+            key: 'Pragma',
+            value: 'no-cache',
           },
         ],
       },

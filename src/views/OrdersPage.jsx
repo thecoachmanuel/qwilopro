@@ -157,7 +157,7 @@ export default function OrdersPage() {
         kitchenOrders: [...offlineGroups, ...(cached?.orders || [])],
         printSettings: cached?.ordersInit?.printSettings || {},
         storeSettings: cached?.ordersInit?.storeSettings || {},
-        paymentTypes: cached?.ordersInit?.paymentTypes || {},
+        paymentTypes: Array.isArray(cached?.ordersInit?.paymentTypes) ? cached.ordersInit.paymentTypes : [],
         currency: currency?.symbol || "₦",
         isLoading: false,
       }));
