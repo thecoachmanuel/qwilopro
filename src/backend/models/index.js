@@ -102,6 +102,7 @@ const categorySchema = new mongoose.Schema({
   is_enabled: { type: Boolean, default: true },
 });
 applyAutoIncrementId(categorySchema, "categories");
+categorySchema.index({ tenant_id: 1, is_enabled: 1 });
 
 // 8. MenuItem
 const menuItemSchema = new mongoose.Schema({
@@ -117,6 +118,8 @@ const menuItemSchema = new mongoose.Schema({
   description: { type: String, default: "" },
 });
 applyAutoIncrementId(menuItemSchema, "menu_items");
+menuItemSchema.index({ tenant_id: 1, is_enabled: 1 });
+menuItemSchema.index({ tenant_id: 1, category: 1 });
 
 // 9. MenuItemVariant
 const menuItemVariantSchema = new mongoose.Schema({
@@ -165,6 +168,7 @@ const customerSchema = new mongoose.Schema({
   update_at: { type: Date, default: Date.now },
 });
 customerSchema.index({ phone: 1, tenant_id: 1 }, { unique: true });
+customerSchema.index({ tenant_id: 1, created_at: -1 });
 
 // 13. Order
 const orderSchema = new mongoose.Schema({
@@ -184,6 +188,9 @@ const orderSchema = new mongoose.Schema({
 });
 applyAutoIncrementId(orderSchema, "orders");
 orderSchema.index({ tenant_id: 1, client_request_id: 1 }, { unique: true, sparse: true });
+orderSchema.index({ tenant_id: 1, date: -1 });
+orderSchema.index({ tenant_id: 1, status: 1 });
+orderSchema.index({ tenant_id: 1, payment_status: 1 });
 
 // 14. OrderItem
 const orderItemSchema = new mongoose.Schema({
@@ -200,6 +207,8 @@ const orderItemSchema = new mongoose.Schema({
   tenant_id: { type: Number, required: true, index: true },
 });
 applyAutoIncrementId(orderItemSchema, "order_items");
+orderItemSchema.index({ tenant_id: 1, order_id: 1 });
+orderItemSchema.index({ tenant_id: 1, date: -1 });
 
 // 15. Invoice
 const invoiceSchema = new mongoose.Schema({
@@ -214,6 +223,7 @@ const invoiceSchema = new mongoose.Schema({
   created_by: { type: String, default: null },
 });
 invoiceSchema.index({ id: 1, tenant_id: 1 }, { unique: true });
+invoiceSchema.index({ tenant_id: 1, created_at: -1 });
 
 // 16. InvoiceSequence
 const invoiceSequenceSchema = new mongoose.Schema({
@@ -310,6 +320,8 @@ const reservationSchema = new mongoose.Schema({
   updated_at: { type: Date, default: Date.now },
 });
 applyAutoIncrementId(reservationSchema, "reservations");
+reservationSchema.index({ tenant_id: 1, date: 1 });
+reservationSchema.index({ tenant_id: 1, status: 1 });
 
 // 24. Feedback
 const feedbackSchema = new mongoose.Schema({
@@ -328,6 +340,7 @@ const feedbackSchema = new mongoose.Schema({
   tenant_id: { type: Number, required: true, index: true },
 });
 applyAutoIncrementId(feedbackSchema, "feedbacks");
+feedbackSchema.index({ tenant_id: 1, date: -1 });
 
 // 25. RefreshToken
 const refreshTokenSchema = new mongoose.Schema({

@@ -12,6 +12,7 @@ import {
   getOfflineOrdersCount,
   isAppOnline,
   syncOfflineOrders,
+  autoSyncOfflineOrders,
 } from "../utils/offlineStorage";
 import { createOrder, createOrderAndInvoice } from "../controllers/pos.controller";
 import { toast } from "react-hot-toast";
@@ -23,6 +24,30 @@ export default function OfflineStatusBanner() {
   const [pendingCount, setPendingCount] = useState(0);
   const [isSyncing, setIsSyncing] = useState(false);
   const [justSynced, setJustSynced] = useState(false);
+
+  const handleSync = async () => {
+    if (isSyncing) return;
+    setIsSyncing(true);
+    try {
+      const res = await syncOfflineOrders(createOrderAndInvoice, createOrder);
+      if (res?.synced > 0) {
+        toast.success(
+          `Successfully synced ${res.synced} offline order${res.synced > 1 ? "s" : ""} to the cloud!`
+        );
+        setJustSynced(true);
+        setTimeout(() => setJustSynced(false), 4000);
+      }
+      if (res?.failed > 0 && res?.remaining > 0) {
+        toast.error(`${res.remaining} order(s) could not sync yet. Will retry.`);
+      }
+    } catch (err) {
+      console.error("Sync failed:", err);
+      toast.error("Failed to sync offline orders. Please check your connection.");
+    } finally {
+      setIsSyncing(false);
+      setPendingCount(getOfflineOrdersCount());
+    }
+  };
 
   useEffect(() => {
     // Initial check
@@ -72,12 +97,17 @@ export default function OfflineStatusBanner() {
     window.addEventListener("restro_offline_orders_changed", handleQueueChanged);
     window.addEventListener("restro_offline_orders_synced", handleSynced);
 
-    // Heartbeat check every 25 seconds
+    // Heartbeat check every 20 seconds
     const interval = setInterval(() => {
       const currentOnline = isAppOnline();
       setIsOnline(currentOnline);
-      setPendingCount(getOfflineOrdersCount());
-    }, 25000);
+      const count = getOfflineOrdersCount();
+      setPendingCount(count);
+      // Auto-trigger sync if online and orders exist
+      if (currentOnline && count > 0 && !isSyncing) {
+        handleSync();
+      }
+    }, 20000);
 
     return () => {
       window.removeEventListener("online", handleOnline);
@@ -86,31 +116,7 @@ export default function OfflineStatusBanner() {
       window.removeEventListener("restro_offline_orders_synced", handleSynced);
       clearInterval(interval);
     };
-  }, []);
-
-  const handleSync = async () => {
-    if (isSyncing) return;
-    setIsSyncing(true);
-    try {
-      const res = await syncOfflineOrders(createOrderAndInvoice, createOrder);
-      if (res?.synced > 0) {
-        toast.success(
-          `Successfully synced ${res.synced} offline order${res.synced > 1 ? "s" : ""} to the cloud!`
-        );
-        setJustSynced(true);
-        setTimeout(() => setJustSynced(false), 4000);
-      }
-      if (res?.failed > 0 && res?.remaining > 0) {
-        toast.error(`${res.remaining} order(s) could not sync yet. Will retry.`);
-      }
-    } catch (err) {
-      console.error("Manual sync failed:", err);
-      toast.error("Failed to sync offline orders. Please check your connection.");
-    } finally {
-      setIsSyncing(false);
-      setPendingCount(getOfflineOrdersCount());
-    }
-  };
+  }, [isSyncing]);
 
   // If online and nothing pending and not just synced, don't show the banner
   if (isOnline && pendingCount === 0 && !justSynced) {

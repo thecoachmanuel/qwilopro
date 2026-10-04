@@ -857,6 +857,11 @@ export default function POSPage() {
         selectedPaymentTitle: paymentMethodText,
       });
 
+      if (offlineResult.isBlocked || !offlineResult.success) {
+        toast.error(offlineResult.error || "Subscription check failed: cannot take orders offline.");
+        return;
+      }
+
       document.getElementById("modal-pay-and-send-kitchen-summary").close();
 
       setDetailsForReceiptPrint({
@@ -973,6 +978,11 @@ export default function POSPage() {
           selectedPaymentTitle: paymentMethodText,
         });
 
+        if (offlineResult.isBlocked || !offlineResult.success) {
+          toast.error(offlineResult.error || "Subscription check failed: cannot take orders offline.");
+          return;
+        }
+
         document.getElementById("modal-pay-and-send-kitchen-summary").close();
 
         setDetailsForReceiptPrint({
@@ -1062,6 +1072,11 @@ export default function POSPage() {
         serviceChargeTotal: state.serviceChargeTotal,
         payableTotal: state.payableTotal,
       });
+
+      if (offlineResult.isBlocked || !offlineResult.success) {
+        toast.error(offlineResult.error || "Subscription check failed: cannot take orders offline.");
+        return;
+      }
 
       document.getElementById("modal-send-kitchen-summary").close();
 
@@ -1171,6 +1186,11 @@ export default function POSPage() {
           serviceChargeTotal: state.serviceChargeTotal,
           payableTotal: state.payableTotal,
         });
+
+        if (offlineResult.isBlocked || !offlineResult.success) {
+          toast.error(offlineResult.error || "Subscription check failed: cannot take orders offline.");
+          return;
+        }
 
         document.getElementById("modal-send-kitchen-summary").close();
 

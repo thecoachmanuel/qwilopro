@@ -83,12 +83,44 @@ export default function LoginPage() {
 
         const result = res.data.user;
 
+        let parsedFeatures = [];
+        const rawFeatures = result?.planFeatures || result?.planFeautures || result?.plan_features || result?.features;
+        if (Array.isArray(rawFeatures)) {
+          parsedFeatures = rawFeatures.map((f) => String(f).trim().toUpperCase());
+        } else if (typeof rawFeatures === "string") {
+          try {
+            const p = JSON.parse(rawFeatures);
+            parsedFeatures = Array.isArray(p) ? p.map((f) => String(f).trim().toUpperCase()) : [String(rawFeatures).trim().toUpperCase()];
+          } catch {
+            parsedFeatures = rawFeatures.split(",").map((f) => f.trim().toUpperCase()).filter(Boolean);
+          }
+        }
+
+        // If admin and no features parsed, default to standard starter features so they are never locked out
+        if (result?.role === "admin" && parsedFeatures.length === 0) {
+          parsedFeatures = ["DASHBOARD", "POS", "ORDERS", "INVOICES", "SETTINGS", "REPORTS", "USER"];
+        }
+
+        let parsedDesc = null;
+        if (result?.features_description) {
+          if (typeof result.features_description === "string") {
+            try {
+              parsedDesc = JSON.parse(result.features_description);
+            } catch {
+              parsedDesc = result.features_description;
+            }
+          } else {
+            parsedDesc = result.features_description;
+          }
+        }
+
         const user = {
           ...result,
-          planFeautures: result.features ? JSON.parse(result.features) : null,
-          features_description: result.features_description
-            ? JSON.parse(result.features_description)
-            : null,
+          planFeatures: parsedFeatures,
+          planFeautures: parsedFeatures,
+          plan_features: parsedFeatures,
+          features: parsedFeatures,
+          features_description: parsedDesc,
         };
         saveUserDetailsInLocalStorage(user);
 

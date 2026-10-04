@@ -1,6 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: false,
+  compress: true,
+  swcMinify: true,
+  poweredByHeader: false,
 
   // ─── Image Optimization ─────────────────────────────────────────────
   images: {
@@ -9,6 +12,30 @@ const nextConfig = {
       { protocol: 'http',  hostname: '**' },
       { protocol: 'https', hostname: '**' },
     ],
+  },
+
+  // ─── Performance & Cache Headers ────────────────────────────────────
+  async headers() {
+    return [
+      {
+        source: '/_next/static/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable',
+          },
+        ],
+      },
+      {
+        source: '/images/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=86400, stale-while-revalidate=604800',
+          },
+        ],
+      },
+    ];
   },
 
   // ─── Server-side External Packages (Next.js 14 syntax) ──────────────

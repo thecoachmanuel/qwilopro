@@ -1,6 +1,18 @@
+import React, { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
-import { getUserDetailsInLocalStorage } from "./UserDetails";
+import { getUserDetailsInLocalStorage, saveUserDetailsInLocalStorage } from "./UserDetails";
 import { PLAN_FEATURES, SCOPES } from "../config/scopes";
+import apiClient from "./ApiClient";
+
+const DEFAULT_STARTER_FEATURES = [
+  "DASHBOARD",
+  "POS",
+  "ORDERS",
+  "INVOICES",
+  "SETTINGS",
+  "REPORTS",
+  "USER",
+];
 
 // Map sub-scopes to their parent plan feature
 const SCOPE_TO_PLAN_FEATURE = {
@@ -32,7 +44,17 @@ function parseFeatures(raw) {
 }
 
 const ScopeProtectedRoute = ({ children, scopes }) => {
-  const user = getUserDetailsInLocalStorage();
+  const [user, setUser] = useState(getUserDetailsInLocalStorage());
+  const [checkedServer, setCheckedServer] = useState(false);
+
+  useEffect(() => {
+    const handleUserUpdated = () => {
+      setUser(getUserDetailsInLocalStorage());
+    };
+    window.addEventListener("restro_user_updated", handleUserUpdated);
+    return () => window.removeEventListener("restro_user_updated", handleUserUpdated);
+  }, []);
+
   if (!user) {
     return <Navigate to="/login" replace />;
   }
@@ -42,9 +64,14 @@ const ScopeProtectedRoute = ({ children, scopes }) => {
     return children;
   }
 
-  const userPlanFeatures = parseFeatures(
+  let userPlanFeatures = parseFeatures(
     user?.planFeatures || user?.planFeautures || user?.plan_features || user?.features
   );
+
+  // If active tenant admin has empty features in storage, grant base starter features so they are never locked out
+  if (role === "admin" && userPlanFeatures.length === 0 && Number(user?.is_active) === 1) {
+    userPlanFeatures = DEFAULT_STARTER_FEATURES;
+  }
 
   // Check subscription active status & expiry date
   const isActive = Number(user?.is_active) === 1;
@@ -61,7 +88,7 @@ const ScopeProtectedRoute = ({ children, scopes }) => {
     return children;
   }
 
-  // 1. Check Plan Features Access (applies to ALL roles, including admin)
+  // 1. Check Plan Features Access
   const hasPlanAccess = scopes.some((scope) => {
     const normalized = String(scope).trim().toUpperCase();
     const parentFeature = SCOPE_TO_PLAN_FEATURE[normalized] || normalized;
@@ -71,26 +98,51 @@ const ScopeProtectedRoute = ({ children, scopes }) => {
     );
   });
 
-  if (!hasPlanAccess) {
-    return <Navigate to="/no-access" replace />;
-  }
-
-  // Tenant Admin has full access to all features included in their plan
-  if (role === "admin") {
+  // If tenant admin has plan access, let them in
+  if (hasPlanAccess && role === "admin") {
     return children;
   }
 
-  // 2. For Staff Users: check granular permissions in user.scope
-  const userScopes = (user.scope || "")
-    .split(",")
-    .map((s) => s.trim().toUpperCase());
+  // If staff user, check granular permissions in user.scope
+  if (hasPlanAccess && role !== "admin") {
+    const userScopes = (user.scope || "")
+      .split(",")
+      .map((s) => s.trim().toUpperCase());
 
-  const hasStaffAccess = scopes.some((scope) =>
-    userScopes.includes(String(scope).trim().toUpperCase())
-  );
+    const hasStaffAccess = scopes.some((scope) =>
+      userScopes.includes(String(scope).trim().toUpperCase())
+    );
 
-  if (hasStaffAccess) {
-    return children;
+    if (hasStaffAccess) {
+      return children;
+    }
+  }
+
+  // If access not recognized yet, but we are online and haven't synced fresh plan claims with the server:
+  if (!checkedServer && typeof navigator !== "undefined" && navigator.onLine) {
+    apiClient
+      .post("/auth/refresh-token")
+      .then((res) => {
+        const freshUser = res.data?.userDetails;
+        if (freshUser) {
+          saveUserDetailsInLocalStorage(freshUser);
+          setUser(freshUser);
+        }
+      })
+      .catch((err) => {
+        console.warn("Permission sync check:", err);
+      })
+      .finally(() => {
+        setCheckedServer(true);
+      });
+
+    // Render smooth transition loader while verifying with server
+    return (
+      <div className="min-h-[50vh] flex flex-col items-center justify-center gap-3">
+        <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+        <p className="text-xs font-medium text-slate-500 dark:text-neutral-400">Verifying plan permissions...</p>
+      </div>
+    );
   }
 
   return <Navigate to="/no-access" replace />;
