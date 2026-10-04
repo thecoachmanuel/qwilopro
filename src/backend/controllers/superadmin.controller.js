@@ -260,7 +260,14 @@ exports.addTenant = async (req, res) => {
 exports.updateTenant = async (req, res) => {
     try {
         const tenantId = req.params.id;
-        const { name, email, isActive } = req.body;
+        const {
+            name,
+            email,
+            isActive,
+            subscription_start,
+            subscription_end,
+            payment_gateway_product_id
+        } = req.body;
 
         if (!tenantId) {
             return res.status(400).json({ message: req.__("invalid_tenant") }); // Translate message
@@ -289,7 +296,16 @@ exports.updateTenant = async (req, res) => {
             }
         }
 
-        await updateTenantDB(tenantId, name, email, isActive, currentTenant.username);
+        await updateTenantDB(
+            tenantId,
+            name,
+            email,
+            isActive,
+            currentTenant.username,
+            subscription_start,
+            subscription_end,
+            payment_gateway_product_id
+        );
 
         if (currentTenant.username !== email || (isActive == 0 && currentTenant.is_active == 1)) {
             await logoutAllUsersOfTenantDB(tenantId);

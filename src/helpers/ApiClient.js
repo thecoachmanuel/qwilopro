@@ -41,68 +41,90 @@ apiClient.interceptors.request.use(
 
 let retryCounter = 0;
 
-// apiClient.interceptors.response.use(
-//   (response) => response,
-//   async (error) => {
-//     const originalRequest = error.config;
+apiClient.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config;
+    const user = getUserDetailsInLocalStorage();
+    const role = user?.role || "";
 
-//     const user = getUserDetailsInLocalStorage();
-//     const role = user?.role || "";
+    // 402 Payment Required: subscription is inactive or expired
+    if (error?.response?.status === 402) {
+      if (
+        typeof window !== "undefined" &&
+        role !== "superadmin" &&
+        !window.location.pathname.includes("/dashboard/inactive-subscription")
+      ) {
+        window.location.href = "/dashboard/inactive-subscription";
+      }
+      return Promise.reject(error);
+    }
 
-//     if(error.response.status === 402) { // payment required, subscription is not active
-//       window.location.href = "/dashboard/inactive-subscription"
-//       return;
-//     }
+    // 401 Unauthorized / 403 Forbidden: attempt token refresh
+    if (
+      (error?.response?.status === 401 || error?.response?.status === 403) &&
+      originalRequest &&
+      !originalRequest._retry
+    ) {
+      originalRequest._retry = true;
+      retryCounter += 1;
 
-//     if ((error.response.status === 401 || error.response.status === 403) && !originalRequest._retry) {
-//       originalRequest._retry = true;
+      if (retryCounter > 3) {
+        Cookie.remove("restroprosaas__authenticated");
+        if (typeof window !== "undefined") {
+          if (role === "superadmin") {
+            window.location.href = "/admin";
+          } else {
+            window.location.href = "/login";
+          }
+        }
+        return Promise.reject(error);
+      }
 
-//       retryCounter+=1;
+      try {
+        let res;
+        if (role === "superadmin") {
+          res = await apiClient.post("/superadmin/refresh-token");
+        } else {
+          res = await apiClient.post("/auth/refresh-token");
+        }
 
-//       if(retryCounter > 3) {
-//         Cookie.remove("restroprosaas__authenticated");
-//         if(role == "superadmin") {
-//           window.location.href = "/superadmin";
-//         } else {
-//           window.location.href = "/login";
-//         }
-//         return;
-//       }
+        if (res.status === 401 || res.status === 403) {
+          if (typeof window !== "undefined") {
+            if (role === "superadmin") {
+              window.location.href = "/admin";
+            } else {
+              window.location.href = "/login";
+            }
+          }
+          return Promise.reject(error);
+        }
 
-//       try {
-//         let res;
-//         if(role == "superadmin") {
-//           res = await apiClient.post("/superadmin/refresh-token")
-//         } else {
-//           res = await apiClient.post("/auth/refresh-token")
-//         }
+        const newAccessToken =
+          res.data?.newAccessToken || res.data?.accessToken;
+        if (newAccessToken && typeof localStorage !== "undefined") {
+          localStorage.setItem("restroprosaas_token", newAccessToken);
+          originalRequest.headers = originalRequest.headers || {};
+          originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+        }
 
-//         const data = res.data;
+        retryCounter = 0;
+        return apiClient(originalRequest);
+      } catch (refreshErr) {
+        console.error("Auto refresh on 401 failed:", refreshErr);
+        if (typeof window !== "undefined") {
+          if (role === "superadmin") {
+            window.location.href = "/admin";
+          } else {
+            window.location.href = "/login";
+          }
+        }
+        return Promise.reject(refreshErr);
+      }
+    }
 
-//         if(res.status == 401 || res.status == 403) {
-//           if(role == "superadmin") {
-//             window.location.href = "/superadmin";
-//           } else {
-//             window.location.href = "/login";
-//           }
-//           return;
-//         }
-//         retryCounter = 0;
-//         return apiClient(originalRequest);
-//       } catch (error) {
-//         // Handle refresh token error (e.g., redirect to login)
-//         console.error(error);
-//         if(role == "superadmin") {
-//           window.location.href = "/superadmin";
-//         } else {
-//           window.location.href = "/login";
-//         }
-//         return Promise.reject(error);
-//       }
-//     } else {
-//       return Promise.reject(error);
-//     }
-//   }
-// );
+    return Promise.reject(error);
+  }
+);
 
 export default apiClient;

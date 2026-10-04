@@ -33,6 +33,7 @@ import { mutate } from "swr";
 import useDebounce from "../../utils/useDebounce";
 import { Link } from "react-router-dom";
 import { useTheme } from "../../contexts/ThemeContext";
+import { getPlans } from "../../controllers/plans.controller";
 export default function SuperAdminTenantsPage() {
   const { t } = useTranslation();
   const filters = [
@@ -56,12 +57,29 @@ export default function SuperAdminTenantsPage() {
   const passwordRef = useRef();
   const isActiveRef = useRef();
 
-  // For update
   const [tenantIdForUpdate, setTenantIdForUpdate] = useState(null);
 
   const updatenameRef = useRef();
   const updateusernameRef = useRef();
   const updateisActiveRef = useRef();
+  const updateSubStartRef = useRef();
+  const updateSubEndRef = useRef();
+  const updatePlanRef = useRef();
+  const [availablePlans, setAvailablePlans] = useState([]);
+
+  useEffect(() => {
+    async function loadPlans() {
+      try {
+        const res = await getPlans();
+        if (res?.data?.data) {
+          setAvailablePlans(res.data.data);
+        }
+      } catch (e) {
+        console.error("Failed to load plans:", e);
+      }
+    }
+    loadPlans();
+  }, []);
 
   // For Delete
   const [tenantIdForDelete, setTenantIdForDelete] = useState(null);
@@ -335,10 +353,24 @@ export default function SuperAdminTenantsPage() {
     }
   };
 
-  const btnShowUpdate = (name, email, isActive, tenantId) => {
-    updatenameRef.current.value = name || "";
-    updateusernameRef.current.value = email || "";
-    updateisActiveRef.current.checked = isActive || 0;
+  const btnShowUpdate = (name, email, isActive, tenantId, subStart, subEnd, planProductId, planTitle) => {
+    if (updatenameRef.current) updatenameRef.current.value = name || "";
+    if (updateusernameRef.current) updateusernameRef.current.value = email || "";
+    if (updateisActiveRef.current) updateisActiveRef.current.checked = Number(isActive) === 1;
+    if (updateSubStartRef.current) {
+      updateSubStartRef.current.value = subStart ? new Date(subStart).toISOString().split("T")[0] : "";
+    }
+    if (updateSubEndRef.current) {
+      updateSubEndRef.current.value = subEnd ? new Date(subEnd).toISOString().split("T")[0] : "";
+    }
+    if (updatePlanRef.current) {
+      const matched = availablePlans.find(
+        (p) =>
+          p.payment_gateway_product_id === planProductId ||
+          p.title?.toLowerCase() === planTitle?.toLowerCase()
+      );
+      updatePlanRef.current.value = matched?.payment_gateway_product_id || planProductId || "";
+    }
 
     setTenantIdForUpdate(tenantId);
 
@@ -348,7 +380,10 @@ export default function SuperAdminTenantsPage() {
   async function btnUpdate() {
     const name = updatenameRef.current.value;
     const email = updateusernameRef.current.value;
-    const isActive = updateisActiveRef.current.checked || 0;
+    const isActive = updateisActiveRef.current.checked ? 1 : 0;
+    const subscription_start = updateSubStartRef.current?.value || null;
+    const subscription_end = updateSubEndRef.current?.value || null;
+    const payment_gateway_product_id = updatePlanRef.current?.value || null;
 
     if (!name) {
       toast.error(t('superadmin_tenants.please_provide_name'));
@@ -369,14 +404,20 @@ export default function SuperAdminTenantsPage() {
 
     try {
       toast.loading(t('superadmin_tenants.please_wait'));
-      const res = await updateTenant(name, email, isActive, tenantIdForUpdate);
+      const res = await updateTenant(
+        name,
+        email,
+        isActive,
+        tenantIdForUpdate,
+        subscription_start,
+        subscription_end,
+        payment_gateway_product_id
+      );
 
       if (res.status == 200) {
         updatenameRef.current.value = null;
         updateusernameRef.current.value = null;
         updateisActiveRef.current.checked = 0;
-
-        // await mutate(APIURL);
 
         await fetchData();
 
@@ -525,15 +566,15 @@ export default function SuperAdminTenantsPage() {
                     <div className="px-2 py-1 w-1/6 min-w-[80] max-w-[120px] text-sm sm:text-xs md:text-sm lg:text-base">
                       {t('superadmin_tenants.status')}
                     </div>
-                    <div className="px-2 py-1 w-1/6 min-w-[150] max-w-[200px] text-sm sm:text-xs md:text-sm lg:text-base">
+                    <div className="px-2 py-1 w-1/6 min-w-[120px] max-w-[160px] text-sm sm:text-xs md:text-sm lg:text-base">
                       {t('superadmin_tenants.subscription_start')}
                     </div>
-                    <div className="px-2 py-1 w-1/6 min-w-[150] max-w-[200px] text-sm sm:text-xs md:text-sm lg:text-base">
+                    <div className="px-2 py-1 w-1/6 min-w-[120px] max-w-[160px] text-sm sm:text-xs md:text-sm lg:text-base">
                       {t('superadmin_tenants.subscription_end')}
                     </div>
-                    {/* <div className="px-2 py-1 w-1/6 min-w-[80] max-w-[120px] text-sm sm:text-xs md:text-sm lg:text-base">
-                      {t('superadmin_tenants.plan')}
-                    </div> */}
+                    <div className="px-2 py-1 w-1/6 min-w-[100px] max-w-[140px] text-sm sm:text-xs md:text-sm lg:text-base text-center">
+                      Plan
+                    </div>
                     <div className="px-2 py-1 w-1/5 min-w-[60] max-w-[200px] text-sm sm:text-xs md:text-sm lg:text-base mr-8">
                       {t('superadmin_tenants.actions')}
                     </div>
@@ -579,16 +620,17 @@ export default function SuperAdminTenantsPage() {
                             )}
                           </span>
                         </div>
-                        <div className="w-1/4 min-w-[150px] max-w-[200px] text-center text-sm font-bold">
-                          {tenant.subscription_start}
+                        <div className="w-1/6 min-w-[120px] max-w-[160px] text-center text-sm font-bold">
+                          {tenant.subscription_start ? new Date(tenant.subscription_start).toLocaleDateString() : "-"}
                         </div>
-                        <div className="w-1/4 min-w-[150px] max-w-[200px] text-center text-sm font-bold">
-                          {tenant.subscription_end}
+                        <div className="w-1/6 min-w-[120px] max-w-[160px] text-center text-sm font-bold">
+                          {tenant.subscription_end ? new Date(tenant.subscription_end).toLocaleDateString() : "-"}
                         </div>
-                        {/* <div className="w-1/4 min-w-[80px] max-w-[120px] text-center text-sm font-bold">
-                          {subscriptionPrice}/{t('superadmin_tenants.month')}
-                          
-                        </div> */}
+                        <div className="w-1/6 min-w-[100px] max-w-[140px] text-center">
+                          <span className="font-bold text-xs px-3 py-1 rounded-full bg-restro-green-10 text-restro-green border border-restro-border-green">
+                            {tenant.plan_title || "Starter"}
+                          </span>
+                        </div>
                         <div className="w-1/5 min-w-[150px] max-w-[200px]  text-right ">
                           <div className="flex gap-3">
                             <button
@@ -597,7 +639,11 @@ export default function SuperAdminTenantsPage() {
                                   tenant.name,
                                   tenant.email,
                                   tenant.is_active,
-                                  tenant.id
+                                  tenant.id,
+                                  tenant.subscription_start,
+                                  tenant.subscription_end,
+                                  tenant.payment_gateway_product_id,
+                                  tenant.plan_title
                                 );
                               }}
                               className="rounded-[42px] bg-white dark:bg-restro-bg-gray p-3 text-restro-text"
@@ -605,7 +651,7 @@ export default function SuperAdminTenantsPage() {
                               <IconPencil size={24} stroke={iconStroke} />
                             </button>
                             <Link
-                              to={`/superadmin/dashboard/tenants/${tenant.id}/subscription-history`}
+                              to={`/admin/dashboard/tenants/${tenant.id}/subscription-history`}
                               className="rounded-[42px] flex items-center justify-center bg-white dark:bg-restro-bg-gray p-3 text-restro-text"
                             >
                               <IconCalendarEvent
@@ -925,6 +971,46 @@ export default function SuperAdminTenantsPage() {
               className="text-sm w-full border rounded-lg px-4 py-1 border-restro-border-green dark:bg-black outline-restro-border-green"
               placeholder={t('superadmin_tenants.enter_email')}
             />
+          </div>
+
+          <div className="mt-4">
+            <label className="mb-1 block text-gray-500 text-sm">
+              Plan
+            </label>
+            <select
+              ref={updatePlanRef}
+              className="select select-sm w-full border border-restro-border-green rounded-lg focus:outline-none dark:bg-black dark:text-white"
+            >
+              <option value="">-- Select Plan --</option>
+              {availablePlans.map((p) => (
+                <option key={p.id} value={p.payment_gateway_product_id}>
+                  {p.title} ({p.payment_gateway_product_id})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 mt-4">
+            <div>
+              <label className="mb-1 block text-gray-500 text-sm">
+                Subscription Start
+              </label>
+              <input
+                ref={updateSubStartRef}
+                type="date"
+                className="text-sm w-full border rounded-lg px-3 py-1 border-restro-border-green dark:bg-black outline-restro-border-green"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-gray-500 text-sm">
+                Subscription End
+              </label>
+              <input
+                ref={updateSubEndRef}
+                type="date"
+                className="text-sm w-full border rounded-lg px-3 py-1 border-restro-border-green dark:bg-black outline-restro-border-green"
+              />
+            </div>
           </div>
 
           <div className="flex items-center mt-6 ml-1 gap-2">

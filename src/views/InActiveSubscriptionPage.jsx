@@ -42,12 +42,22 @@ export default function InActiveSubscriptionPage() {
 
   useAuth();
 
-  // redirect to dashboard if subscription is active
+  // redirect to dashboard only if subscription is truly active and not expired
   useEffect(() => {
-    if (user?.is_active == 1) {
+    const isEndExpired =
+      user?.subscription_end &&
+      new Date(user.subscription_end).getTime() <
+        new Date().setHours(0, 0, 0, 0);
+
+    const isSubActive =
+      (user?.subscription_is_active === 1 ||
+        user?.subscription_is_active === true) ||
+      (Number(user?.is_active) === 1 && !isEndExpired);
+
+    if (user && isSubActive && !isEndExpired) {
       navigate("/dashboard", { replace: true });
     }
-  }, [user?.is_active, navigate]);
+  }, [user?.is_active, user?.subscription_end, user?.subscription_is_active, navigate]);
 
   const fetchPlans = async () => {
     try {

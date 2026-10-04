@@ -289,9 +289,11 @@ exports.getNewAccessToken = async (req, res) => {
     // 1️⃣ Verify refresh token JWT
     const decoded = verifyToken(refreshToken);
 
-    // 2️⃣ Check refresh token exists in DB
-    const isExist = await verifyRefreshTokenDB(refreshToken);
-    if (!isExist) throw new Error("Refresh token revoked");
+    // 2️⃣ Check refresh token exists in DB (skip check if using active access token fallback)
+    if (!req.isAccessTokenFallback) {
+      const isExist = await verifyRefreshTokenDB(refreshToken);
+      if (!isExist) throw new Error("Refresh token revoked");
+    }
 
     // 3️⃣ Validate tenant + token version
     // const tenant = await getTenantById(decoded.tenant_id);
@@ -304,9 +306,25 @@ exports.getNewAccessToken = async (req, res) => {
     // 4️⃣ Get fresh user data
     const user = await getUserDB(decoded.username, decoded.tenant_id);
 
+    let parsedFeatures = [];
+    const rawFeat = user.planFeatures || user.planFeautures || user.plan_features || user.features;
+    if (Array.isArray(rawFeat)) {
+      parsedFeatures = rawFeat;
+    } else if (typeof rawFeat === "string") {
+      try {
+        const p = JSON.parse(rawFeat);
+        parsedFeatures = Array.isArray(p) ? p : [rawFeat];
+      } catch {
+        parsedFeatures = rawFeat.split(",").map((s) => s.trim());
+      }
+    }
+
     const userDetails = {
       ...user,
-      planFeautures: JSON.parse(user.planFeatures || "[]"),
+      planFeatures: parsedFeatures,
+      planFeautures: parsedFeatures,
+      plan_features: parsedFeatures,
+      features: parsedFeatures,
     };
 
     const payload = {
@@ -317,7 +335,8 @@ exports.getNewAccessToken = async (req, res) => {
       is_active: user.is_active,
       tokenVersion: user.token_version,
       scope: user.scope,
-      planFeautures: JSON.parse(user.planFeatures || "[]"),
+      planFeatures: parsedFeatures,
+      planFeautures: parsedFeatures,
     };
 
     // 5️⃣ Generate new tokens

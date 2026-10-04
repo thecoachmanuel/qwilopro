@@ -29,6 +29,8 @@ const tenantSchema = new mongoose.Schema({
   isTrialPlan: { type: Number, default: 0 },
   payment_gateway_product_id: { type: String, default: null },
   payment_gateway_price_id: { type: String, default: null },
+  plan_id: { type: Number, default: null },
+  plan_title: { type: String, default: null },
   token_version: { type: Number, default: 1 },
   stripe_next_price_id: { type: String, default: null },
 });
@@ -289,7 +291,7 @@ const subscriptionHistorySchema = new mongoose.Schema({
   created_at: { type: Date, default: Date.now },
   starts_on: { type: Date, default: null },
   expires_on: { type: Date, default: null },
-  status: { type: String, enum: ["created", "updated", "plan_changed", "downgrade_scheduled", "cancelAtPeriodEnd", "cancelled"] },
+  status: { type: String, enum: ["created", "updated", "plan_changed", "active", "downgrade_scheduled", "cancelAtPeriodEnd", "cancelled"] },
 });
 applyAutoIncrementId(subscriptionHistorySchema, "subscription_history");
 

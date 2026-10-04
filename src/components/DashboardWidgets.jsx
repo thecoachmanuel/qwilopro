@@ -25,19 +25,21 @@ function calcDelta(today, yesterday) {
   return ((today - yesterday) / yesterday) * 100;
 }
 
-function formatCurrency(value, symbol) {
+function formatCurrency(value, symbol = "₦") {
   const num = Number(value) || 0;
-  if (num >= 10000000) return `${symbol}${(num / 10000000).toFixed(1)}Cr`;
-  if (num >= 100000) return `${symbol}${(num / 100000).toFixed(1)}L`;
-  if (num >= 1000) return `${symbol}${(num / 1000).toFixed(1)}K`;
-  return `${symbol}${num.toFixed(num % 1 === 0 ? 0 : 2)}`;
+  const sym = symbol || "₦";
+  if (num >= 1000000000) return `${sym}${(num / 1000000000).toFixed(1)}B`;
+  if (num >= 1000000) return `${sym}${(num / 1000000).toFixed(1)}M`;
+  if (num >= 1000) return `${sym}${(num / 1000).toFixed(1)}K`;
+  return `${sym}${num.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 }
 
 function formatNumber(value) {
   const num = Number(value) || 0;
+  if (num >= 1000000000) return `${(num / 1000000000).toFixed(1)}B`;
   if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
   if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
-  return num.toString();
+  return num.toLocaleString("en-US");
 }
 
 const chartBaseConfig = {

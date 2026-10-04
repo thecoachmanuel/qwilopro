@@ -111,28 +111,73 @@ exports.isAuthenticated = async (req, res, next) => {
 };
 
 
-exports.isSubscriptionActive = async (req, res, next) => {
-    const user = req.user;
+const SCOPE_TO_PLAN_FEATURE = {
+    CUSTOMER_DISPLAY: "POS",
+    KITCHEN_DISPLAY: "KITCHEN",
+    ORDER_STATUS_DISPLAY: "POS",
+    ORDER_STATUS: "POS",
+    VIEW_RESERVATIONS: "RESERVATIONS",
+    MANAGE_RESERVATIONS: "RESERVATIONS",
+    VIEW_CUSTOMERS: "CUSTOMERS",
+    MANAGE_CUSTOMERS: "CUSTOMERS",
+    VIEW_INVENTORY: "INVENTORY",
+    MANAGE_INVENTORY: "INVENTORY",
+};
 
-    // Fetch fresh tenant/subscription info
-    const tenant = await getTenantById(user.tenant_id);
-    if(tenant?.is_active == 1) {
-        return next();
-    } else {
-        return res.status(402).json({
+exports.isSubscriptionActive = async (req, res, next) => {
+    try {
+        const user = req.user;
+        if (!user || !user.tenant_id) {
+            return res.status(401).json({
+                success: false,
+                message: req.__("login_again_to_access")
+            });
+        }
+
+        // Fetch fresh tenant/subscription info
+        const tenant = await getTenantById(user.tenant_id);
+        if (!tenant) {
+            return res.status(404).json({
+                success: false,
+                message: req.__("tenant_not_found")
+            });
+        }
+
+        const isActive = Number(tenant.is_active) === 1;
+        const isExpired = tenant.subscription_end
+            ? new Date(tenant.subscription_end).getTime() < new Date().setHours(0, 0, 0, 0)
+            : false;
+
+        if (isActive && !isExpired) {
+            return next();
+        } else {
+            return res.status(402).json({
+                success: false,
+                message: req.__("subscription_cancelled_no_longer_charged")
+            });
+        }
+    } catch (error) {
+        console.error("isSubscriptionActive error:", error);
+        return res.status(500).json({
             success: false,
-            message: req.__("subscription_cancelled_no_longer_charged")
+            message: req.__("something_went_wrong_try_later")
         });
     }
 };
 
 exports.hasRefreshToken = (req, res, next) => {
-    const token =
-        req.cookies.refreshToken ||
+    let token =
+        req.cookies?.refreshToken ||
         req.headers["x-refresh-token"] ||
         req.body?.refreshToken;
 
-    if(!token) {
+    let isAccessTokenFallback = false;
+    if (!token && req.headers.authorization && req.headers.authorization.startsWith("Bearer ")) {
+        token = req.headers.authorization.split(" ")[1];
+        isAccessTokenFallback = true;
+    }
+
+    if (!token) {
         return res.status(401).json({
             success: false,
             message: req.__("login_again_to_access")
@@ -142,6 +187,7 @@ exports.hasRefreshToken = (req, res, next) => {
         const decodedToken = verifyToken(token);
         req.user = decodedToken;
         req.refreshToken = token;
+        req.isAccessTokenFallback = isAccessTokenFallback;
 
         next();
     } catch (error) {
@@ -161,81 +207,84 @@ exports.hasRefreshToken = (req, res, next) => {
 exports.authorize = (requiredScopes) => {
     return async (req, res, next) => {
         try {
-            // const {username, scope: userScopes, tenant_id} = req.user;
-            const {username,  tenant_id, planFeatures,  scope: userScopes} = req.user;
-        
+            const { username, tenant_id } = req.user;
             const user = await getUserDB(username, tenant_id);
-            console.log("User fetched for authorization:", user.plan_features);
 
-
-            // const isSame =
-            //   Array.isArray(user.plan_features) &&
-            //   Array.isArray(planFeatures) &&
-            //   user.plan_features.length === planFeatures.length &&
-            //   user.plan_features.every((f, i) => f === planFeatures[i]);
-
-            // if (!isSame) {
-            //   return res.status(403).json({
-            //     success: false,
-            //     message: req.__("operation_not_allowed"),
-            //   });
-            // }
-
-            const userPlanScopesArr = user?.plan_features || [];
-            // const userScopes = user?.scope || "";
-
-            const hasAccess = requiredScopes.some((scope)=> userPlanScopesArr.includes(scope));
-
-            if(!hasAccess) {
-                return res.status(403).json({
-                    success: false, 
-                    message: req.__("operation_not_allowed")
-                });
-            }
-
-            if(!user) {
+            if (!user) {
                 return res.status(401).json({
-                    success: false, 
+                    success: false,
                     message: req.__("operation_not_allowed")
                 });
             }
 
-            if(user.role == ROLES.ADMIN) {
+            // If no specific scopes required, allow
+            if (!requiredScopes || requiredScopes.length === 0) {
                 return next();
             }
 
-            // const isSameScope =
-            //   user.scope?.length === userScopes?.length &&
-            //   user.scope.every(s => userScopes.includes(s));
+            // 1. Parse Plan Features
+            let userPlanFeatures = [];
+            const rawPlan = user.plan_features || user.planFeatures || user.features;
+            if (Array.isArray(rawPlan)) {
+                userPlanFeatures = rawPlan;
+            } else if (typeof rawPlan === "string") {
+                try {
+                    const parsed = JSON.parse(rawPlan);
+                    userPlanFeatures = Array.isArray(parsed) ? parsed : [rawPlan];
+                } catch {
+                    userPlanFeatures = rawPlan.split(",");
+                }
+            }
+            userPlanFeatures = userPlanFeatures.map((s) => String(s).trim().toUpperCase());
 
-            // if (!isSameScope) {
-            //   return res.status(403).json({
-            //     success: false,
-            //     message: req.__("operation_not_allowed"),
-            //   });
-            // }
+            // 2. Check Plan Access (applies to ALL roles, including admin)
+            const hasPlanAccess = requiredScopes.some((scope) => {
+                const normalized = String(scope).trim().toUpperCase();
+                const parentFeature = SCOPE_TO_PLAN_FEATURE[normalized] || normalized;
+                return (
+                    userPlanFeatures.includes(normalized) ||
+                    userPlanFeatures.includes(parentFeature)
+                );
+            });
 
-            const userScopesArr = user?.scope?.split(",")?.map(s=>s.trim());
-
-            const isOperationAllowed = requiredScopes.some((scope)=>userScopesArr.includes(scope));
-
-            if(!isOperationAllowed) {
+            if (!hasPlanAccess) {
                 return res.status(403).json({
-                    success: false, 
+                    success: false,
                     message: req.__("operation_not_allowed")
                 });
             }
-            next();
 
+            // Tenant Admin has full access to features in their plan
+            if (user.role == ROLES.ADMIN) {
+                return next();
+            }
+
+            // 3. For Staff Users: check granular permissions in user.scope
+            const userScopesArr = (user.scope || "")
+                .split(",")
+                .map((s) => s.trim().toUpperCase());
+
+            const isOperationAllowed = requiredScopes.some((scope) =>
+                userScopesArr.includes(String(scope).trim().toUpperCase())
+            );
+
+            if (!isOperationAllowed) {
+                return res.status(403).json({
+                    success: false,
+                    message: req.__("operation_not_allowed")
+                });
+            }
+
+            next();
         } catch (error) {
-            console.error(error);
+            console.error("authorize error:", error);
             return res.status(500).json({
                 success: false,
                 message: req.__("something_went_wrong_try_later")
             });
         }
     };
-}
+};
 
 exports.isSuperAdmin = async (req, res, next) => {
     try {

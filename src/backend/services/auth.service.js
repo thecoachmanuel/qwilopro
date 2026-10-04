@@ -26,11 +26,26 @@ exports.signInDB = async (username, password) => {
     let plan = null;
     if (user.tenant_id) {
       tenant = await Tenant.findOne({ id: user.tenant_id }).lean();
-      if (tenant?.payment_gateway_product_id) {
+      if (tenant?.payment_gateway_product_id || tenant?.plan_id) {
         plan = await Plan.findOne({
-          payment_gateway_product_id: tenant.payment_gateway_product_id,
+          $or: [
+            ...(tenant.payment_gateway_product_id ? [{ payment_gateway_product_id: tenant.payment_gateway_product_id }] : []),
+            ...(tenant.plan_id ? [{ id: tenant.plan_id }] : []),
+          ],
           is_deleted: false,
         }).lean();
+      }
+      if (!plan) {
+        plan = await Plan.findOne({ is_deleted: false }).sort({ id: 1 }).lean();
+      }
+    }
+
+    let parsedPlanFeatures = [];
+    if (plan?.features) {
+      try {
+        parsedPlanFeatures = typeof plan.features === "string" ? JSON.parse(plan.features) : plan.features;
+      } catch {
+        parsedPlanFeatures = String(plan.features).split(",").map((s) => s.trim());
       }
     }
 
@@ -46,13 +61,18 @@ exports.signInDB = async (username, password) => {
       scope: user.scope,
       tenant_id: user.tenant_id,
       is_active: tenant?.is_active ?? 0,
-      payment_gateway_product_id: tenant?.payment_gateway_product_id || null,
+      subscription_start: tenant?.subscription_start || null,
+      subscription_end: tenant?.subscription_end || null,
+      payment_gateway_product_id: plan?.payment_gateway_product_id || tenant?.payment_gateway_product_id || null,
       token_version: tenant?.token_version || 1,
       plan_title: plan?.title || null,
       is_trial: plan?.is_trial || 0,
       trial_days: plan?.trial_days || 0,
       features_description: plan?.features_description || null,
       features: plan?.features || null,
+      planFeatures: parsedPlanFeatures,
+      planFeautures: parsedPlanFeatures,
+      plan_features: parsedPlanFeatures,
     };
   } catch (error) {
     console.error("signInDB Error:", error);
@@ -69,11 +89,17 @@ exports.getUserDB = async (username, tenantId) => {
     let plan = null;
     if (tenantId) {
       tenant = await Tenant.findOne({ id: tenantId }).lean();
-      if (tenant?.payment_gateway_product_id) {
+      if (tenant?.payment_gateway_product_id || tenant?.plan_id) {
         plan = await Plan.findOne({
-          payment_gateway_product_id: tenant.payment_gateway_product_id,
+          $or: [
+            ...(tenant.payment_gateway_product_id ? [{ payment_gateway_product_id: tenant.payment_gateway_product_id }] : []),
+            ...(tenant.plan_id ? [{ id: tenant.plan_id }] : []),
+          ],
           is_deleted: false,
         }).lean();
+      }
+      if (!plan) {
+        plan = await Plan.findOne({ is_deleted: false }).sort({ id: 1 }).lean();
       }
     }
 
@@ -103,6 +129,8 @@ exports.getUserDB = async (username, tenantId) => {
       subscription_end: tenant?.subscription_end || null,
       payment_gateway_product_id: tenant?.payment_gateway_product_id || null,
       planFeatures: plan?.features || null,
+      planFeautures: parsedPlanFeatures,
+      features: plan?.features || null,
       features_description: plan?.features_description || null,
       plan_title: plan?.title || null,
       is_trial: plan?.is_trial || 0,

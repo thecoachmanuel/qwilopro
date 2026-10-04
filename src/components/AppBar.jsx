@@ -53,12 +53,28 @@ export default function AppBar() {
     return () => document.removeEventListener("keydown", down);
   }, []);
 
-  const user = getUserDetailsInLocalStorage();
-  const { role: userRole, scope, planFeautures } = user;
-  const userScopes = scope?.split(",");
-  const userPlanFeatures = Array.isArray(planFeautures)
-  ? planFeautures
-  : planFeautures?.split(",") || [];
+  const user = getUserDetailsInLocalStorage() || {};
+  const { role: userRole, scope } = user;
+  const rawFeatures =
+    user?.planFeatures || user?.planFeautures || user?.plan_features || user?.features;
+  const userPlanFeatures = (
+    Array.isArray(rawFeatures)
+      ? rawFeatures
+      : typeof rawFeatures === "string"
+      ? (() => {
+          try {
+            const p = JSON.parse(rawFeatures);
+            return Array.isArray(p) ? p : [rawFeatures];
+          } catch {
+            return rawFeatures.split(",");
+          }
+        })()
+      : []
+  ).map((s) => String(s).trim().toUpperCase());
+
+  const userScopes = (scope || "")
+    .split(",")
+    .map((s) => s.trim().toUpperCase());
 
   const btnLogout = async () => {
     try {

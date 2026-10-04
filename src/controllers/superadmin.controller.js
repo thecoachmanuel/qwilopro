@@ -112,12 +112,23 @@ export async function addTenant(name, email, password, isActive) {
   }
 }
 
-export async function updateTenant(name, email, isActive, id) {
+export async function updateTenant(
+  name,
+  email,
+  isActive,
+  id,
+  subscription_start,
+  subscription_end,
+  payment_gateway_product_id
+) {
   try {
     const response = await ApiClient.patch(`/superadmin/tenants/update/${id}`, {
       name,
       email,
       isActive,
+      subscription_start,
+      subscription_end,
+      payment_gateway_product_id,
     });
     return response;
   } catch (error) {

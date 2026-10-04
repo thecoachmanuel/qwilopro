@@ -1,4 +1,4 @@
-import React, { useContext } from "react";
+import React, { useContext, useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   IconArmchair2,
@@ -151,16 +151,72 @@ export const getNavbarItems = (t) => [
 export default function Navbar() {
   const { t } = useTranslation();
   const { pathname } = useLocation();
-  const user = getUserDetailsInLocalStorage();
-  const { role: userRole, scope, planFeautures } = user;
-  const userScopes = scope?.split(",");
-  const userPlanFeatures = Array.isArray(planFeautures)
-    ? planFeautures
-    : planFeautures?.split(",") || [];
+  const [user, setUser] = useState(() => getUserDetailsInLocalStorage() || {});
+
+  useEffect(() => {
+    const handleUpdate = () => {
+      setUser(getUserDetailsInLocalStorage() || {});
+    };
+    window.addEventListener("restro_user_updated", handleUpdate);
+    window.addEventListener("storage", handleUpdate);
+    return () => {
+      window.removeEventListener("restro_user_updated", handleUpdate);
+      window.removeEventListener("storage", handleUpdate);
+    };
+  }, []);
+
+  useEffect(() => {
+    setUser(getUserDetailsInLocalStorage() || {});
+  }, [pathname]);
+
+  const { role: userRole, scope } = user;
+  const rawFeatures =
+    user?.planFeatures || user?.planFeautures || user?.plan_features || user?.features;
+  const userPlanFeatures = (
+    Array.isArray(rawFeatures)
+      ? rawFeatures
+      : typeof rawFeatures === "string"
+      ? (() => {
+          try {
+            const p = JSON.parse(rawFeatures);
+            return Array.isArray(p) ? p : [rawFeatures];
+          } catch {
+            return rawFeatures.split(",");
+          }
+        })()
+      : []
+  ).map((s) => String(s).trim().toUpperCase());
+
+  const userScopes = (scope || "")
+    .split(",")
+    .map((s) => s.trim().toUpperCase());
+
   const { theme } = useTheme();
   const [isNavbarCollapsed, setIsNavbarCollapsed] = useContext(NavbarContext);
 
   const navbarItems = getNavbarItems(t);
+
+  const filterItem = (item) => {
+    const requiredFeatures = item.features || [];
+    if (requiredFeatures.length > 0) {
+      const hasPlan = requiredFeatures.some((f) =>
+        userPlanFeatures.includes(String(f).trim().toUpperCase())
+      );
+      if (!hasPlan) return false;
+    }
+
+    if (item.type === "text") return true;
+
+    if (item.type === "link") {
+      if (userRole === "admin") return true;
+      const requiredScopes = item.scopes || [];
+      if (requiredScopes.length === 0) return true;
+      return requiredScopes.some((sc) =>
+        userScopes.includes(String(sc).trim().toUpperCase())
+      );
+    }
+    return false;
+  };
 
   const btnToggleNavbar = () => {
     const isNavCollapsed = toggleNavbar();
@@ -177,22 +233,7 @@ export default function Navbar() {
       <div className="flex flex-col items-start gap-4 h-screen px-5 py-6 overflow-y-auto fixed left-0 top-0 bg-restro-green-light">
 
         <img src={(theme === "black" ? LogoDark : Logo)?.src || (theme === "black" ? LogoDark : Logo)} alt="logo" className="w-12 block mb-6" />
-        {navbarItems.filter(item => {
-          const requiredScopes = item.features
-          if (requiredScopes?.length == 0) {
-            return true;
-          }
-          return requiredScopes?.some(scope => userPlanFeatures.includes(scope))
-        }).filter((navItem) => {
-          const requiredScopes = navItem.scopes;
-          if (navItem.type == "link") {
-            if (userRole == "admin") {
-              return true;
-            }
-
-            return requiredScopes.some((scope) => userScopes.includes(scope));
-          }
-        }).map((item, index) => {
+        {navbarItems.filter(filterItem).map((item, index) => {
           if (item.type == "text") {
             return;
           }
@@ -255,23 +296,7 @@ export default function Navbar() {
         </div>
 
         {
-          navbarItems.filter(item => {
-            const requiredScopes = item.features
-            if (requiredScopes?.length == 0) return true;
-            return requiredScopes?.some(scope => userPlanFeatures.includes(scope))
-          }).filter((navItem) => {
-            const requiredScopes = navItem.scopes;
-            if (navItem.type == "text") {
-              return true;
-            }
-            if (navItem.type == "link") {
-              if (userRole == "admin") {
-                return true;
-              }
-
-              return requiredScopes.some((scope) => userScopes.includes(scope));
-            }
-          }).map((item, index) => {
+          navbarItems.filter(filterItem).map((item, index) => {
             if (item.type == "text") {
               return (
                 <p key={index} className="font-bold hidden md:block">

@@ -3,6 +3,7 @@ const KEY = 'restroprosaas_user';
 export function saveUserDetailsInLocalStorage(user) {
     if (typeof window === 'undefined') return;
     localStorage.setItem(KEY, JSON.stringify(user));
+    window.dispatchEvent(new Event("restro_user_updated"));
 }
 
 export function getUserDetailsInLocalStorage() {

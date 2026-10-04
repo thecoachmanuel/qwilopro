@@ -12,6 +12,7 @@ const {
   Customer,
   PaymentGateway,
   RefreshToken,
+  Plan,
 } = require("../models");
 const { doUserExistDB } = require("./user.service");
 const { CONFIG } = require("../config");
@@ -199,13 +200,31 @@ exports.getAllTenantsDB = async () => {
 };
 
 exports.getTenantSubscriptionHistoryDB = async (tenantId) => {
+  const tId = Number(tenantId);
+  const tenant = await Tenant.findOne({ id: tId }).lean();
+  let planTitle = "";
+  if (tenant?.payment_gateway_product_id || tenant?.plan_id) {
+    const plan = await Plan.findOne({
+      $or: [
+        ...(tenant.payment_gateway_product_id ? [{ payment_gateway_product_id: tenant.payment_gateway_product_id }] : []),
+        ...(tenant.plan_id ? [{ id: tenant.plan_id }] : []),
+      ],
+      is_deleted: false,
+    }).lean();
+    if (plan) planTitle = plan.title;
+  }
+
   const results = await SubscriptionHistory.find(
-    { tenant_id: Number(tenantId) },
+    { tenant_id: tId },
     { _id: 0, id: 1, tenant_id: 1, created_at: 1, starts_on: 1, expires_on: 1, status: 1 }
   )
     .sort({ created_at: -1 })
     .lean();
-  return results;
+
+  return results.map((r) => ({
+    ...r,
+    plan_title: planTitle || "Subscription",
+  }));
 };
 
 exports.getTenantTotalUsersDB = async (tenantId) => {
@@ -226,9 +245,31 @@ exports.getTenantDetailsDB = async (tenantId) => {
       payment_customer_id: 1,
       subscription_start: 1,
       subscription_end: 1,
+      plan_id: 1,
+      payment_gateway_product_id: 1,
+      isTrialPlan: 1,
+      hasTrial: 1,
     }
   ).lean();
-  return tenant || null;
+
+  if (!tenant) return null;
+
+  let plan = null;
+  if (tenant.payment_gateway_product_id || tenant.plan_id) {
+    plan = await Plan.findOne({
+      $or: [
+        ...(tenant.payment_gateway_product_id ? [{ payment_gateway_product_id: tenant.payment_gateway_product_id }] : []),
+        ...(tenant.plan_id ? [{ id: tenant.plan_id }] : []),
+      ],
+      is_deleted: false,
+    }).lean();
+  }
+
+  return {
+    ...tenant,
+    plan_title: plan?.title || "Starter",
+    payment_gateway_product_id: plan?.payment_gateway_product_id || tenant.payment_gateway_product_id || null,
+  };
 };
 
 exports.getTenantStoreDetailsDB = async (tenantId) => {
@@ -291,6 +332,36 @@ exports.getTenantsDB = async (page, perPage, search, status, type, from, to) => 
     });
   }
 
+  pipeline.push({
+    $lookup: {
+      from: "plans",
+      let: { pId: "$payment_gateway_product_id", planId: "$plan_id" },
+      pipeline: [
+        {
+          $match: {
+            $expr: {
+              $or: [
+                { $and: [{ $ne: ["$$pId", null] }, { $eq: ["$payment_gateway_product_id", "$$pId"] }] },
+                { $and: [{ $ne: ["$$planId", null] }, { $eq: ["$id", "$$planId"] }] },
+              ],
+            },
+          },
+        },
+        { $limit: 1 },
+      ],
+      as: "matchedPlan",
+    },
+  });
+
+  pipeline.push({
+    $addFields: {
+      plan_title: { $ifNull: [{ $arrayElemAt: ["$matchedPlan.title", 0] }, "Starter"] },
+      payment_gateway_product_id: {
+        $ifNull: ["$payment_gateway_product_id", { $arrayElemAt: ["$matchedPlan.payment_gateway_product_id", 0] }],
+      },
+    },
+  });
+
   pipeline.push({ $sort: { id: -1 } });
   pipeline.push({ $skip: offset });
   pipeline.push({ $limit: limit });
@@ -346,25 +417,98 @@ exports.getTenantDetailsByIdDB = async (tenantId) => {
   };
 };
 
-exports.updateTenantDB = async (tenantId, name, email, isActive, existingEmail) => {
+exports.updateTenantDB = async (
+  tenantId,
+  name,
+  email,
+  isActive,
+  existingEmail,
+  subscription_start,
+  subscription_end,
+  payment_gateway_product_id
+) => {
   const tId = Number(tenantId);
-  await Tenant.updateOne({ id: tId }, { $set: { is_active: isActive ? 1 : 0, name } });
+  const tenant = await Tenant.findOne({ id: tId });
+  if (!tenant) throw new Error("Tenant not found");
+
+  const tenantUpdates = {
+    is_active: isActive ? 1 : 0,
+    name,
+  };
+
+  // Find the selected Plan
+  let selectedPlan = null;
+  if (payment_gateway_product_id) {
+    selectedPlan = await Plan.findOne({
+      $or: [
+        { payment_gateway_product_id: String(payment_gateway_product_id).trim() },
+        { id: !isNaN(payment_gateway_product_id) ? Number(payment_gateway_product_id) : -1 },
+        { title: new RegExp(`^${String(payment_gateway_product_id).trim()}$`, "i") },
+      ],
+      is_deleted: false,
+    }).lean();
+  }
+
+  if (selectedPlan) {
+    tenantUpdates.payment_gateway_product_id = selectedPlan.payment_gateway_product_id;
+    tenantUpdates.plan_id = selectedPlan.id;
+    tenantUpdates.plan_title = selectedPlan.title;
+  } else if (payment_gateway_product_id) {
+    tenantUpdates.payment_gateway_product_id = payment_gateway_product_id;
+  }
+
+  // Handle subscription start
+  if (subscription_start !== undefined && subscription_start !== null && subscription_start !== "") {
+    tenantUpdates.subscription_start = new Date(subscription_start);
+  } else if (isActive && !tenant.subscription_start) {
+    tenantUpdates.subscription_start = new Date();
+  }
+
+  // Handle subscription end
+  if (subscription_end !== undefined && subscription_end !== null && subscription_end !== "") {
+    tenantUpdates.subscription_end = new Date(subscription_end);
+  } else if (isActive && (!tenant.subscription_end || new Date(tenant.subscription_end) < new Date())) {
+    // Default 1 year from now if activated by admin without explicit end date
+    const oneYearLater = new Date();
+    oneYearLater.setFullYear(oneYearLater.getFullYear() + 1);
+    tenantUpdates.subscription_end = oneYearLater;
+  }
+
+  // Bump token version so any old cached token is superseded
+  tenantUpdates.token_version = (tenant.token_version || 1) + 1;
+
+  await Tenant.updateOne({ id: tId }, { $set: tenantUpdates });
+
+  // Record history log
+  const effectiveStarts = tenantUpdates.subscription_start || tenant.subscription_start || new Date();
+  const effectiveExpires = tenantUpdates.subscription_end || tenant.subscription_end || null;
+  await SubscriptionHistory.create({
+    tenant_id: tId,
+    starts_on: effectiveStarts,
+    expires_on: effectiveExpires,
+    status: selectedPlan ? "plan_changed" : isActive ? "updated" : "cancelled",
+  }).catch((e) => console.error("Subscription history log error:", e));
 
   const currentUser = await User.findOne({ tenant_id: tId, username: existingEmail });
-  if (!currentUser) {
-    throw new Error("User not found");
+  if (currentUser) {
+    const updates = {};
+    if (currentUser.name !== name) {
+      updates.name = name;
+    }
+    if (currentUser.username !== email) {
+      updates.username = email;
+    }
+    if (Object.keys(updates).length > 0) {
+      await User.updateOne({ tenant_id: tId, username: existingEmail }, { $set: updates });
+    }
   }
 
-  const updates = {};
-  if (currentUser.name !== name) {
-    updates.name = name;
-  }
-  if (currentUser.username !== email) {
-    updates.username = email;
-  }
-  if (Object.keys(updates).length > 0) {
-    await User.updateOne({ tenant_id: tId, username: existingEmail }, { $set: updates });
-  }
+  return {
+    success: true,
+    tenant_id: tId,
+    plan_title: selectedPlan?.title || null,
+    payment_gateway_product_id: tenantUpdates.payment_gateway_product_id || null,
+  };
 };
 
 exports.logoutAllUsersOfTenantDB = async (tenantId) => {

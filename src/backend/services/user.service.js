@@ -25,8 +25,20 @@ exports.getUserDB = async (username, tenantId) => {
     {
       $lookup: {
         from: "plans",
-        localField: "tenant.payment_gateway_product_id",
-        foreignField: "payment_gateway_product_id",
+        let: { pId: "$tenant.payment_gateway_product_id", planId: "$tenant.plan_id" },
+        pipeline: [
+          {
+            $match: {
+              $expr: {
+                $or: [
+                  { $and: [{ $ne: ["$$pId", null] }, { $eq: ["$payment_gateway_product_id", "$$pId"] }] },
+                  { $and: [{ $ne: ["$$planId", null] }, { $eq: ["$id", "$$planId"] }] },
+                ],
+              },
+            },
+          },
+          { $limit: 1 },
+        ],
         as: "plan",
       },
     },
@@ -43,14 +55,57 @@ exports.getUserDB = async (username, tenantId) => {
         role: 1,
         scope: 1,
         plan_features: "$plan.features",
+        features_description: "$plan.features_description",
+        plan_title: "$plan.title",
         is_active: "$tenant.is_active",
+        subscription_start: "$tenant.subscription_start",
+        subscription_end: "$tenant.subscription_end",
+        payment_gateway_product_id: "$tenant.payment_gateway_product_id",
         name: "$tenant.name",
       },
     },
     { $limit: 1 },
   ]);
 
-  return results[0] || null;
+  if (!results[0]) return null;
+  const user = results[0];
+
+  let parsedFeatures = [];
+  if (user.plan_features) {
+    if (Array.isArray(user.plan_features)) {
+      parsedFeatures = user.plan_features;
+    } else if (typeof user.plan_features === "string") {
+      try {
+        const p = JSON.parse(user.plan_features);
+        parsedFeatures = Array.isArray(p) ? p : [user.plan_features];
+      } catch {
+        parsedFeatures = user.plan_features.split(",").map((s) => s.trim());
+      }
+    }
+  }
+
+  // Fallback: If no plan features were loaded for this tenant, look up the default active plan
+  if (parsedFeatures.length === 0) {
+    const defaultPlan = await Plan.findOne({ is_deleted: false }).sort({ id: 1 }).lean();
+    if (defaultPlan?.features) {
+      try {
+        parsedFeatures =
+          typeof defaultPlan.features === "string"
+            ? JSON.parse(defaultPlan.features)
+            : defaultPlan.features;
+      } catch {
+        parsedFeatures = String(defaultPlan.features)
+          .split(",")
+          .map((s) => s.trim());
+      }
+      user.plan_title = defaultPlan.title;
+    }
+  }
+
+  user.plan_features = parsedFeatures;
+  user.planFeatures = parsedFeatures;
+  user.planFeautures = parsedFeatures;
+  return user;
 };
 
 exports.getAllUsersDB = async (tenantId) => {

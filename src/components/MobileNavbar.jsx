@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { IconMenu2, IconX } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
@@ -9,18 +9,35 @@ import { getUserDetailsInLocalStorage } from "../helpers/UserDetails";
 import { getNavbarItems } from "./Navbar";
 
 function filterByPlanAndScope(items, user) {
-  const { role: userRole, scope, planFeautures } = user;
-  const userScopes = scope?.split(",") || [];
-  const userPlanFeatures = Array.isArray(planFeautures)
-    ? planFeautures
-    : planFeautures?.split(",") || [];
+  if (!user) return [];
+  const { role: userRole, scope } = user;
+  const rawFeatures =
+    user?.planFeatures || user?.planFeautures || user?.plan_features || user?.features;
+  const userPlanFeatures = (
+    Array.isArray(rawFeatures)
+      ? rawFeatures
+      : typeof rawFeatures === "string"
+      ? (() => {
+          try {
+            const p = JSON.parse(rawFeatures);
+            return Array.isArray(p) ? p : [rawFeatures];
+          } catch {
+            return rawFeatures.split(",");
+          }
+        })()
+      : []
+  ).map((s) => String(s).trim().toUpperCase());
+
+  const userScopes = (scope || "")
+    .split(",")
+    .map((s) => s.trim().toUpperCase());
 
   return items
     .filter((item) => {
       const requiredFeatures = item.features || [];
       if (requiredFeatures.length === 0) return true;
       return requiredFeatures.some((feature) =>
-        userPlanFeatures.includes(feature)
+        userPlanFeatures.includes(String(feature).trim().toUpperCase())
       );
     })
     .filter((item) => {
@@ -28,7 +45,10 @@ function filterByPlanAndScope(items, user) {
       if (item.type === "link") {
         if (userRole === "admin") return true;
         const requiredScopes = item.scopes || [];
-        return requiredScopes.some((sc) => userScopes.includes(sc));
+        if (requiredScopes.length === 0) return true;
+        return requiredScopes.some((sc) =>
+          userScopes.includes(String(sc).trim().toUpperCase())
+        );
       }
       return false;
     });
@@ -39,8 +59,24 @@ export default function MobileNavbar() {
   const { pathname } = useLocation();
   const { theme } = useTheme();
   const [isMoreOpen, setIsMoreOpen] = useState(false);
+  const [user, setUser] = useState(() => getUserDetailsInLocalStorage());
 
-  const user = getUserDetailsInLocalStorage();
+  useEffect(() => {
+    const handleUpdate = () => {
+      setUser(getUserDetailsInLocalStorage());
+    };
+    window.addEventListener("restro_user_updated", handleUpdate);
+    window.addEventListener("storage", handleUpdate);
+    return () => {
+      window.removeEventListener("restro_user_updated", handleUpdate);
+      window.removeEventListener("storage", handleUpdate);
+    };
+  }, []);
+
+  useEffect(() => {
+    setUser(getUserDetailsInLocalStorage());
+  }, [pathname]);
+
   const baseItems = getNavbarItems(t);
   const navbarItems = filterByPlanAndScope(baseItems, user);
 

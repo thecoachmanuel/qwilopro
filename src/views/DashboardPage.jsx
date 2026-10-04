@@ -76,7 +76,7 @@ export default function DashboardPage() {
   } = data;
 
   const currency = CURRENCIES.find((c) => c.cc === currencyCode);
-  const sym = currency?.symbol || "";
+  const sym = currency?.symbol || "₦";
 
   // Calculate deltas
   const revenueDelta = calcDelta(
