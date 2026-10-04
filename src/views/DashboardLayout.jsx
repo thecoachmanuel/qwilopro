@@ -3,29 +3,14 @@ import { Outlet, useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import AppBar from "../components/AppBar";
 import MobileNavbar from "../components/MobileNavbar";
+import OfflineStatusBanner from "../components/OfflineStatusBanner";
 import { NavbarContext } from "../contexts/NavbarContext";
 import useAuth from "../helpers/useAuth";
-import { useEffect } from "react";
-import Cookies from "js-cookie";
-import { jwtDecode } from "jwt-decode";
 
 export default function DashboardLayout() {
   useAuth();
   const [isNavbarCollapsed] = useContext(NavbarContext);
   const navigate = useNavigate();
-
-  //   useEffect(() => {
-  //   const token = Cookies.get("accessToken");
-  //   console.log("DashboardLayout - token:", token);
-  //   if (!token) return;
-
-  //   const decoded = jwtDecode(token);
-  //   console.log(decoded);
-
-  //   if (String(decoded.is_active) === "0") {
-  //     navigate("/dashboard/inactive-subscription", { replace: true });
-  //   }
-  // }, [navigate]);
 
   const contentPaddingClass = isNavbarCollapsed
     ? "w-full md:pl-[5.5rem]"
@@ -36,10 +21,12 @@ export default function DashboardLayout() {
       <div className="hidden md:block">
         <Navbar />
       </div>
-      {/* <div className={`${contentPaddingClass} pb-20`}> */}
-      <div className={`${contentPaddingClass} pb-24 md:pb-0`}>
+      <div className={`${contentPaddingClass} pb-24 md:pb-0 flex flex-col min-h-screen`}>
+        <OfflineStatusBanner />
         <AppBar />
-        <Outlet />
+        <div className="flex-1">
+          <Outlet />
+        </div>
       </div>
       <MobileNavbar />
     </div>

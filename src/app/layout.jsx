@@ -1,10 +1,13 @@
 import '../index.css';
+import ServiceWorkerRegistration from '../components/ServiceWorkerRegistration';
 
 export const metadata = {
   title: 'QwiloPro SaaS - Restaurant POS',
   description: 'Full-stack POS software for Restaurant, Cafe, Hotel, Food Truck',
+  manifest: '/manifest.json',
   icons: {
     icon: '/favicon.png',
+    apple: '/logo_192.png',
   },
 };
 
@@ -12,6 +15,11 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en" data-theme="light">
       <head>
+        <link rel="manifest" href="/manifest.json" />
+        <meta name="theme-color" content="#10b981" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="apple-mobile-web-app-title" content="QwiloPro POS" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
@@ -37,6 +45,7 @@ export default function RootLayout({ children }) {
         />
       </head>
       <body className="bg-white dark:bg-black text-slate-800 dark:text-neutral-100 font-sans antialiased min-h-screen">
+        <ServiceWorkerRegistration />
         {children}
       </body>
     </html>

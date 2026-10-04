@@ -112,6 +112,14 @@ apiClient.interceptors.response.use(
         return apiClient(originalRequest);
       } catch (refreshErr) {
         console.error("Auto refresh on 401 failed:", refreshErr);
+        // Do not boot user if offline or network error occurred
+        if (
+          (typeof navigator !== "undefined" && !navigator.onLine) ||
+          !refreshErr.response ||
+          refreshErr.code === "ERR_NETWORK"
+        ) {
+          return Promise.reject(refreshErr);
+        }
         if (typeof window !== "undefined") {
           if (role === "superadmin") {
             window.location.href = "/admin";

@@ -15,6 +15,9 @@ export default function useAuth() {
 
   const safeRefresh = async () => {
     if (!user) return;
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      return; // Offline mode: keep existing session intact
+    }
     try {
       if (role === "superadmin") {
         const res = await apiClient.post("/superadmin/refresh-token");
@@ -32,12 +35,19 @@ export default function useAuth() {
         }
       }
     } catch (error) {
+      // If offline or network error occurred, do not boot user
+      if (
+        (typeof navigator !== "undefined" && !navigator.onLine) ||
+        !error.response ||
+        error.code === "ERR_NETWORK"
+      ) {
+        return;
+      }
       console.error("Token refresh failed:", error);
 
       // Only redirect on actual 401 Unauthorized errors if we have no valid token in storage
       if (error?.response?.status === 401) {
         const existingToken = localStorage.getItem("restroprosaas_token");
-        // If there's an existing token, give it a chance rather than immediately booting the user
         if (!existingToken) {
           if (role === "superadmin") {
             navigate("/admin", { replace: true });

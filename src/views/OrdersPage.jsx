@@ -39,6 +39,13 @@ import QRCode from "qrcode"
 import { getQRMenuLink } from "../helpers/QRMenuHelper";
 import { useTheme } from "../contexts/ThemeContext";
 import clsx from "clsx";
+import {
+  getOrdersSnapshot,
+  saveOrdersSnapshot,
+  getOfflineOrdersQueue,
+  isAppOnline,
+} from "../utils/offlineStorage";
+import { IconWifiOff } from "@tabler/icons-react";
 
 export default function OrdersPage() {
   const { t } = useTranslation();
@@ -78,10 +85,22 @@ export default function OrdersPage() {
     _init();
     _initSocket();
 
+    const handleQueueChange = () => {
+      _init();
+    };
+    window.addEventListener("restro_offline_orders_changed", handleQueueChange);
+    window.addEventListener("restro_offline_orders_synced", handleQueueChange);
+    window.addEventListener("online", handleQueueChange);
+    window.addEventListener("offline", handleQueueChange);
+
     return () => {
       // socket.disconnect()
       socket.off('new_order')
       socket.off('order_update')
+      window.removeEventListener("restro_offline_orders_changed", handleQueueChange);
+      window.removeEventListener("restro_offline_orders_synced", handleQueueChange);
+      window.removeEventListener("online", handleQueueChange);
+      window.removeEventListener("offline", handleQueueChange);
     }
   }, []);
 
@@ -94,7 +113,57 @@ export default function OrdersPage() {
     currency,
   } = state;
 
+  const formatOfflineOrdersGroup = (offlineQueue) => {
+    if (!offlineQueue || offlineQueue.length === 0) return [];
+    return [{
+      table_id: null,
+      table_title: "Offline Orders (Pending Sync)",
+      floor: "Saved Locally on Device",
+      is_offline_group: true,
+      order_ids: offlineQueue.map((o) => o.localOrderId),
+      orders: offlineQueue.map((o) => ({
+        id: o.localOrderId,
+        token_no: o.tokenNo,
+        payment_status: o.type === "order_and_invoice" ? "paid" : "unpaid",
+        delivery_type: o.deliveryType,
+        customer_name: o.customerId?.name || "Walk-in",
+        created_at: o.createdAt,
+        total: o.payableTotal,
+        is_offline: true,
+        items: (o.cart || []).map((item) => ({
+          id: item.id,
+          title: item.title,
+          quantity: item.quantity,
+          status: "pending",
+          variant_title: item.variant?.title,
+          notes: item.notes,
+        })),
+      })),
+    }];
+  };
+
   const _init = async () => {
+    const offlineQueue = getOfflineOrdersQueue();
+    const offlineGroups = formatOfflineOrdersGroup(offlineQueue);
+
+    if (!isAppOnline()) {
+      const cached = getOrdersSnapshot();
+      const currency = CURRENCIES.find(
+        (c) => c.cc == cached?.ordersInit?.storeSettings?.currency
+      );
+
+      setState((prev) => ({
+        ...prev,
+        kitchenOrders: [...offlineGroups, ...(cached?.orders || [])],
+        printSettings: cached?.ordersInit?.printSettings || {},
+        storeSettings: cached?.ordersInit?.storeSettings || {},
+        paymentTypes: cached?.ordersInit?.paymentTypes || {},
+        currency: currency?.symbol || "₦",
+        isLoading: false,
+      }));
+      return;
+    }
+
     try {
       const [ordersResponse, ordersInitResponse] = await Promise.all([
         getOrders(),
@@ -105,33 +174,56 @@ export default function OrdersPage() {
         const orders = ordersResponse?.data || [];
         const ordersInit = ordersInitResponse.data;
 
+        saveOrdersSnapshot(orders, ordersInit);
+
         const currency = CURRENCIES.find(
           (c) => c.cc == ordersInit?.storeSettings?.currency
         );
 
         setState({
           ...state,
-          kitchenOrders: orders,
+          kitchenOrders: [...offlineGroups, ...orders],
           printSettings: ordersInit.printSettings || {},
           storeSettings: ordersInit.storeSettings || {},
           paymentTypes: ordersInit.paymentTypes || {},
-          currency: currency?.symbol,
+          currency: currency?.symbol || "₦",
           isLoading: false,
         });
       }
     } catch (error) {
-      console.error(error);
-      toast.dismiss();
-      toast.error("Error loading orders! Please try later!");
+      console.warn("Online orders load failed, checking offline cache:", error);
+      const cached = getOrdersSnapshot();
+      const currency = CURRENCIES.find(
+        (c) => c.cc == cached?.ordersInit?.storeSettings?.currency
+      );
 
       setState({
         ...state,
+        kitchenOrders: [...offlineGroups, ...(cached?.orders || [])],
+        printSettings: cached?.ordersInit?.printSettings || {},
+        storeSettings: cached?.ordersInit?.storeSettings || {},
+        paymentTypes: cached?.ordersInit?.paymentTypes || {},
+        currency: currency?.symbol || "₦",
         isLoading: false,
       });
     }
   };
 
   const refreshOrders = async () => {
+    const offlineQueue = getOfflineOrdersQueue();
+    const offlineGroups = formatOfflineOrdersGroup(offlineQueue);
+
+    if (!isAppOnline()) {
+      const cached = getOrdersSnapshot();
+      setState((prev) => ({
+        ...prev,
+        kitchenOrders: [...offlineGroups, ...(cached?.orders || [])],
+        isLoading: false,
+      }));
+      toast("Refreshed from offline storage.", { icon: "📡" });
+      return;
+    }
+
     try {
       toast.loading(t('orders.loading_message'));
       const res = await getOrders();
@@ -140,21 +232,19 @@ export default function OrdersPage() {
         toast.success(t('orders.orders_loaded'));
         setState({
           ...state,
-          kitchenOrders: res.data,
+          kitchenOrders: [...offlineGroups, ...res.data],
           isLoading: false,
         });
       }
     } catch (error) {
-      const message =
-        error.response.data.message ||
-        "Error loading orders! Please try later!";
-      console.error(error);
       toast.dismiss();
-      toast.error(message);
+      const cached = getOrdersSnapshot();
       setState({
         ...state,
+        kitchenOrders: [...offlineGroups, ...(cached?.orders || [])],
         isLoading: false,
       });
+      toast("Loaded orders from offline cache.", { icon: "📡" });
     }
   };
 

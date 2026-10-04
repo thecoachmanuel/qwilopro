@@ -1,7 +1,7 @@
 import React, { useContext, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next';
 import Page from "../components/Page";
-import { IconPlus, IconNotes, IconArmchair, IconScreenShare, IconSearch, IconDeviceFloppy, IconChefHat, IconCash, IconMinus, IconNote, IconTrash, IconFilter, IconPhoto, IconFilterFilled, IconClipboardList, IconX, IconClearAll, IconPencil, IconCheck, IconCarrot, IconRotate, IconQrcode, IconArmchair2, IconUser, IconCategory, IconGridDots, IconLayoutGrid, IconListDetails, IconListTree, IconMenu4, IconLayoutGridFilled, IconMenu2, IconLayoutList, IconLayout2, IconLayout2Filled, IconAlertTriangleFilled } from "@tabler/icons-react";
+import { IconPlus, IconNotes, IconArmchair, IconScreenShare, IconSearch, IconDeviceFloppy, IconChefHat, IconCash, IconMinus, IconNote, IconTrash, IconFilter, IconPhoto, IconFilterFilled, IconClipboardList, IconX, IconClearAll, IconPencil, IconCheck, IconCarrot, IconRotate, IconQrcode, IconArmchair2, IconUser, IconCategory, IconGridDots, IconLayoutGrid, IconListDetails, IconListTree, IconMenu4, IconLayoutGridFilled, IconMenu2, IconLayoutList, IconLayout2, IconLayout2Filled, IconAlertTriangleFilled, IconWifiOff } from "@tabler/icons-react";
 import { VITE_BACKEND_SOCKET_IO, iconStroke } from "../config/config";
 import { cancelAllQROrders, cancelQROrder, createOrder, createOrderAndInvoice, getDrafts, getQROrders, getQROrdersCount, initPOS, setDrafts } from "../controllers/pos.controller";
 import { CURRENCIES } from '../config/currencies.config';
@@ -20,6 +20,13 @@ import POSMenuItemDetailedView from '../components/POSMenuItemDetailedView';
 import POSMenuItemCompactView from '../components/POSMenuItemCompactView';
 import { clsx } from "clsx";
 import { useTheme } from '../contexts/ThemeContext';
+import {
+  getPOSSnapshot,
+  isAppOnline,
+  saveOfflineOrder,
+  savePOSSnapshot,
+  getOfflineOrdersCount,
+} from '../utils/offlineStorage';
 
 export default function POSPage() {
   const { t } = useTranslation();
@@ -88,14 +95,45 @@ export default function POSPage() {
     selectedPaymentType: null,
   });
 
-  useEffect(()=>{
+  const [isOnline, setIsOnline] = useState(
+    typeof navigator !== 'undefined' ? navigator.onLine : true
+  );
+  const [offlinePendingCount, setOfflinePendingCount] = useState(0);
+
+  useEffect(() => {
     _initPOS();
     _initSocket();
-  },[]);
+
+    setIsOnline(isAppOnline());
+    setOfflinePendingCount(getOfflineOrdersCount());
+
+    const onOnline = () => {
+      setIsOnline(true);
+      setOfflinePendingCount(getOfflineOrdersCount());
+      _initPOS();
+    };
+    const onOffline = () => {
+      setIsOnline(false);
+      setOfflinePendingCount(getOfflineOrdersCount());
+    };
+    const onQueueChange = (e) => {
+      setOfflinePendingCount(e?.detail?.count ?? getOfflineOrdersCount());
+    };
+
+    window.addEventListener('online', onOnline);
+    window.addEventListener('offline', onOffline);
+    window.addEventListener('restro_offline_orders_changed', onQueueChange);
+    window.addEventListener('restro_offline_orders_synced', onQueueChange);
+
+    return () => {
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('offline', onOffline);
+      window.removeEventListener('restro_offline_orders_changed', onQueueChange);
+      window.removeEventListener('restro_offline_orders_synced', onQueueChange);
+    };
+  }, []);
 
   const { categories, menuItems, paymentTypes, printSettings, storeSettings, storeTables, currency, cartItems, searchQuery, selectedCategory, selectedItemId, drafts, customer, customerType, isLoading } = state;
-
-
 
   const sendNewOrderEvent = (tokenNo, orderId) => {
     if (isSocketConnected) {
@@ -111,13 +149,43 @@ export default function POSPage() {
     tapSound.play();
   }
 
+  const _loadCachedPOSData = (data) => {
+    const currency = CURRENCIES.find((c) => c.cc == data?.storeSettings?.currency);
+    const savedView = sessionStorage.getItem('view') || 'detailed';
+
+    setState((prev) => ({
+      ...prev,
+      view: savedView,
+      categories: data.categories || [],
+      menuItems: data.menuItems || [],
+      paymentTypes: data.paymentTypes || [],
+      printSettings: data.printSettings || null,
+      storeSettings: data.storeSettings || null,
+      storeTables: data.storeTables || [],
+      serviceCharge: data.serviceCharge || null,
+      currency: currency?.symbol || "₦",
+      qrOrdersCount: 0,
+      isLoading: false,
+    }));
+  };
+
   async function _initPOS() {
+    // If browser is offline, load instantly from offline cache
+    if (!isAppOnline()) {
+      const cached = getPOSSnapshot();
+      if (cached) {
+        _loadCachedPOSData(cached);
+        return;
+      }
+    }
+
     try {
       const res = await initPOS();
       let totalQROrders = 0;
 
       if(res.status == 200) {
         const data = res.data;
+        savePOSSnapshot(data); // Persist snapshot for offline business continuity
 
         const currency = CURRENCIES.find((c)=>c.cc==data?.storeSettings?.currency);
 
@@ -139,13 +207,21 @@ export default function POSPage() {
           storeSettings: data.storeSettings,
           storeTables: data.storeTables,
           serviceCharge:data.serviceCharge,
-          currency: currency?.symbol || "",
+          currency: currency?.symbol || "₦",
           qrOrdersCount: totalQROrders || 0,
           isLoading: false,
         }));
       }
     } catch (error) {
-      console.error(error);
+      console.warn("Online initPOS failed, checking offline cache:", error);
+      const cached = getPOSSnapshot();
+      if (cached) {
+        _loadCachedPOSData(cached);
+        toast("Loaded menu from offline cache.", { icon: "📡" });
+      } else {
+        toast.error("Offline: No cached menu found. Please connect to internet to load your menu.");
+        setState((prev) => ({ ...prev, isLoading: false }));
+      }
     }
   }
 
@@ -638,6 +714,17 @@ export default function POSPage() {
       return;
     }
 
+    if (!isAppOnline()) {
+      setState({
+        ...state,
+        customer: { phone: phone, name: `Customer (${phone})` },
+        customerType: "CUSTOMER"
+      });
+      document.getElementById("modal-search-customer").close();
+      toast.success(`Customer set to ${phone} (Offline Mode)`);
+      return;
+    }
+
     try {
       toast.loading(t('pos.please_wait'));
       const resp = await searchCustomer(phone);
@@ -653,7 +740,18 @@ export default function POSPage() {
 
     } catch (error) {
       console.log(error);
-      const message = error.response.data.message || t('pos.error_getting_details');
+      if (!error.response || error.code === 'ERR_NETWORK') {
+        setState({
+          ...state,
+          customer: { phone: phone, name: `Customer (${phone})` },
+          customerType: "CUSTOMER"
+        });
+        document.getElementById("modal-search-customer").close();
+        toast.dismiss();
+        toast.success(`Customer set: ${phone} (Offline Mode)`);
+        return;
+      }
+      const message = error?.response?.data?.message || t('pos.error_getting_details');
       toast.dismiss();
       toast.error(message);
     }
@@ -730,12 +828,76 @@ export default function POSPage() {
     if(!state.selectedPaymentType) {
       return toast.error(t('orders.select_payment_method'));
     }
-    try {
-      const deliveryType = diningOptionRef.current.value;
-      const tableId = tableRef.current.value;
-      const customerType = state.customerType;
-      const customer = state.customer;
 
+    const deliveryType = diningOptionRef.current?.value || "dinein";
+    const tableId = tableRef.current?.value || null;
+    const customerType = state.customerType;
+    const customer = state.customer;
+
+    const page_format = printSettings?.page_format || null;
+    const is_enable_print = printSettings?.is_enable_print || 0;
+
+    const paymentType = paymentTypes.find((v)=>v.id == state.selectedPaymentType);
+    let paymentMethodText = paymentType ? paymentType.title : "Cash";
+
+    // Handle offline flow directly
+    if (!isAppOnline()) {
+      const offlineResult = saveOfflineOrder({
+        type: "order_and_invoice",
+        cart: cartItems,
+        deliveryType,
+        customerType,
+        customerId: customer,
+        tableId,
+        netTotal: state.itemsTotal,
+        taxTotal: state.taxTotal,
+        serviceChargeTotal: state.serviceChargeTotal,
+        payableTotal: state.payableTotal,
+        selectedPaymentType: state.selectedPaymentType,
+        selectedPaymentTitle: paymentMethodText,
+      });
+
+      document.getElementById("modal-pay-and-send-kitchen-summary").close();
+
+      setDetailsForReceiptPrint({
+        cartItems, deliveryType, customerType, customer, tableId, currency, storeSettings, printSettings,
+        itemsTotal: state.itemsTotal,
+        taxTotal: state.taxTotal,
+        serviceChargeTotal: state.serviceChargeTotal,
+        payableTotal: state.payableTotal,
+        tokenNo: offlineResult.tokenNo,
+        orderId: offlineResult.orderId,
+        paymentMethod: paymentMethodText
+      });
+
+      setState((prev) => ({
+        ...prev,
+        cartItems: [],
+        tokenNo: offlineResult.tokenNo,
+        orderId: offlineResult.orderId,
+        selectedQrOrderItem: null,
+        selectedPaymentType: null,
+      }));
+
+      playTapSound();
+      toast.success(`Offline Order Saved! (Token #${offlineResult.tokenNo}). Will sync automatically when online.`, { duration: 6000 });
+
+      if (is_enable_print) {
+        setTimeout(()=>{
+          const receiptWindow = window.open("/print-receipt", "_blank", "toolbar=yes,scrollbars=yes,resizable=yes,top=500,left=500,width=400,height=400");
+          receiptWindow.onload = (e) => {
+            setTimeout(()=>{
+              receiptWindow.print();
+            },800)
+          }
+        }, 100);
+      } else {
+        document.getElementById("modal-print-token").showModal();
+      }
+      return;
+    }
+
+    try {
       toast.loading(t('pos.please_wait'));
       const res = await createOrderAndInvoice(cartItems, deliveryType, customerType, customer, tableId, state.itemsTotal, state.taxTotal, state.serviceChargeTotal , state.payableTotal, state.selectedQrOrderItem, state.selectedPaymentType);
       toast.dismiss();
@@ -743,15 +905,6 @@ export default function POSPage() {
         const data = res.data;
         toast.success(res.data.message);
         document.getElementById("modal-pay-and-send-kitchen-summary").close();
-
-        const page_format = printSettings?.page_format || null;
-        const is_enable_print = printSettings?.is_enable_print || 0;
-
-        const paymentType = paymentTypes.find((v)=>v.id == state.selectedPaymentType);
-        let paymentMethodText;
-        if(paymentType) {
-          paymentMethodText = paymentType.title;
-        }
 
         setDetailsForReceiptPrint({
           cartItems, deliveryType, customerType, customer, tableId, currency, storeSettings, printSettings,
@@ -802,10 +955,66 @@ export default function POSPage() {
         document.getElementById("modal-print-token").showModal();
       }
     } catch (error) {
+      toast.dismiss();
+      // If network failure mid-flight, fall back to offline queue
+      if (!error.response || error.code === "ERR_NETWORK" || !isAppOnline()) {
+        const offlineResult = saveOfflineOrder({
+          type: "order_and_invoice",
+          cart: cartItems,
+          deliveryType,
+          customerType,
+          customerId: customer,
+          tableId,
+          netTotal: state.itemsTotal,
+          taxTotal: state.taxTotal,
+          serviceChargeTotal: state.serviceChargeTotal,
+          payableTotal: state.payableTotal,
+          selectedPaymentType: state.selectedPaymentType,
+          selectedPaymentTitle: paymentMethodText,
+        });
+
+        document.getElementById("modal-pay-and-send-kitchen-summary").close();
+
+        setDetailsForReceiptPrint({
+          cartItems, deliveryType, customerType, customer, tableId, currency, storeSettings, printSettings,
+          itemsTotal: state.itemsTotal,
+          taxTotal: state.taxTotal,
+          serviceChargeTotal: state.serviceChargeTotal,
+          payableTotal: state.payableTotal,
+          tokenNo: offlineResult.tokenNo,
+          orderId: offlineResult.orderId,
+          paymentMethod: paymentMethodText
+        });
+
+        setState((prev) => ({
+          ...prev,
+          cartItems: [],
+          tokenNo: offlineResult.tokenNo,
+          orderId: offlineResult.orderId,
+          selectedQrOrderItem: null,
+          selectedPaymentType: null,
+        }));
+
+        playTapSound();
+        toast.success(`Connection dropped! Order saved offline (Token #${offlineResult.tokenNo}).`, { duration: 6000 });
+
+        if(is_enable_print) {
+          setTimeout(()=>{
+            const receiptWindow = window.open("/print-receipt", "_blank", "toolbar=yes,scrollbars=yes,resizable=yes,top=500,left=500,width=400,height=400");
+            receiptWindow.onload = (e) => {
+              setTimeout(()=>{
+                receiptWindow.print();
+              },800)
+            }
+          }, 100);
+        } else {
+          document.getElementById("modal-print-token").showModal();
+        }
+        return;
+      }
+
       const message = error?.response?.data?.message || t('pos.something_went_wrong');
       console.error(error);
-
-      toast.dismiss();
       toast.error(message);
     }
   };
@@ -831,12 +1040,68 @@ export default function POSPage() {
   }
 
   const btnSendToKitchen = async () => {
-    try {
-      const deliveryType = diningOptionRef.current.value;
-      const tableId = tableRef.current.value;
-      const customerType = state.customerType;
-      const customer = state.customer;
+    const deliveryType = diningOptionRef.current?.value || "dinein";
+    const tableId = tableRef.current?.value || null;
+    const customerType = state.customerType;
+    const customer = state.customer;
 
+    const page_format = printSettings?.page_format || null;
+    const is_enable_print = printSettings?.is_enable_print || 0;
+
+    // Handle offline flow directly
+    if (!isAppOnline()) {
+      const offlineResult = saveOfflineOrder({
+        type: "order_only",
+        cart: cartItems,
+        deliveryType,
+        customerType,
+        customerId: customer,
+        tableId,
+        netTotal: state.itemsTotal,
+        taxTotal: state.taxTotal,
+        serviceChargeTotal: state.serviceChargeTotal,
+        payableTotal: state.payableTotal,
+      });
+
+      document.getElementById("modal-send-kitchen-summary").close();
+
+      setDetailsForReceiptPrint({
+        cartItems, deliveryType, customerType, customer, tableId, currency, storeSettings, printSettings,
+        itemsTotal: state.itemsTotal,
+        taxTotal: state.taxTotal,
+        serviceChargeTotal: state.serviceChargeTotal,
+        payableTotal: state.payableTotal,
+        tokenNo: offlineResult.tokenNo,
+        orderId: offlineResult.orderId,
+      });
+
+      setState((prev) => ({
+        ...prev,
+        cartItems: [],
+        tokenNo: offlineResult.tokenNo,
+        orderId: offlineResult.orderId,
+        selectedQrOrderItem: null,
+      }));
+
+      playTapSound();
+      toast.success(`Offline Kitchen Order Saved! (Token #${offlineResult.tokenNo}). Will sync when online.`, { duration: 6000 });
+
+      if (is_enable_print) {
+        setTimeout(()=>{
+          const receiptWindow = window.open("/print-receipt", "_blank", "toolbar=yes,scrollbars=yes,resizable=yes,top=500,left=500,width=400,height=400");
+          receiptWindow.onload = (e) => {
+            setTimeout(()=>{
+              receiptWindow.print();
+            },800)
+          }
+        }, 100);
+      } else {
+        document.getElementById("modal-print-token").showModal();
+      }
+      return;
+    }
+
+    try {
       toast.loading(t('pos.please_wait'));
       const res = await createOrder(cartItems, deliveryType, customerType, customer, tableId, state.selectedQrOrderItem);
       toast.dismiss();
@@ -844,9 +1109,6 @@ export default function POSPage() {
         const data = res.data;
         toast.success(res.data.message);
         document.getElementById("modal-send-kitchen-summary").close();
-
-        const page_format = printSettings?.page_format || null;
-        const is_enable_print = printSettings?.is_enable_print || 0;
 
         setDetailsForReceiptPrint({
           cartItems, deliveryType, customerType, customer, tableId, currency, storeSettings, printSettings,
@@ -895,10 +1157,61 @@ export default function POSPage() {
         document.getElementById("modal-print-token").showModal();
       }
     } catch (error) {
+      toast.dismiss();
+      if (!error.response || error.code === "ERR_NETWORK" || !isAppOnline()) {
+        const offlineResult = saveOfflineOrder({
+          type: "order_only",
+          cart: cartItems,
+          deliveryType,
+          customerType,
+          customerId: customer,
+          tableId,
+          netTotal: state.itemsTotal,
+          taxTotal: state.taxTotal,
+          serviceChargeTotal: state.serviceChargeTotal,
+          payableTotal: state.payableTotal,
+        });
+
+        document.getElementById("modal-send-kitchen-summary").close();
+
+        setDetailsForReceiptPrint({
+          cartItems, deliveryType, customerType, customer, tableId, currency, storeSettings, printSettings,
+          itemsTotal: state.itemsTotal,
+          taxTotal: state.taxTotal,
+          serviceChargeTotal: state.serviceChargeTotal,
+          payableTotal: state.payableTotal,
+          tokenNo: offlineResult.tokenNo,
+          orderId: offlineResult.orderId,
+        });
+
+        setState((prev) => ({
+          ...prev,
+          cartItems: [],
+          tokenNo: offlineResult.tokenNo,
+          orderId: offlineResult.orderId,
+          selectedQrOrderItem: null,
+        }));
+
+        playTapSound();
+        toast.success(`Connection dropped! Kitchen order saved offline (Token #${offlineResult.tokenNo}).`, { duration: 6000 });
+
+        if (is_enable_print) {
+          setTimeout(()=>{
+            const receiptWindow = window.open("/print-receipt", "_blank", "toolbar=yes,scrollbars=yes,resizable=yes,top=500,left=500,width=400,height=400");
+            receiptWindow.onload = (e) => {
+              setTimeout(()=>{
+                receiptWindow.print();
+              },800)
+            }
+          }, 100);
+        } else {
+          document.getElementById("modal-print-token").showModal();
+        }
+        return;
+      }
+
       const message = error?.response?.data?.message || t('pos.something_went_wrong');
       console.error(error);
-
-      toast.dismiss();
       toast.error(message);
     }
   };
@@ -970,6 +1283,13 @@ export default function POSPage() {
           <Link to="/dashboard/orders" className = "relative text-sm rounded-lg border transition active:scale-95 hover:shadow-lg text-gray-500 px-2 py-1 flex items-center gap-1 text-restro-text bg-restro-gray border-restro-border-green hover:bg-restro-button-hover">
             <IconArmchair size={18} stroke={iconStroke} /> {t('pos.table_orders')}
           </Link>
+
+          {!isOnline && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-700 dark:text-amber-300 text-xs font-bold whitespace-nowrap">
+              <IconWifiOff size={16} className="animate-pulse" />
+              <span>Offline Mode {offlinePendingCount > 0 ? `(${offlinePendingCount} queued)` : ""}</span>
+            </div>
+          )}
         </div>
       </div>
 

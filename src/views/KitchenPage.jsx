@@ -10,6 +10,7 @@ import { initSocket } from "../utils/socket";
 import { textToSpeech } from "../utils/textToSpeech";
 import { getUserDetailsInLocalStorage } from "../helpers/UserDetails";
 import { useTheme } from "../contexts/ThemeContext";
+import { getOfflineOrdersQueue, isAppOnline } from "../utils/offlineStorage";
 
 export default function KitchenPage() {
   const { t } = useTranslation();
@@ -26,16 +27,64 @@ export default function KitchenPage() {
     _init();
     _initSocket();
 
+    const handleQueueChange = () => {
+      _init();
+    };
+    window.addEventListener("restro_offline_orders_changed", handleQueueChange);
+    window.addEventListener("restro_offline_orders_synced", handleQueueChange);
+    window.addEventListener("online", handleQueueChange);
+    window.addEventListener("offline", handleQueueChange);
+
     return () => {
       // socket.disconnect()
       socket.off('new_order')
       socket.off('order_update')
+      window.removeEventListener("restro_offline_orders_changed", handleQueueChange);
+      window.removeEventListener("restro_offline_orders_synced", handleQueueChange);
+      window.removeEventListener("online", handleQueueChange);
+      window.removeEventListener("offline", handleQueueChange);
     }
   },[])
 
   const { kitchenOrders, isLoading } = state;
 
+  const _formatOfflineKitchenOrders = (offlineQueue) => {
+    if (!offlineQueue || offlineQueue.length === 0) return [];
+    return offlineQueue.map((o) => ({
+      id: o.localOrderId,
+      token_no: o.tokenNo,
+      order_id: o.localOrderId,
+      created_at: o.createdAt,
+      delivery_type: o.deliveryType,
+      table_id: o.tableId,
+      table_title: o.tableId ? `Table #${o.tableId}` : "Takeaway / Dine Out",
+      is_offline: true,
+      items: (o.cart || []).map((c) => ({
+        id: c.id,
+        order_item_id: `OFF-ITEM-${c.id}-${Date.now()}`,
+        title: c.title,
+        quantity: c.quantity,
+        status: "pending",
+        variant_title: c.variant?.title,
+        notes: c.notes,
+        addons: c.addons || [],
+      })),
+    }));
+  };
+
   const _init = async () => {
+    const offlineQueue = getOfflineOrdersQueue();
+    const offlineOrders = _formatOfflineKitchenOrders(offlineQueue);
+
+    if (!isAppOnline()) {
+      setState((prev) => ({
+        ...prev,
+        kitchenOrders: offlineOrders,
+        isLoading: false,
+      }));
+      return;
+    }
+
     try {
       const res = await getKitchenOrders();
 
@@ -44,17 +93,15 @@ export default function KitchenPage() {
 
         setState({
           ...state,
-          kitchenOrders: orders || [],
+          kitchenOrders: [...offlineOrders, ...orders],
           isLoading: false,
         });
       }
     } catch (error) {
-      console.error(error);
-      toast.dismiss();
-      toast.error(t('kitchen.error_loading_orders'));
-
+      console.warn("Online kitchen orders fetch failed, showing offline orders:", error);
       setState({
         ...state,
+        kitchenOrders: offlineOrders,
         isLoading: false,
       });
     }
@@ -105,6 +152,19 @@ export default function KitchenPage() {
   }
 
   async function btnRefresh() {
+    const offlineQueue = getOfflineOrdersQueue();
+    const offlineOrders = _formatOfflineKitchenOrders(offlineQueue);
+
+    if (!isAppOnline()) {
+      setState((prev) => ({
+        ...prev,
+        kitchenOrders: offlineOrders,
+        isLoading: false,
+      }));
+      toast("Refreshed offline kitchen orders.", { icon: "📡" });
+      return;
+    }
+
     try {
       toast.loading(t('kitchen.loading_message'));
       const res = await getKitchenOrders();
@@ -115,19 +175,19 @@ export default function KitchenPage() {
 
         setState({
           ...state,
-          kitchenOrders: orders || [],
+          kitchenOrders: [...offlineOrders, ...orders],
           isLoading: false,
         });
       }
     } catch (error) {
       console.error(error);
       toast.dismiss();
-      toast.error(t('kitchen.error_loading_orders'));
-
       setState({
         ...state,
+        kitchenOrders: offlineOrders,
         isLoading: false,
       });
+      toast("Loaded offline kitchen orders.", { icon: "📡" });
     }
   }
 
