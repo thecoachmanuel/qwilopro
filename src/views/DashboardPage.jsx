@@ -27,7 +27,7 @@ import {
 
 export default function DashboardPage() {
   const { t } = useTranslation();
-  const { data, error, isLoading } = useDashboard();
+  const { data, error, isLoading, mutate } = useDashboard();
 
   if (isLoading) {
     return (
@@ -41,12 +41,28 @@ export default function DashboardPage() {
   }
 
   if (error) {
-    console.error(error);
+    console.error("[Dashboard] Load error:", error?.response?.status, error?.message);
+    // Check if it's a subscription/access error
+    const isSubError = error?.response?.status === 402 || error?.response?.status === 403;
     return (
       <Page>
         <div className="flex min-h-[60vh] items-center justify-center">
-          <div className="rounded-2xl border border-dashed border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/20 p-10 text-center text-red-600">
-            <h3 className="text-lg font-bold">{t("dashboard.error")}</h3>
+          <div className="rounded-2xl border border-dashed border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/20 p-10 text-center text-red-600 max-w-sm w-full">
+            <h3 className="text-lg font-bold mb-2">{t("dashboard.error")}</h3>
+            {isSubError ? (
+              <p className="text-sm text-red-500 mb-4">Your subscription may have expired or your plan does not include dashboard access.</p>
+            ) : (
+              <p className="text-sm text-red-500 mb-4">Could not connect to the server. Please check your internet connection.</p>
+            )}
+            {!isSubError && (
+              <button
+                onClick={() => mutate()}
+                className="mt-2 inline-flex items-center gap-2 rounded-xl bg-restro-green px-5 py-2 text-sm font-bold text-white hover:bg-restro-green/90 active:scale-95 transition"
+              >
+                <IconLoader2 size={16} stroke={iconStroke} />
+                Retry
+              </button>
+            )}
           </div>
         </div>
       </Page>

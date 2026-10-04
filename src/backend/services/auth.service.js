@@ -128,14 +128,15 @@ exports.getUserDB = async (username, tenantId) => {
       subscription_start: tenant?.subscription_start || null,
       subscription_end: tenant?.subscription_end || null,
       payment_gateway_product_id: tenant?.payment_gateway_product_id || null,
-      planFeatures: plan?.features || null,
+      // All feature fields normalized to parsed arrays for consistent ScopeProtectedRoute reads
+      planFeatures: parsedPlanFeatures,
       planFeautures: parsedPlanFeatures,
-      features: plan?.features || null,
+      features: parsedPlanFeatures,
+      plan_features: parsedPlanFeatures,
       features_description: plan?.features_description || null,
       plan_title: plan?.title || null,
       is_trial: plan?.is_trial || 0,
       trial_days: plan?.trial_days || 0,
-      plan_features: parsedPlanFeatures,
     };
   } catch (error) {
     console.error("getUserDB Error:", error);

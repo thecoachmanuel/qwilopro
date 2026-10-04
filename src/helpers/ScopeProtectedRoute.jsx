@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { getUserDetailsInLocalStorage, saveUserDetailsInLocalStorage } from "./UserDetails";
 import { PLAN_FEATURES, SCOPES } from "../config/scopes";
@@ -45,7 +45,9 @@ function parseFeatures(raw) {
 
 const ScopeProtectedRoute = ({ children, scopes }) => {
   const [user, setUser] = useState(getUserDetailsInLocalStorage());
-  const [checkedServer, setCheckedServer] = useState(false);
+  // useRef instead of useState — doesn't reset on re-render/re-mount in same mount cycle
+  const refreshFiredRef = useRef(false);
+  const [refreshDone, setRefreshDone] = useState(false);
 
   useEffect(() => {
     const handleUserUpdated = () => {
@@ -118,8 +120,12 @@ const ScopeProtectedRoute = ({ children, scopes }) => {
     }
   }
 
-  // If access not recognized yet, but we are online and haven't synced fresh plan claims with the server:
-  if (!checkedServer && typeof navigator !== "undefined" && navigator.onLine) {
+  // If access not recognized yet, try one server verification to get fresh plan data.
+  // Use a ref so this only fires ONCE per component mount (not on every re-render).
+  if (!refreshFiredRef.current && typeof navigator !== "undefined" && navigator.onLine) {
+    refreshFiredRef.current = true; // mark immediately so concurrent renders don't double-fire
+    const timeout = setTimeout(() => setRefreshDone(true), 8000); // max 8s spinner
+
     apiClient
       .post("/auth/refresh-token")
       .then((res) => {
@@ -130,13 +136,24 @@ const ScopeProtectedRoute = ({ children, scopes }) => {
         }
       })
       .catch((err) => {
-        console.warn("Permission sync check:", err);
+        console.warn("Permission sync check:", err?.response?.status || err?.message);
       })
       .finally(() => {
-        setCheckedServer(true);
+        clearTimeout(timeout);
+        setRefreshDone(true);
       });
 
     // Render smooth transition loader while verifying with server
+    return (
+      <div className="min-h-[50vh] flex flex-col items-center justify-center gap-3">
+        <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+        <p className="text-xs font-medium text-slate-500 dark:text-neutral-400">Verifying plan permissions...</p>
+      </div>
+    );
+  }
+
+  // If refresh already fired but we're still waiting, keep spinner
+  if (refreshFiredRef.current && !refreshDone) {
     return (
       <div className="min-h-[50vh] flex flex-col items-center justify-center gap-3">
         <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
