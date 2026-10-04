@@ -33,7 +33,7 @@ export default function SuperAdminAppBar() {
       if (response.status == 200) {
         toast.dismiss();
         toast.success(response.data.message);
-        navigate("/superadmin", { replace: true });
+        navigate("/admin", { replace: true });
       }
     } catch (error) {
       const message =
@@ -82,7 +82,7 @@ export default function SuperAdminAppBar() {
               <Menu.Item>
                 {({ active }) => (
                   <Link
-                    to="/superadmin/dashboard/contact-support"
+                    to="/admin/dashboard/contact-support"
                     className={`${
                       theme === "black"
                         ? active
@@ -102,7 +102,7 @@ export default function SuperAdminAppBar() {
               <Menu.Item>
                 {({ active }) => (
                   <Link
-                    to="/superadmin/dashboard/language"
+                    to="/admin/dashboard/language"
                     className={`${
                       theme === "black"
                         ? active

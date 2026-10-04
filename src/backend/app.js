@@ -104,6 +104,7 @@ app.use("/api/v1/reports", reportsRoutes);
 app.use("/api/v1/qrmenu", qrMenuRoutes);
 app.use("/api/v1/feedback", feedbackRoutes);
 app.use("/api/v1/superadmin", superAdminRoutes);
+app.use("/api/v1/admin", superAdminRoutes);
 app.use("/api/v1/inventory", inventoryRoutes);
 app.use("/api/v1/plans", planRoutes);
 // routes

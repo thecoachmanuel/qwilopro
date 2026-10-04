@@ -33,31 +33,31 @@ export const getSuperAdminNavbarItems = (t) => [
     type: "link",
     text: t('superadmin_navbar.dashboard'),
     icon: <IconLayoutDashboard stroke={iconStroke} />,
-    path: "/superadmin/dashboard/home",
+    path: "/admin/dashboard/home",
   },
   {
     type: "link",
     text: t('superadmin_navbar.payment_gateways'),
     icon: <IconCreditCard stroke={iconStroke} />,
-    path: "/superadmin/dashboard/payment-gateways",
+    path: "/admin/dashboard/payment-gateways",
   },
   {
     type: "link",
     text: t('superadmin_navbar.plans'),
     icon: <IconPremiumRights stroke={iconStroke} />,
-    path: "/superadmin/dashboard/plans",
+    path: "/admin/dashboard/plans",
   },
   {
     type: "link",
     text: t('superadmin_navbar.tenants'),
     icon: <IconBuildingStore stroke={iconStroke} />,
-    path: "/superadmin/dashboard/tenants",
+    path: "/admin/dashboard/tenants",
   },
   {
     type: "link",
     text: t('superadmin_navbar.reports'),
     icon: <IconChartArea stroke={iconStroke} />,
-    path: "/superadmin/dashboard/reports",
+    path: "/admin/dashboard/reports",
   },
 ];
 

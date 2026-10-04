@@ -24,7 +24,7 @@ export default function SuperAdminLoginPage() {
       if (!user) return;
       const { role } = user;
       if (role == "superadmin") {
-        navigate("/superadmin/dashboard/home", {
+        navigate("/admin/dashboard/home", {
           replace: true,
         });
         return;
@@ -62,8 +62,7 @@ export default function SuperAdminLoginPage() {
         const user = res.data.user;
         saveUserDetailsInLocalStorage(user);
 
-        const { role } = getUserDetailsInLocalStorage();
-        navigate("/superadmin/dashboard/home", {
+        navigate("/admin/dashboard/home", {
           replace: true,
         });
         return;

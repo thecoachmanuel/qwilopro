@@ -31,7 +31,7 @@ export default function useAuth() {
       // Only redirect on actual 401 Unauthorized errors
       if (error?.response?.status === 401) {
         if (role === "superadmin") {
-          navigate("/superadmin", { replace: true });
+          navigate("/admin", { replace: true });
         } else {
           navigate("/refresh", { replace: true });
         }

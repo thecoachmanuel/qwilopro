@@ -74,7 +74,7 @@ export default function SuperAdminDashboardPage() {
           <p className='font-black text-5xl mt-2 text-restro-text'>{Number(ordersProcessedToday).toLocaleString("en",{notation: "compact"})}</p>
         </div>
 
-        <Link to="/superadmin/dashboard/reports" className='flex items-center justify-center gap-2 rounded-[42px] border px-8 py-5 md:col-span-2 transition active:scale-95 font-bold border-restro-border-green hover:bg-restro-button-hover '>
+        <Link to="/admin/dashboard/reports" className='flex items-center justify-center gap-2 rounded-[42px] border px-8 py-5 md:col-span-2 transition active:scale-95 font-bold border-restro-border-green hover:bg-restro-button-hover '>
           <p>{t('superadmin_dashboard.view_more')}</p>
           <IconArrowRight stroke={iconStroke} />
         </Link>

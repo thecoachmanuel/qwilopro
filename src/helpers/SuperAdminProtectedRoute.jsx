@@ -9,7 +9,7 @@ const SuperAdminProtectedRoute = ({ children }) => {
     return children;
   }
 
-  return <Navigate to="/superadmin" replace />;
+  return <Navigate to="/admin" replace />;
 };
 
 export default SuperAdminProtectedRoute;

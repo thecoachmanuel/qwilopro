@@ -28,7 +28,7 @@ export default function LoginPage() {
       const { role, scope } = user;
 
       if (role == "superadmin") {
-        navigate("/superadmin/dashboard/home", {
+        navigate("/admin/dashboard/home", {
           replace: true,
         });
         return;

@@ -69,7 +69,27 @@ const buildDateFilter = (field, type, from, to) => {
 };
 
 exports.signInDB = async (username, password) => {
-  const user = await SuperAdmin.findOne({ email: username }).lean();
+  const cleanEmail = (username || "").trim().toLowerCase();
+  let user = await SuperAdmin.findOne({ email: { $regex: new RegExp(`^${cleanEmail}$`, "i") } }).lean();
+
+  if (!user) {
+    // Check if no superadmin exists yet in database -> create default one
+    const count = await SuperAdmin.countDocuments();
+    if (count === 0) {
+      const defaultEmail = (process.env.DEFAULT_SUPERADMIN_EMAIL || "superadmin@qwilopro.com").trim().toLowerCase();
+      const defaultPass = process.env.DEFAULT_SUPERADMIN_PASSWORD || "admin123";
+      const hashedPassword = await bcrypt.hash(defaultPass, CONFIG.PASSWORD_SALT);
+      const created = await SuperAdmin.create({
+        email: defaultEmail,
+        password: hashedPassword,
+        name: "Super Admin",
+      });
+      if (cleanEmail === defaultEmail) {
+        user = created.toObject ? created.toObject() : created;
+      }
+    }
+  }
+
   if (!user) {
     return null;
   }
@@ -83,7 +103,11 @@ exports.signInDB = async (username, password) => {
 };
 
 exports.getAdminUserDB = async (username) => {
-  const user = await SuperAdmin.findOne({ email: username }, { email: 1, password: 1, name: 1, _id: 0 }).lean();
+  const cleanEmail = (username || "").trim().toLowerCase();
+  const user = await SuperAdmin.findOne(
+    { email: { $regex: new RegExp(`^${cleanEmail}$`, "i") } },
+    { email: 1, password: 1, name: 1, _id: 0 }
+  ).lean();
   return user || null;
 };
 

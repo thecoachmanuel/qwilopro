@@ -114,6 +114,7 @@ app.prepare().then(async () => {
   server.use("/api/v1/qrmenu", qrMenuRoutes);
   server.use("/api/v1/feedback", feedbackRoutes);
   server.use("/api/v1/superadmin", superAdminRoutes);
+  server.use("/api/v1/admin", superAdminRoutes);
   server.use("/api/v1/inventory", inventoryRoutes);
   server.use("/api/v1/plans", planRoutes);
 

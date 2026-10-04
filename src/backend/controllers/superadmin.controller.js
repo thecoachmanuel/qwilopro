@@ -44,10 +44,9 @@ exports.signIn = async (req, res) => {
             res.cookie('restroprosaas__authenticated', 'true', cookieAuthStatusOptions);
 
             // set refresh token in DB.
-            const deviceDetails = req.useragent;
-
-            const deviceIP = req.connection.remoteAddress;
-            const deviceName = `${deviceDetails.platform}\nBrowser: ${deviceDetails.browser}`;
+            const deviceDetails = req.useragent || {};
+            const deviceIP = req.headers["x-forwarded-for"] || req.socket?.remoteAddress || req.ip || "127.0.0.1";
+            const deviceName = `${deviceDetails.platform || "Unknown"}\nBrowser: ${deviceDetails.browser || "Unknown"}`;
             const deviceLocation = null;
             await addRefreshTokenDB(username, refreshToken, refreshTokenExpiry, deviceIP, deviceName, deviceLocation, null);
 

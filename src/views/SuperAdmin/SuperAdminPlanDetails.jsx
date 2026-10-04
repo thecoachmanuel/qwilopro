@@ -81,7 +81,7 @@ export default function SuperAdminPlanDetails() {
             {error || (t("superadmin_plan_details.load_failed") || "Failed to load plan details.")}
           </p>
           <Link
-            to="/superadmin/dashboard/plans"
+            to="/admin/dashboard/plans"
             className={clsx(
               "inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium transition-all",
               "bg-restro-green hover:bg-restro-green-button-hover text-white"
@@ -108,7 +108,7 @@ export default function SuperAdminPlanDetails() {
         <ul>
           <li>
             <Link
-              to="/superadmin/dashboard/plans"
+              to="/admin/dashboard/plans"
               className={isLight ? "text-gray-600 hover:text-restro-green" : "text-gray-400 hover:text-restro-green"}
             >
               {t("plans")}
@@ -130,7 +130,7 @@ export default function SuperAdminPlanDetails() {
         <div className="relative z-10 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
           <div className="flex-1">
             <Link
-              to="/superadmin/dashboard/plans"
+              to="/admin/dashboard/plans"
               className={clsx(
                 "inline-flex items-center gap-2 text-sm font-medium w-fit rounded-xl px-3 py-2 mb-4 transition-colors",
                 isLight

@@ -292,7 +292,23 @@ export default function App() {
           {/* app routes */}
 
 
-          {/* superadmin routes */}
+          {/* admin / superadmin routes */}
+          <Route path="/admin" element={<SuperAdminLoginPage />} />
+          <Route path="/admin/login" element={<SuperAdminLoginPage />} />
+          <Route path="/admin/dashboard" element={<PrivateRoute><SuperAdminDashboadLayout/></PrivateRoute>}>
+            <Route path="" element={<SuperAdminProtectedRoute><SuperAdminDashboardPage /></SuperAdminProtectedRoute>} />
+            <Route path="home" element={<SuperAdminProtectedRoute><SuperAdminDashboardPage /></SuperAdminProtectedRoute>} />
+            <Route path="plans" element={<SuperAdminProtectedRoute><SuperAdminPlansPage /></SuperAdminProtectedRoute>} />
+            <Route path="payment-gateways" element={<SuperAdminProtectedRoute><SuperAdminPaymentGatewaysPage /></SuperAdminProtectedRoute>} />
+            <Route path="tenants" element={<SuperAdminProtectedRoute><SuperAdminTenantsPage /></SuperAdminProtectedRoute>} />
+            <Route path="tenants/:id/subscription-history" element={<SuperAdminProtectedRoute><SuperAdminTenantSubscriptionHistoryPage /></SuperAdminProtectedRoute>} />
+            <Route path="plans/:id" element={<SuperAdminProtectedRoute><SuperAdminPlanDetails /></SuperAdminProtectedRoute>} />
+            <Route path="reports" element={<SuperAdminProtectedRoute><SuperAdminReportsPage /></SuperAdminProtectedRoute>} />
+            <Route path="contact-support" element={<SuperAdminProtectedRoute><SuperAdminContactSupportPage /></SuperAdminProtectedRoute>} />
+            <Route path="language" element={<LanguagePage />} />
+          </Route>
+
+          {/* superadmin backward-compatibility aliases */}
           <Route path="/superadmin" element={<SuperAdminLoginPage />} />
           <Route path="/superadmin/login" element={<SuperAdminLoginPage />} />
           <Route path="/superadmin/dashboard" element={<PrivateRoute><SuperAdminDashboadLayout/></PrivateRoute>}>
@@ -307,7 +323,7 @@ export default function App() {
             <Route path="contact-support" element={<SuperAdminProtectedRoute><SuperAdminContactSupportPage /></SuperAdminProtectedRoute>} />
             <Route path="language" element={<LanguagePage />} />
           </Route>
-          {/* superadmin routes */}
+          {/* admin / superadmin routes */}
 
 
         </Routes>

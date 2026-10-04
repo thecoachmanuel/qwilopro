@@ -61,7 +61,7 @@ export default function SuperAdminTenantSubscriptionHistoryPage() {
       {/* breadcrumbs */}
       <div className="breadcrumbs text-sm">
         <ul>
-          <li><Link to="/superadmin/dashboard/tenants">{t('superadmin_tenant_subscription_history.tenants')}</Link></li>
+          <li><Link to="/admin/dashboard/tenants">{t('superadmin_tenant_subscription_history.tenants')}</Link></li>
           <li>{tenantInfo.name}</li>
           <li>{t('superadmin_tenant_subscription_history.subscription_history')}</li>
         </ul>
