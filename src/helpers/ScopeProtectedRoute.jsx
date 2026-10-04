@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { getUserDetailsInLocalStorage, saveUserDetailsInLocalStorage } from "./UserDetails";
 import { PLAN_FEATURES, SCOPES } from "../config/scopes";
@@ -14,7 +14,6 @@ const DEFAULT_STARTER_FEATURES = [
   "USER",
 ];
 
-// Map sub-scopes to their parent plan feature
 const SCOPE_TO_PLAN_FEATURE = {
   CUSTOMER_DISPLAY: PLAN_FEATURES.POS,
   KITCHEN_DISPLAY: PLAN_FEATURES.KITCHEN,
@@ -44,6 +43,11 @@ function parseFeatures(raw) {
 }
 
 const ScopeProtectedRoute = ({ children, scopes }) => {
+  // ====================================================================
+  // ALL React hooks MUST be declared before any conditional return.
+  // Having a second useEffect AFTER an early-return is a React Rules of
+  // Hooks violation that causes a fatal "Application error" in production.
+  // ====================================================================
   const [user, setUser] = useState(getUserDetailsInLocalStorage());
   const [isVerifying, setIsVerifying] = useState(false);
   const [checkedServer, setCheckedServer] = useState(false);
@@ -56,69 +60,54 @@ const ScopeProtectedRoute = ({ children, scopes }) => {
     return () => window.removeEventListener("restro_user_updated", handleUserUpdated);
   }, []);
 
-  if (!user) {
-    return <Navigate to="/login" replace />;
-  }
-
-  const role = user.role;
-  if (role === "superadmin") {
-    return children;
-  }
+  // Compute derived flags (no hooks allowed below this point)
+  const noUser = !user;
+  const role = user?.role;
+  const isSuperAdmin = role === "superadmin";
 
   let userPlanFeatures = parseFeatures(
     user?.planFeatures || user?.planFeautures || user?.plan_features || user?.features
   );
-
-  // If active tenant admin has empty features in storage, grant base starter features so they are never locked out
   if (role === "admin" && userPlanFeatures.length === 0 && Number(user?.is_active) === 1) {
     userPlanFeatures = DEFAULT_STARTER_FEATURES;
   }
 
-  // Check subscription active status & expiry date
   const isActive = Number(user?.is_active) === 1;
   const isExpired = user?.subscription_end
     ? new Date(user.subscription_end).getTime() < new Date().setHours(0, 0, 0, 0)
     : false;
 
-  if (!isActive || isExpired) {
-    return <Navigate to="/dashboard/inactive-subscription" replace />;
-  }
+  const needsRedirectToInactive = !noUser && !isSuperAdmin && (!isActive || isExpired);
+  const noScopesRequired =
+    !noUser && !isSuperAdmin && !needsRedirectToInactive && (!scopes || scopes.length === 0);
 
-  // If no specific scopes required for this route, allow access
-  if (!scopes || scopes.length === 0) {
-    return children;
-  }
-
-  // Check Plan Features Access
-  const hasPlanAccess = scopes.some((scope) => {
-    const normalized = String(scope).trim().toUpperCase();
-    const parentFeature = SCOPE_TO_PLAN_FEATURE[normalized] || normalized;
-    return (
-      userPlanFeatures.includes(normalized) ||
-      userPlanFeatures.includes(parentFeature)
-    );
-  });
-
-  // Determine if user has permission
   let hasAccess = false;
-  if (hasPlanAccess) {
-    if (role === "admin") {
-      hasAccess = true;
-    } else {
-      // Staff user: check specific permissions in user.scope
-      const userScopes = (user?.scope || "")
-        .split(",")
-        .map((s) => s.trim().toUpperCase());
-
-      hasAccess = scopes.some((scope) =>
-        userScopes.includes(String(scope).trim().toUpperCase())
+  if (!noUser && !isSuperAdmin && !needsRedirectToInactive && scopes && scopes.length > 0) {
+    const hasPlanAccess = scopes.some((scope) => {
+      const normalized = String(scope).trim().toUpperCase();
+      const parentFeature = SCOPE_TO_PLAN_FEATURE[normalized] || normalized;
+      return (
+        userPlanFeatures.includes(normalized) ||
+        userPlanFeatures.includes(parentFeature)
       );
+    });
+    if (hasPlanAccess) {
+      if (role === "admin") {
+        hasAccess = true;
+      } else {
+        const userScopes = (user?.scope || "")
+          .split(",")
+          .map((s) => s.trim().toUpperCase());
+        hasAccess = scopes.some((scope) =>
+          userScopes.includes(String(scope).trim().toUpperCase())
+        );
+      }
     }
   }
 
-  // Async server verification if access not recognized yet (in case plan was just upgraded)
+  // Async server re-check (second useEffect) — safe because it is BEFORE all returns
   useEffect(() => {
-    if (hasAccess) return;
+    if (noUser || isSuperAdmin || needsRedirectToInactive || noScopesRequired || hasAccess) return;
     if (checkedServer || typeof navigator === "undefined" || !navigator.onLine) return;
 
     let isMounted = true;
@@ -146,14 +135,15 @@ const ScopeProtectedRoute = ({ children, scopes }) => {
     return () => {
       isMounted = false;
     };
-  }, [hasAccess, checkedServer]);
+  }, [hasAccess, checkedServer, noUser, isSuperAdmin, needsRedirectToInactive, noScopesRequired]);
+  // ====================================================================
 
-  // If access is confirmed, render children immediately
-  if (hasAccess) {
-    return children;
-  }
+  // Conditional returns — all hooks are safely above this point
+  if (noUser) return <Navigate to="/login" replace />;
+  if (isSuperAdmin) return children;
+  if (needsRedirectToInactive) return <Navigate to="/dashboard/inactive-subscription" replace />;
+  if (noScopesRequired || hasAccess) return children;
 
-  // If verifying with server, show smooth spinner
   if (isVerifying) {
     return (
       <div className="min-h-[50vh] flex flex-col items-center justify-center gap-3">
@@ -163,12 +153,10 @@ const ScopeProtectedRoute = ({ children, scopes }) => {
     );
   }
 
-  // If verification completed and still no access, redirect to /no-access
   if (checkedServer || (typeof navigator !== "undefined" && !navigator.onLine)) {
     return <Navigate to="/no-access" replace />;
   }
 
-  // Default while initial check runs
   return (
     <div className="min-h-[50vh] flex flex-col items-center justify-center gap-3">
       <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
