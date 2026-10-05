@@ -1,4 +1,4 @@
-import { Fragment } from "react";
+import { Fragment, useState, useEffect } from "react";
 import { Menu, Transition } from "@headlessui/react";
 import { Link, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
@@ -20,14 +20,23 @@ import {
 import { signOut } from "../controllers/auth.controller";
 import { iconStroke } from "../config/config";
 import { getUserDetailsInLocalStorage } from "../helpers/UserDetails";
+import { getImageURL } from "../helpers/ImageHelper";
 import { useTheme } from "../contexts/ThemeContext";
 import clsx from "clsx";
 
 export default function AppBarDropdown() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const user = getUserDetailsInLocalStorage();
+  const [user, setUser] = useState(() => getUserDetailsInLocalStorage());
   const { theme, toggleTheme } = useTheme();
+
+  useEffect(() => {
+    const handleUpdate = () => {
+      setUser(getUserDetailsInLocalStorage());
+    };
+    window.addEventListener("restro_user_updated", handleUpdate);
+    return () => window.removeEventListener("restro_user_updated", handleUpdate);
+  }, []);
 
   const btnLogout = async () => {
     try {
@@ -49,6 +58,8 @@ export default function AppBarDropdown() {
   const itemBaseClasses =
     "group flex gap-2 w-full items-center rounded-2xl px-3 py-2 text-sm transition-colors ";
 
+  const userAvatarSrc = user?.photo ? getImageURL(user.photo) : (AvatarImg?.src || AvatarImg);
+
   return (
     <Menu as="div" className="relative inline-block text-left z-50">
       <div>
@@ -60,7 +71,11 @@ export default function AppBarDropdown() {
               : "bg-restro-green-light hover:bg-restro-button-hover text-restro-green-dark"
           )}
         >
-          <img src={AvatarImg?.src || AvatarImg} alt="avatar" className="w-10 h-10 rounded-full p-1" />
+          <img
+            src={userAvatarSrc}
+            alt="avatar"
+            className="w-10 h-10 rounded-full p-1 object-cover"
+          />
           <p className="font-medium hidden md:block">{user?.name || "Account"}</p>
           <IconChevronDown stroke={iconStroke} className="mr-1" size={18} />
         </Menu.Button>

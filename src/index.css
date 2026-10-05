@@ -129,3 +129,15 @@
 .react-hot-toast {
   z-index: 99999 !important;
 }
+
+/* Prevent iOS Safari & Mobile Chrome auto-zooming when focusing on inputs */
+@media screen and (max-width: 768px) {
+  input,
+  input:focus,
+  select,
+  select:focus,
+  textarea,
+  textarea:focus {
+    font-size: 16px !important;
+  }
+}

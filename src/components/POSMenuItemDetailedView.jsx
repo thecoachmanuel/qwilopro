@@ -9,10 +9,22 @@ const POSMenuItemDetailedView = ({ menuItems, selectedCategory, categories, sear
   const { t } = useTranslation();
   const { theme } = useTheme();
 
-  const filteredMenuItems = menuItems.filter((menuItem) => menuItem.is_enabled)
+  const safeMenuItems = Array.isArray(menuItems) ? menuItems : [];
+  const safeCategories = Array.isArray(categories) ? categories : [];
+
+  const filteredMenuItems = safeMenuItems
+    .filter((menuItem) => menuItem && menuItem.is_enabled)
     .filter((menuItem) => {
       if (selectedCategory === "all") {
-        return !menuItem.category_id || categories.find(category => category.id === menuItem.category_id && category.is_enabled);
+        return (
+          !menuItem.category_id ||
+          safeCategories.find(
+            (category) =>
+              category &&
+              category.id === menuItem.category_id &&
+              category.is_enabled
+          )
+        );
       }
       return selectedCategory === menuItem.category_id;
     })
@@ -20,7 +32,10 @@ const POSMenuItemDetailedView = ({ menuItems, selectedCategory, categories, sear
       if (!searchQuery) {
         return true;
       }
-      return menuItem.title.trim().toLowerCase().includes(searchQuery.trim().toLowerCase());
+      return (menuItem.title || "")
+        .trim()
+        .toLowerCase()
+        .includes(searchQuery.trim().toLowerCase());
     });
 
   return (

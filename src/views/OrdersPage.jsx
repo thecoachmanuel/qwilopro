@@ -259,41 +259,22 @@ export default function OrdersPage() {
       } catch {}
     };
 
-    if (isSocketConnected) {
-      socket.emit("authenticate", tenantId);
-      socket.on("new_order", (payload) => {
-        playNewOrderAudio();
-        refreshOrders();
-      });
+    socket.emit("authenticate", tenantId);
+    socket.on("new_order", (payload) => {
+      playNewOrderAudio();
+      refreshOrders();
+    });
 
-      socket.on("order_update", () => {
-        refreshOrders();
-      });
-    } else {
-      initSocket();
-      socket?.emit?.("authenticate", tenantId);
-      socket?.on?.("new_order", (payload) => {
-        playNewOrderAudio();
-        refreshOrders();
-      });
-
-      socket?.on?.("order_update", () => {
-        refreshOrders();
-      });
-    }
+    socket.on("order_update", () => {
+      refreshOrders();
+    });
   };
 
   const sendOrderUpdateEvent = () => {
     const u = getUserDetailsInLocalStorage();
     const tenantId = u?.tenant_id;
     if (!tenantId) return;
-
-    if (isSocketConnected && socket?.emit) {
-      socket.emit("order_update_backend", {}, tenantId);
-    } else {
-      initSocket();
-      socket?.emit?.("order_update_backend", {}, tenantId);
-    }
+    socket?.emit?.("order_update_backend", {}, tenantId);
   };
 
   if (state.isLoading) {
@@ -465,13 +446,14 @@ export default function OrdersPage() {
             });
           }
 
+          const firstOrder = state.summaryOrders?.[0] || {};
           const {
             customer_id,
             customer_type,
             customer_name,
             date,
             delivery_type,
-          } = state.summaryOrders[0];
+          } = firstOrder;
 
           const paymentType = paymentTypes.find((v)=>v.id == state.selectedPaymentType);
           let paymentMethodText;
@@ -570,13 +552,14 @@ export default function OrdersPage() {
           });
         }
 
+        const firstOrder = (Array.isArray(ordersArr) ? ordersArr[0] : ordersArr) || {};
         const {
           customer_id,
           customer_type,
           customer_name,
           date,
           delivery_type,
-        } = ordersArr;
+        } = firstOrder;
 
         setDetailsForReceiptPrint({
           cartItems: orders,
@@ -816,9 +799,15 @@ export default function OrdersPage() {
                         </div>
                         <div className="text-end">
                           <p>
-                            {new Intl.DateTimeFormat("en-US", {
-                              timeStyle: "short",
-                            }).format(new Date(date))}
+                            {(() => {
+                              try {
+                                return date
+                                  ? new Intl.DateTimeFormat("en-US", { timeStyle: "short" }).format(new Date(date))
+                                  : "";
+                              } catch {
+                                return "";
+                              }
+                            })()}
                           </p>
                           <p className={clsx("flex gap-2 items-center text-sm", {
                             "text-amber-500": payment_status == "pending",
@@ -826,14 +815,14 @@ export default function OrdersPage() {
                           })}>
                             {" "}
                             <IconCash stroke={iconStroke} size={18} />{" "}
-                            {payment_status.toUpperCase()}
+                            {(payment_status || "pending").toUpperCase()}
                           </p>
                         </div>
                       </div>
 
                       {/* order items */}
                       <div className="mt-4 flex flex-col divide-y divide-gray-200 dark:divide-gray-700">
-                        {items.map((item, index) => {
+                        {(items || []).map((item, index) => {
                           const {
                             id: orderItemId,
                             order_id,

@@ -16,13 +16,22 @@ exports.getOrders = async (req, res) => {
       const orderItems = kitchenOrdersItems.filter((oi)=>oi.order_id == order.id);
 
       orderItems.forEach((oi, index)=>{
-        const addonsIds = oi?.addons ? JSON.parse(oi?.addons) : null;
+        let addonsIds = null;
+        if (Array.isArray(oi?.addons)) {
+          addonsIds = oi.addons;
+        } else if (typeof oi?.addons === "string") {
+          try {
+            addonsIds = JSON.parse(oi.addons);
+          } catch {
+            addonsIds = null;
+          }
+        }
 
-        if(addonsIds) {
+        if(addonsIds && Array.isArray(addonsIds)) {
           const itemAddons = addonsIds.map((addonId)=>{
             const addon = addons.filter((a)=>a.id == addonId);
             return addon[0];
-          });
+          }).filter(Boolean);
           orderItems[index].addons = [...itemAddons];
         }
       });

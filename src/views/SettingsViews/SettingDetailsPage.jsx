@@ -13,6 +13,7 @@ import { toast } from "react-hot-toast";
 import { mutate } from "swr";
 import Popover from "../../components/Popover";
 import {
+  IconCopy,
   IconExternalLink,
   IconLock,
   IconQrcode,
@@ -48,12 +49,21 @@ export default function SettingDetailsPage() {
     ? rawFeatures.map(f => String(f).toUpperCase())
     : (typeof rawFeatures === 'string' ? rawFeatures.split(",").map(f => f.trim().toUpperCase()) : []);
 
-  const isQrMenuAccess = user?.role === "admin" || userPlanFeatures.includes(PLAN_FEATURES?.QRMENU || 'QRMENU');
+  const isSuperAdmin = user?.role === "superadmin" || Boolean(user?.is_superadmin);
+  const isQrMenuAccess =
+    isSuperAdmin ||
+    userPlanFeatures.includes(PLAN_FEATURES?.QRMENU || 'QRMENU') ||
+    userPlanFeatures.includes("QRMENU") ||
+    user?.role === "admin";
+
   const isCustomDomainAccess =
-    user?.role === "admin" ||
+    isSuperAdmin ||
     userPlanFeatures.includes(PLAN_FEATURES?.CUSTOM_DOMAIN || "CUSTOM_DOMAIN") ||
     userPlanFeatures.includes("CUSTOM_DOMAIN") ||
-    (user?.plan_title && String(user.plan_title).toLowerCase().includes("business"));
+    (user?.plan_title && (
+      String(user.plan_title).toLowerCase().includes("business") ||
+      String(user.plan_title).toLowerCase().includes("enterprise")
+    ));
 
   const { APIURL, data, error, isLoading } = useStoreSettings();
 
@@ -171,12 +181,8 @@ export default function SettingDetailsPage() {
       const res = await uploadStoreImage(formData);
       if (res.status == 200) {
         toast.dismiss();
-        toast.success(res.data.message);
-
-        // update the image state
-        const imagePath = res.data.imageURL;
+        toast.success(res.data?.message || "Store image uploaded successfully!");
         await mutate(APIURL);
-        location.reload();
       }
     } catch (error) {
       console.error(error);
@@ -190,15 +196,14 @@ export default function SettingDetailsPage() {
   const handleFileDelete = async () => {
     try {
       toast.loading(t("settings.please_wait"));
-
-      console.log(uniqueId);
-
       const res = await deleteStoreImage(uniqueId);
-      if (res.status == 200) {
+      if (res.status == 200 && res.data?.success !== false) {
         toast.dismiss();
-        toast.success(res.data.message);
+        toast.success(res.data?.message || "Store image removed successfully!");
         await mutate(APIURL);
-        location.reload();
+      } else {
+        toast.dismiss();
+        toast.error(res.data?.message || t("settings.something_went_wrong"));
       }
     } catch (error) {
       console.error(error);
@@ -381,20 +386,36 @@ export default function SettingDetailsPage() {
             {/* switch */}
           </div>
           {isQRMenuEnabled && isQrMenuAccess && (
-            <div className="mt-4 flex flex-col lg:flex-row gap-4">
+            <div className="mt-4 flex flex-col sm:flex-row gap-3">
               <button
+                type="button"
                 onClick={btnDownloadMenuQR}
                 className="btn btn-sm transition-colors rounded-xl bg-restro-gray hover:bg-restro-button-hover"
               >
                 <IconQrcode stroke={iconStroke} />{" "}
                 {t("settings.download_qr_code")}
               </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(QR_MENU_LINK);
+                    toast.success("Storefront link copied to clipboard!");
+                  } catch (e) {
+                    toast.error("Failed to copy link");
+                  }
+                }}
+                className="btn btn-sm transition-colors rounded-xl bg-restro-gray hover:bg-restro-button-hover"
+              >
+                <IconCopy stroke={iconStroke} size={18} /> Copy Storefront Link
+              </button>
               <a
                 target="_blank"
+                rel="noreferrer"
                 href={QR_MENU_LINK}
                 className="btn btn-sm transition-colors rounded-xl bg-restro-gray hover:bg-restro-button-hover"
               >
-                <IconExternalLink stroke={iconStroke} />{" "}
+                <IconExternalLink stroke={iconStroke} size={18} />{" "}
                 {t("settings.view_digital_menu")}
               </a>
             </div>
@@ -498,7 +519,7 @@ export default function SettingDetailsPage() {
                 Host: <span className="font-bold text-restro-green">order</span> (or your subdomain) &rarr; Target: <span className="font-bold text-restro-green">cname.qwilopro.com</span>
               </div>
               {custom_domain && (
-                <div className="pt-1 flex items-center gap-2">
+                <div className="pt-1 flex flex-wrap items-center gap-2">
                   <span>Storefront Live Link:</span>
                   <a
                     href={`https://${custom_domain}`}
@@ -508,6 +529,20 @@ export default function SettingDetailsPage() {
                   >
                     https://{custom_domain} <IconExternalLink size={14} stroke={iconStroke} />
                   </a>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(`https://${custom_domain}`);
+                        toast.success("Custom domain link copied to clipboard!");
+                      } catch (e) {
+                        toast.error("Failed to copy link");
+                      }
+                    }}
+                    className="btn btn-xs rounded-lg bg-restro-gray hover:bg-restro-button-hover ml-1"
+                  >
+                    <IconCopy size={13} stroke={iconStroke} /> Copy
+                  </button>
                 </div>
               )}
             </div>

@@ -67,11 +67,11 @@ exports.uploadMenuItemPhoto = async (req, res) => {
 
         const file = req.files.image;
 
-        const imagePath = path.join(__dirname, `../../public/${tenantId}/`) + id;
-
-        if(!fs.existsSync(path.join(__dirname, `../../public/${tenantId}/`))) {
-            fs.mkdirSync(path.join(__dirname, `../../public/${tenantId}/`));
+        const tenantPublicDir = path.resolve(process.cwd(), "public", String(tenantId));
+        if(!fs.existsSync(tenantPublicDir)) {
+            fs.mkdirSync(tenantPublicDir, { recursive: true });
         }
+        const imagePath = path.join(tenantPublicDir, String(id));
 
         const imageURL = `/public/${tenantId}/${id}`;
 
@@ -96,9 +96,16 @@ exports.removeMenuItemPhoto = async (req, res) => {
     try {
         const tenantId = req.user.tenant_id;
         const id = req.params.id;
-        const imagePath = path.join(__dirname, `../../public/${tenantId}/`) + id;
+        const tenantPublicDir = path.resolve(process.cwd(), "public", String(tenantId));
+        const imagePath = path.join(tenantPublicDir, String(id));
 
-        fs.unlinkSync(imagePath)
+        if (fs.existsSync(imagePath)) {
+            try { fs.unlinkSync(imagePath); } catch (e) {}
+        }
+        const legacyPath = path.resolve(process.cwd(), "src/public", String(tenantId), String(id));
+        if (fs.existsSync(legacyPath)) {
+            try { fs.unlinkSync(legacyPath); } catch (e) {}
+        }
 
         await updateMenuItemImageDB(id, null, tenantId);
 

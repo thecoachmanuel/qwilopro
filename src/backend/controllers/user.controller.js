@@ -2,6 +2,9 @@ const { CONFIG } = require("../config");
 const { ROLES, SCOPES } = require("../config/user.config");
 const { getAllUsersDB, doUserExistDB, addUserDB, deleteUserDB, deleteUserRefreshTokensDB, updateUserDB, updateUserPasswordDB } = require("../services/user.service");
 const bcrypt = require("bcrypt");
+const path = require("path");
+const fs = require("fs");
+const { nanoid } = require("nanoid");
 
 exports.getAllUsers = async (req, res) => {
     try {
@@ -226,6 +229,67 @@ exports.updateUserPassword = async (req, res) => {
         return res.status(500).json({
             success: false,
             message: req.__("something_went_wrong_try_later") // Translate message
+        });
+    }
+};
+
+exports.uploadProfilePhoto = async (req, res) => {
+    try {
+        const tenantId = req.user.tenant_id;
+        const username = req.user.username;
+
+        if (!req.files || !req.files.photo) {
+            return res.status(400).json({
+                success: false,
+                message: "Please choose an image file"
+            });
+        }
+
+        const file = req.files.photo;
+        const uniqueId = `avatar_${nanoid()}`;
+        const tenantPublicDir = path.resolve(process.cwd(), "public", String(tenantId));
+        if (!fs.existsSync(tenantPublicDir)) {
+            fs.mkdirSync(tenantPublicDir, { recursive: true });
+        }
+        const filePath = path.join(tenantPublicDir, uniqueId);
+        await file.mv(filePath);
+
+        const imageURL = `/public/${tenantId}/${uniqueId}`;
+
+        const { User } = require("../models");
+        await User.updateOne({ username, tenant_id: tenantId }, { $set: { photo: imageURL } });
+
+        return res.status(200).json({
+            success: true,
+            message: "Profile photo updated successfully",
+            photo: imageURL
+        });
+    } catch (error) {
+        console.error("uploadProfilePhoto error:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Failed to upload photo"
+        });
+    }
+};
+
+exports.removeProfilePhoto = async (req, res) => {
+    try {
+        const tenantId = req.user.tenant_id;
+        const username = req.user.username;
+
+        const { User } = require("../models");
+        await User.updateOne({ username, tenant_id: tenantId }, { $set: { photo: null } });
+
+        return res.status(200).json({
+            success: true,
+            message: "Profile photo removed successfully"
+        });
+    } catch (error) {
+        console.error("removeProfilePhoto error:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Failed to remove photo"
         });
     }
 };

@@ -119,41 +119,22 @@ export default function KitchenPage() {
       } catch {}
     };
 
-    if (isSocketConnected) {
-      socket.emit("authenticate", tenantId);
-      socket.on('new_order', (payload) => {
-        playNewOrderSound();
-        btnRefresh();
-      });
+    socket.emit("authenticate", tenantId);
+    socket.on('new_order', (payload) => {
+      playNewOrderSound();
+      btnRefresh();
+    });
 
-      socket.on("order_update", () => {
-        btnRefresh();
-      });
-    } else {
-      initSocket();
-      socket?.emit?.("authenticate", tenantId);
-      socket?.on?.('new_order', (payload) => {
-        playNewOrderSound();
-        btnRefresh();
-      });
-
-      socket?.on?.("order_update", () => {
-        btnRefresh();
-      });
-    }
+    socket.on("order_update", () => {
+      btnRefresh();
+    });
   };
 
   const sendOrderUpdateEvent = () => {
     const u = getUserDetailsInLocalStorage();
     const tenantId = u?.tenant_id;
     if (!tenantId) return;
-
-    if (isSocketConnected && socket?.emit) {
-      socket.emit('order_update_backend', {}, tenantId);
-    } else {
-      initSocket();
-      socket?.emit?.('order_update_backend', {}, tenantId);
-    }
+    socket?.emit?.('order_update_backend', {}, tenantId);
   };
 
   async function btnRefresh() {

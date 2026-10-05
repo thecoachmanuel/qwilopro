@@ -46,8 +46,13 @@ export default function InActiveSubscriptionPage() {
 
   useAuth();
 
-  // redirect to dashboard only if subscription is truly active and has valid end date
+  const queryParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams();
+  const isManageMode = queryParams.has("manage") || queryParams.has("upgrade") || queryParams.has("change");
+
+  // redirect to dashboard only if subscription is truly active, has valid end date, and user is NOT explicitly managing plans
   useEffect(() => {
+    if (isManageMode) return;
+
     const hasSubEnd = Boolean(user?.subscription_end);
     const isEndExpired =
       hasSubEnd &&
@@ -60,7 +65,7 @@ export default function InActiveSubscriptionPage() {
     if (user && isSubActive) {
       navigate("/dashboard/home", { replace: true });
     }
-  }, [user?.is_active, user?.subscription_end, navigate]);
+  }, [user?.is_active, user?.subscription_end, navigate, isManageMode]);
 
   const fetchPlans = async () => {
     try {
@@ -167,11 +172,21 @@ export default function InActiveSubscriptionPage() {
   return (
     <Page className="">
       <div className="flex items-center justify-between px-4 py-3 border-b border-restro-gray">
-        <img
-          src={(theme === "black" ? LogoDark : Logo)?.src || (theme === "black" ? LogoDark : Logo)}
-          alt="logo"
-          className="h-12 block"
-        />
+        <div className="flex items-center gap-4">
+          <img
+            src={(theme === "black" ? LogoDark : Logo)?.src || (theme === "black" ? LogoDark : Logo)}
+            alt="logo"
+            className="h-12 block"
+          />
+          {isManageMode && (
+            <button
+              onClick={() => navigate("/dashboard/profile")}
+              className="btn btn-sm rounded-xl bg-restro-gray hover:bg-restro-button-hover text-restro-text"
+            >
+              &larr; {t("Back to Profile") || "Back to Profile"}
+            </button>
+          )}
+        </div>
         <AppBarDropdown />
       </div>
 

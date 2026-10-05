@@ -162,8 +162,8 @@ exports.uploadStoreImageDB = async (image, uniqueId, tenantId) => {
 exports.deleteStoreImageDB = async (image, uniqueId, tenantId) => {
   try {
     await StoreDetails.updateOne(
-      { tenant_id: tenantId, unique_id: uniqueId },
-      { $set: { store_image: image } }
+      { tenant_id: tenantId },
+      { $set: { store_image: null, unique_id: null } }
     );
   } catch (error) {
     console.error("deleteStoreImageDB Error:", error);

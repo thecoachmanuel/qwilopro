@@ -133,19 +133,21 @@ export default function QRMenuPage() {
   const QR_MENU_LINK = getQRMenuLink(qrcode, storeSettings?.slug);
 
   const btnShare = async () => {
-    const shareData = {
-      title: t("qr_menu.menu"),
-      text: t("qr_menu.menu"),
-      url: QR_MENU_LINK,
-    };
-
     try {
-      if (navigator.canShare) {
-        if (navigator?.canShare(shareData)) {
-          await navigator.share(shareData);
-        }
-      } else {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
         await navigator.clipboard.writeText(QR_MENU_LINK);
+        toast.success(t("qr_menu.menu_link_copied"));
+      } else if (navigator.share) {
+        await navigator.share({
+          url: QR_MENU_LINK,
+        });
+      } else {
+        const input = document.createElement("input");
+        input.value = QR_MENU_LINK;
+        document.body.appendChild(input);
+        input.select();
+        document.execCommand("copy");
+        document.body.removeChild(input);
         toast.success(t("qr_menu.menu_link_copied"));
       }
     } catch (error) {

@@ -7,6 +7,7 @@ const SocketContext = createContext(null);
 
 const SocketProvider = ({ children }) => {
   const [isSocketConnected, setIsSocketConnected] = useState(false);
+  const authenticatedTenantRef = React.useRef(null);
 
   useEffect(() => {
     if (!socket) return;
@@ -14,13 +15,17 @@ const SocketProvider = ({ children }) => {
 
     const handleConnect = () => {
       const user = getUserDetailsInLocalStorage();
-      if(user) {
+      if (user?.tenant_id && authenticatedTenantRef.current !== user.tenant_id) {
+        authenticatedTenantRef.current = user.tenant_id;
         socket.emit("authenticate", user.tenant_id);
       }
       setIsSocketConnected(true);
     };
 
-    const handleDisconnect = () => setIsSocketConnected(false);
+    const handleDisconnect = () => {
+      authenticatedTenantRef.current = null;
+      setIsSocketConnected(false);
+    };
 
     socket.on('connect', handleConnect);
     socket.on('disconnect', handleDisconnect);
@@ -28,7 +33,6 @@ const SocketProvider = ({ children }) => {
     return () => {
       socket.off('connect', handleConnect);
       socket.off('disconnect', handleDisconnect);
-      socket.disconnect();
     };
   }, []);
 

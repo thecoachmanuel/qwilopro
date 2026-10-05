@@ -6,7 +6,7 @@ const fs = require("fs");
 const STORE_IMAGE_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
 
 const getTenantPublicDir = (tenantId) =>
-    path.resolve(__dirname, "../../public", String(tenantId));
+    path.resolve(process.cwd(), "public", String(tenantId));
 
 const getSafeStoreImagePath = (tenantId, uniqueId) => {
     if (typeof uniqueId !== "string" || !STORE_IMAGE_ID_PATTERN.test(uniqueId)) {
@@ -77,7 +77,9 @@ exports.setStoreDetails = async (req, res) => {
                 custom_domain = String(custom_domain).trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "");
                 const rawFeat = req.user?.plan_features || req.user?.planFeatures || req.user?.features || [];
                 const feats = Array.isArray(rawFeat) ? rawFeat.map(f => String(f).toUpperCase()) : [];
-                if (!feats.includes("CUSTOM_DOMAIN") && req.user?.role !== "admin") {
+                const isSuperAdmin = req.user?.role === "superadmin" || Boolean(req.user?.is_superadmin);
+                const hasCustomDomain = feats.includes("CUSTOM_DOMAIN") || isSuperAdmin || (req.user?.plan_title && String(req.user.plan_title).toLowerCase().includes("business"));
+                if (!hasCustomDomain) {
                     return res.status(403).json({
                         success: false,
                         message: "Custom domain feature requires Business Plan upgrade.",
@@ -152,25 +154,15 @@ exports.deleteStoreImage = async (req, res) => {
         const tenantId = req.user.tenant_id;
         const uniqueId = req.body.uniqueId;
 
-        const imagePath = getSafeStoreImagePath(tenantId, uniqueId);
-
-        if(!imagePath){
-            return res.status(200).json({
-                success: false,
-                message: req.__("invalid_request"),
-            })
-        }
-
-        const storeSettings = await getStoreSettingDB(tenantId);
-        if(storeSettings?.unique_id !== uniqueId) {
-            return res.status(200).json({
-                success: false,
-                message: req.__("invalid_request"),
-            })
-        }
-
-        if(fs.existsSync(imagePath)) {
-            fs.unlinkSync(imagePath);
+        if (uniqueId) {
+            const imagePath = getSafeStoreImagePath(tenantId, uniqueId);
+            if (imagePath && fs.existsSync(imagePath)) {
+                try { fs.unlinkSync(imagePath); } catch (e) {}
+            }
+            const legacyPath = path.resolve(process.cwd(), "src/public", String(tenantId), String(uniqueId));
+            if (fs.existsSync(legacyPath)) {
+                try { fs.unlinkSync(legacyPath); } catch (e) {}
+            }
         }
 
         await deleteStoreImageDB(null, uniqueId, tenantId);
@@ -178,7 +170,7 @@ exports.deleteStoreImage = async (req, res) => {
         return res.status(200).json({
             success: true,
             message: req.__("store_image_removed"),
-        })
+        });
     } catch (error) {
         console.error(error);
         return res.status(500).json({

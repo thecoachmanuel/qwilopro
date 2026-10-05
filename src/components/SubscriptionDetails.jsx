@@ -85,76 +85,82 @@ export default function SubscriptionDetails() {
     const paymentGateway = data?.payment_gateway;
     const paymentCustomerId = data?.payment_customer_id;
 
-    if (!paymentCustomerId) {
-      toast.error(t("toast.something_went_wrong"));
-      return;
-    }
+    if (paymentCustomerId) {
+      try {
+        toast.loading(t("toast.please_wait"));
+        const res =
+          paymentGateway === "paystack"
+            ? await getPaystackManageSubscriptionLink(paymentCustomerId)
+            : await getManageSubscriptionLink(paymentCustomerId);
 
-    try {
-      toast.loading(t("toast.please_wait"));
-      const res =
-        paymentGateway === "paystack"
-          ? await getPaystackManageSubscriptionLink(paymentCustomerId)
-          : await getManageSubscriptionLink(paymentCustomerId);
-
-      if (res.status === 200 && res.data?.url) {
+        if (res.status === 200 && res.data?.url) {
+          toast.dismiss();
+          window.location.href = res.data.url;
+          return;
+        }
+      } catch (error) {
+        console.warn("Manage subscription portal unavailable, redirecting to plan manager:", error);
+      } finally {
         toast.dismiss();
-        window.location.href = res.data.url;
-      } else {
-        toast.dismiss();
-        toast.error(t("toast.something_went_wrong"));
       }
-    } catch (error) {
-      console.error(error);
-      const message =
-        error?.response?.data?.message || t("subscription.cancel_error");
-      toast.dismiss();
-      toast.error(message);
     }
+
+    // Fallback: navigate to plans & subscription management page
+    navigate("/dashboard/inactive-subscription?manage=true");
   };
 
   return (
-    <div className="w-full md:w-96 rounded-3xl border border-restro-border-green px-4 py-3">
+    <div className="w-full md:w-96 rounded-3xl border border-restro-border-green px-4 py-3 bg-restro-card-bg">
       <div className="flex items-center gap-2">
         <div className="w-10 h-10 flex items-center justify-center rounded-2xl bg-restro-green text-white">
           <IconCreditCard stroke={iconStroke} />
         </div>
-        <p>{t("subscription.details")}</p>
+        <p className="font-semibold">{t("subscription.details")}</p>
       </div>
       {data?.is_active && data?.status != "cancelAtPeriodEnd" ? (
         <div>
-          <p className="mt-4">
-            {t("subscription.status")}: {t("subscription.active")}
+          <p className="mt-4 text-sm">
+            <span className="text-gray-400">{t("subscription.status")}:</span>{" "}
+            <span className="text-restro-green font-semibold">{t("subscription.active")}</span>
           </p>
       
-          <p className="mt-2">
-            {t("subscription.renews_at")}: {String(data?.subscription_end).substring(0,10)}
+          <p className="mt-2 text-sm">
+            <span className="text-gray-400">{t("subscription.renews_at")}:</span>{" "}
+            <span className="font-medium">{String(data?.subscription_end).substring(0,10)}</span>
           </p>
       
-          <button 
-            onClick={btnCancelSubscription}
-            className="w-full block mt-4 bg-red-50 text-red-500 px-4 py-2 rounded-2xl transition hover:bg-red-100 active:scale-95 text-sm"
-          >
-            {t("subscription.cancel_subscription")}
-          </button>
-          <button 
-            onClick={btnManageSubscription}
-            className="w-full block mt-4 bg-restro-green-10 text-restro-green px-4 py-2 rounded-2xl transition hover:bg-restro-green-10 active:scale-95 text-sm"
-          >
-            {t("Manage Subscription")}
-          </button>
+          <div className="flex flex-col gap-2 mt-4">
+            <button 
+              onClick={btnManageSubscription}
+              className="w-full block bg-restro-green text-white px-4 py-2 rounded-2xl transition hover:bg-restro-green-button-hover active:scale-95 text-sm font-semibold"
+            >
+              {t("Manage / Upgrade Subscription")}
+            </button>
+            <button 
+              onClick={btnCancelSubscription}
+              className="w-full block bg-red-50 dark:bg-red-950/30 text-red-500 px-4 py-2 rounded-2xl transition hover:bg-red-100 dark:hover:bg-red-900/40 active:scale-95 text-sm"
+            >
+              {t("subscription.cancel_subscription")}
+            </button>
+          </div>
         </div>
       ) : (
-         data?.isTrialPlan == 0 && (
-          <p className="mt-4">
-            Your subscription has been canceled. You'll continue to have access until{" "}
-            {String(data?.subscription_end).substring(0, 10)}.
+        <div className="mt-4">
+          <p className="text-sm text-gray-500">
+            {data?.isTrialPlan == 0 ? (
+              <>Your subscription has been canceled or expired.</>
+            ) : (
+              <>Your free trial has ended.</>
+            )}
           </p>
-
-          //show manage subscription button ?
-        )
-      )
-    } 
+          <button 
+            onClick={btnManageSubscription}
+            className="w-full block mt-4 bg-restro-green text-white px-4 py-2.5 rounded-2xl transition hover:bg-restro-green-button-hover active:scale-95 text-sm font-semibold shadow-sm"
+          >
+            {t("subscription.renew_or_change_plan") || "Subscribe / Upgrade Plan"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

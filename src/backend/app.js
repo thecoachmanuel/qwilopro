@@ -89,7 +89,10 @@ app.use(fileUpload({
   // Use OS temp dir — works on Vercel (/tmp) and locally
   tempFileDir: os.tmpdir()
 }))
-app.use("/public", express.static(path.join(__dirname, "../public")))
+app.use("/public", express.static(path.resolve(process.cwd(), "public")));
+if (fs.existsSync(path.resolve(process.cwd(), "src", "public"))) {
+  app.use("/public", express.static(path.resolve(process.cwd(), "src", "public")));
+}
 app.use(morgan("tiny"));
 // app.use(limiter);
 /**

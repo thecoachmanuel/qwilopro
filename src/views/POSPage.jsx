@@ -124,6 +124,7 @@ export default function POSPage() {
     window.addEventListener('restro_offline_orders_synced', onQueueChange);
 
     return () => {
+      socket?.off?.('new_qrorder');
       window.removeEventListener('online', onOnline);
       window.removeEventListener('offline', onOffline);
       window.removeEventListener('restro_offline_orders_changed', onQueueChange);
@@ -136,12 +137,7 @@ export default function POSPage() {
   const sendNewOrderEvent = (tokenNo, orderId) => {
     const tenantId = user?.tenant_id;
     if (!tenantId) return;
-    if (isSocketConnected && socket?.emit) {
-      socket.emit('new_order_backend', {tokenNo, orderId}, tenantId);
-    } else {
-      initSocket();
-      socket?.emit?.('new_order_backend', {tokenNo, orderId}, tenantId);
-    }
+    socket?.emit?.('new_order_backend', {tokenNo, orderId}, tenantId);
   }
 
   const playTapSound = () => {
@@ -153,18 +149,18 @@ export default function POSPage() {
 
   const _loadCachedPOSData = (data) => {
     const currency = CURRENCIES.find((c) => c.cc == data?.storeSettings?.currency);
-    const savedView = sessionStorage.getItem('view') || 'detailed';
+    const savedView = (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('view')) || 'detailed';
 
     setState((prev) => ({
       ...prev,
       view: savedView,
-      categories: data.categories || [],
-      menuItems: data.menuItems || [],
-      paymentTypes: data.paymentTypes || [],
-      printSettings: data.printSettings || null,
-      storeSettings: data.storeSettings || null,
-      storeTables: data.storeTables || [],
-      serviceCharge: data.serviceCharge || null,
+      categories: Array.isArray(data?.categories) ? data.categories : [],
+      menuItems: Array.isArray(data?.menuItems) ? data.menuItems : [],
+      paymentTypes: Array.isArray(data?.paymentTypes) ? data.paymentTypes : [],
+      printSettings: data?.printSettings || null,
+      storeSettings: data?.storeSettings || null,
+      storeTables: Array.isArray(data?.storeTables) ? data.storeTables : [],
+      serviceCharge: data?.serviceCharge || null,
       currency: currency?.symbol || "₦",
       qrOrdersCount: 0,
       isLoading: false,
@@ -197,18 +193,18 @@ export default function POSPage() {
           console.log(error);
         }
 
-        const savedView = sessionStorage.getItem('view') || 'detailed';
+        const savedView = (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('view')) || 'detailed';
 
         setState((prev) => ({
           ...prev,
-          view:savedView,
-          categories: data.categories,
-          menuItems: data.menuItems,
-          paymentTypes: data.paymentTypes,
-          printSettings: data.printSettings,
-          storeSettings: data.storeSettings,
-          storeTables: data.storeTables,
-          serviceCharge:data.serviceCharge,
+          view: savedView,
+          categories: Array.isArray(data?.categories) ? data.categories : [],
+          menuItems: Array.isArray(data?.menuItems) ? data.menuItems : [],
+          paymentTypes: Array.isArray(data?.paymentTypes) ? data.paymentTypes : [],
+          printSettings: data?.printSettings || null,
+          storeSettings: data?.storeSettings || null,
+          storeTables: Array.isArray(data?.storeTables) ? data.storeTables : [],
+          serviceCharge: data?.serviceCharge || null,
           currency: currency?.symbol || "₦",
           qrOrdersCount: totalQROrders || 0,
           isLoading: false,
@@ -221,7 +217,7 @@ export default function POSPage() {
         _loadCachedPOSData(cached);
         toast("Loaded menu from offline cache.", { icon: "📡" });
       } else {
-        toast.error("Offline: No cached menu found. Please connect to internet to load your menu.");
+        toast.error("Could not load menu. Please connect to internet to load your menu.");
         setState((prev) => ({ ...prev, isLoading: false }));
       }
     }
@@ -243,36 +239,19 @@ export default function POSPage() {
   const _initSocket = () => {
     const tenantId = user?.tenant_id;
     if (!tenantId || !socket) return;
-    if (isSocketConnected) {
-      socket.emit("authenticate", tenantId);
-      socket.on('new_qrorder', async (payload) => {
-        try {
-          const totalQROrders = await _getQROrdersCount();
+    socket.emit("authenticate", tenantId);
+    socket.on('new_qrorder', async (payload) => {
+      try {
+        const totalQROrders = await _getQROrdersCount();
 
-          setState((prevState) => ({
-            ...prevState,
-            qrOrdersCount: totalQROrders || 0
-          }));
-        } catch (error) {
-          console.log(error);
-        }
-      });
-    } else {
-      initSocket();
-      socket?.emit?.("authenticate", tenantId);
-      socket?.on?.('new_qrorder', async (payload) => {
-        try {
-          const totalQROrders = await _getQROrdersCount();
-
-          setState((prevState) => ({
-            ...prevState,
-            qrOrdersCount: totalQROrders || 0
-          }));
-        } catch (error) {
-          console.log(error);
-        }
-      });
-    }
+        setState((prevState) => ({
+          ...prevState,
+          qrOrdersCount: totalQROrders || 0
+        }));
+      } catch (error) {
+        console.log(error);
+      }
+    });
   }
 
   if(isLoading) {
@@ -1337,7 +1316,7 @@ export default function POSPage() {
                 >
                   {t('pos.all')}
                 </button>
-                {categories.filter((category) => category.is_enabled).map((category, index) => (
+                {(categories || []).filter((category) => category?.is_enabled).map((category, index) => (
                 <button
                     key={index}
                     className={`min-w-fit px-4 py-2 rounded-xl ${selectedCategory === category.id  ? theme === 'black' ? 'bg-restro-green-dark-mode text-white' : 'bg-restro-green text-white' : theme=== 'black' ? 'bg-restro-bg-seconday-dark-mode' : 'bg-gray-100 text-gray-600'}`}
@@ -1412,7 +1391,7 @@ export default function POSPage() {
           <div className = "sticky w-full px-4 py-3 border-b rounded-t-2xl border-restro-border-green">
             {/* search customer */}
             <div onClick={btnOpenSearchCustomerModal} className="flex items-center gap-2">
-              <input value={customerType=="WALKIN"?t('pos.walkin_customer'):`${customer.name}`} type="text" placeholder={t('pos.search_customer')} className= "flex items-center gap-1 text-sm w-full px-4 py-2 transition active:scale-95 hover:shadow-lg border rounded-lg bg-restro-gray border-restro-border-green hover:bg-restro-button-hover outline-restro-border-green"/>
+              <input value={customerType=="WALKIN"?t('pos.walkin_customer'):`${customer?.name || ""}`} type="text" placeholder={t('pos.search_customer')} className= "flex items-center gap-1 text-sm w-full px-4 py-2 transition active:scale-95 hover:shadow-lg border rounded-lg bg-restro-gray border-restro-border-green hover:bg-restro-button-hover outline-restro-border-green"/>
               <button onClick={btnOpenSearchCustomerModal} className = "flex items-center justify-center w-9 h-9 transition active:scale-95 rounded-lg hover:shadow-lg bg-restro-gray border border-restro-border-green hover:bg-restro-button-hover">
                 <IconSearch size={18} stroke={iconStroke} />
               </button>
@@ -1432,7 +1411,7 @@ export default function POSPage() {
             <select ref={tableRef} className="mt-3 text-sm w-full border rounded-lg px-4 py-2 justify-center bg-restro-gray border-restro-border-green hover:bg-restro-button-hover focus:outline-restro-border-green">
               <option value="">{t('pos.select_table')}</option>
               {
-                storeTables.map((table, index)=>{
+                (storeTables || []).map((table, index)=>{
                   return <option value={table.id} key={index}>{table.table_title} ({table.seating_capacity} {t('pos.person')}) - {table.floor}</option>
                 })
               }
@@ -1554,7 +1533,7 @@ export default function POSPage() {
             <select ref={categoryFilterDropdownRef} type="text" name="select_category" id='select_category' className='text-sm w-full rounded-lg px-4 py-2 border border-restro-border-green dark:bg-black focus:outline-restro-border-green' placeholder={t('pos.select_category')} >
               <option value="all">{t('pos.all')}</option>
               {
-                categories.filter((category) => category.is_enabled).map((category, index)=><option value={category.id} key={index}>{category.title}</option>)
+                (categories || []).filter((category) => category?.is_enabled).map((category, index)=><option value={category.id} key={index}>{category.title}</option>)
               }
             </select>
           </div>
@@ -1582,12 +1561,12 @@ export default function POSPage() {
               <h3>{t('pos.variants')}</h3>
               <div className="flex flex-col gap-2 mt-2">
               {
-                menuItems.find((item)=>item.id==selectedItemId)?.variants?.map((variant, index)=>{
-                  const {id, item_id, title, price} = variant;
+                (menuItems || []).find((item)=>item.id==selectedItemId)?.variants?.map((variant, index)=>{
+                  const {id, item_id, title, price} = variant || {};
 
-                  const fullItem = state.menuItems.find(item => item.id == selectedItemId);
+                  const fullItem = (menuItems || []).find(item => item.id == selectedItemId);
 
-                  const variantRecipeItems = fullItem.recipeItems?.filter(
+                  const variantRecipeItems = fullItem?.recipeItems?.filter(
                     r => r.variant_id === id && r.addon_id === 0
                   );
 
@@ -1601,7 +1580,7 @@ export default function POSPage() {
                     return Math.floor(currentQty / requiredQty);
                   });
 
-                  const minItemsCanBeMade = quantitiesPossible?.length > 0
+                  const minItemsCanBeMade = (quantitiesPossible && quantitiesPossible.length > 0)
                     ? Math.min(...quantitiesPossible)
                     : null;
 
@@ -1628,12 +1607,12 @@ export default function POSPage() {
               <h3>{t('pos.addons')}</h3>
               <div className="flex flex-col gap-2 mt-2">
               {
-                state.menuItems.find((item)=>item.id==selectedItemId)?.addons?.map((addon, index)=>{
-                  const {id, item_id, title, price} = addon;
+                (menuItems || []).find((item)=>item.id==selectedItemId)?.addons?.map((addon, index)=>{
+                  const {id, item_id, title, price} = addon || {};
 
-                  const fullItem = menuItems.find(item => item.id == selectedItemId);
+                  const fullItem = (menuItems || []).find(item => item.id == selectedItemId);
 
-                  const addonRecipeItems = fullItem.recipeItems?.filter(
+                  const addonRecipeItems = fullItem?.recipeItems?.filter(
                     (r) => r.addon_id === id && r.variant_id === 0
                   );
 
@@ -1643,7 +1622,7 @@ export default function POSPage() {
                     return Math.floor(currentQty / requiredQty);
                   });
 
-                  const minItemsCanBeMade = quantitiesPossible?.length > 0
+                  const minItemsCanBeMade = (quantitiesPossible && quantitiesPossible.length > 0)
                     ? Math.min(...quantitiesPossible)
                     : null;
 
@@ -1888,7 +1867,7 @@ export default function POSPage() {
               { label: t('pos.tax_total'), value: state.taxTotal, prefix: "+" },
               { label: t('pos.service_charge_total'), value: state.serviceChargeTotal, prefix: "+" },
             ].map(({ label, value, prefix = "" }, index) => (
-              <div key={index} className='flex items-center justify-between' text-restro-text>
+              <div key={index} className='flex items-center justify-between text-restro-text'>
                 <p>{label}</p>
                 <p className="text-lg">
                   {prefix}{currency}{value.toFixed(2)}
@@ -1908,7 +1887,7 @@ export default function POSPage() {
             className={`grid gap-2 grid-cols-3`
           }
           >
-            {paymentTypes.map((paymentType, i)=>{
+            {(paymentTypes || []).map((paymentType, i)=>{
               const uniqueId = `icon-${paymentType?.id}`;
               return <label key={i} className=''>
                 <input

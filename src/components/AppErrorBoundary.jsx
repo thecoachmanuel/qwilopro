@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 import React from 'react';
 
 /**
@@ -15,23 +15,41 @@ export default class AppErrorBoundary extends React.Component {
     this.state = { hasError: false, reloaded: false };
   }
 
+  componentDidMount() {
+    // Once the app mounts successfully without crashing, clear any reload flag after 3s
+    this.healthyTimer = setTimeout(() => {
+      try {
+        sessionStorage.removeItem('app_error_reload_v1');
+      } catch {}
+    }, 3000);
+  }
+
+  componentWillUnmount() {
+    if (this.healthyTimer) clearTimeout(this.healthyTimer);
+  }
+
   static getDerivedStateFromError(error) {
-    return { hasError: true };
+    let alreadyReloaded = false;
+    try {
+      alreadyReloaded = !!sessionStorage.getItem('app_error_reload_v1');
+    } catch {}
+    return { hasError: true, reloaded: !alreadyReloaded };
   }
 
   componentDidCatch(error, info) {
     console.error('[AppErrorBoundary] caught error:', error, info);
 
-    // Auto-reload once to pick up the latest JS bundle.
-    // We use sessionStorage to prevent infinite reload loops.
     const reloadKey = 'app_error_reload_v1';
-    const alreadyReloaded = sessionStorage.getItem(reloadKey);
+    let alreadyReloaded = false;
+    try {
+      alreadyReloaded = !!sessionStorage.getItem(reloadKey);
+    } catch {}
 
     if (!alreadyReloaded) {
-      sessionStorage.setItem(reloadKey, '1');
-      // Small delay so the error is logged first
-      setTimeout(() => window.location.reload(), 800);
-      this.setState({ reloaded: true });
+      try {
+        sessionStorage.setItem(reloadKey, '1');
+      } catch {}
+      setTimeout(() => window.location.reload(), 400);
     }
   }
 

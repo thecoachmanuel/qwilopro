@@ -84,7 +84,17 @@ app.prepare().then(async () => {
       tempFileDir: path.join(__dirname, "tmp"),
     })
   );
-  server.use("/public", express.static(path.join(__dirname, "public")));
+  const fs = require("fs");
+  server.use(
+    "/public",
+    express.static(path.resolve(process.cwd(), "public"), { maxAge: "7d" })
+  );
+  if (fs.existsSync(path.resolve(process.cwd(), "src", "public"))) {
+    server.use(
+      "/public",
+      express.static(path.resolve(process.cwd(), "src", "public"), { maxAge: "7d" })
+    );
+  }
   server.use(morgan("tiny"));
 
   // Auto-connect / retry DB connection on API calls if not connected
