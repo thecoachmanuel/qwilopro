@@ -94,15 +94,12 @@ exports.setStoreDetails = async (req, res) => {
             }
         }
 
-        const uniqueQRCode = nanoid();
-
-        const qrCodeExists = await getQRMenuCodeDB(tenantId);
-        if(qrCodeExists) {
-            await setStoreSettingDB(storeName, address, phone, email, currency, isQRMenuEnabled, isQROrderEnabled, uniqueQRCode, isFeedbackEnabled, tenantId, slug, custom_domain, isDeliveryEnabled, deliveryFee);
-        } else {
-            await updateQRMenuCodeDB(uniqueQRCode, tenantId);
-            await setStoreSettingDB(storeName, address, phone, email, currency, isQRMenuEnabled, isQROrderEnabled, uniqueQRCode, isFeedbackEnabled, tenantId, slug, custom_domain, isDeliveryEnabled, deliveryFee);
+        let activeQRCode = await getQRMenuCodeDB(tenantId);
+        if (!activeQRCode) {
+            activeQRCode = nanoid();
+            await updateQRMenuCodeDB(activeQRCode, tenantId);
         }
+        await setStoreSettingDB(storeName, address, phone, email, currency, isQRMenuEnabled, isQROrderEnabled, activeQRCode, isFeedbackEnabled, tenantId, slug, custom_domain, isDeliveryEnabled, deliveryFee);
 
         return res.status(200).json({
             success: true,

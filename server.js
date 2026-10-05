@@ -141,6 +141,7 @@ app.prepare().then(async () => {
       methods: ["GET", "POST"],
     },
   });
+  global.io = io;
 
   io.on("connection", (socket) => {
     socket.on("authenticate", async (tenantId) => {

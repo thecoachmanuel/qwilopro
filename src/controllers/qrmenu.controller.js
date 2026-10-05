@@ -1,7 +1,7 @@
 import axios from "axios";
 import { API } from "../config/config";
 
-const CART_KEY = 'RESTROPROSAAS__CART';
+const DEFAULT_CART_KEY = 'RESTROPROSAAS__CART';
 
 export async function getQRMenuInit(qrcode, tableId) {
     axios.defaults.withCredentials = true;
@@ -13,14 +13,26 @@ export async function getQRMenuInit(qrcode, tableId) {
     }
 }
 
-export function getCart() {
-    const cartString = localStorage.getItem(CART_KEY);
-    const cart = cartString ? JSON.parse(cartString) : [];
-    return cart;
+export function getCart(storeIdentifier) {
+    if (typeof window === 'undefined') return [];
+    const key = storeIdentifier ? `RESTROPROSAAS__CART_${storeIdentifier}` : DEFAULT_CART_KEY;
+    const cartString = localStorage.getItem(key);
+    if (cartString) {
+        try { return JSON.parse(cartString); } catch (e) { return []; }
+    }
+    if (storeIdentifier) {
+        const legacy = localStorage.getItem(DEFAULT_CART_KEY);
+        if (legacy) {
+            try { return JSON.parse(legacy); } catch (e) { return []; }
+        }
+    }
+    return [];
 }
 
-export function setCart(cart) {
-    localStorage.setItem(CART_KEY, JSON.stringify(cart));
+export function setCart(cart, storeIdentifier) {
+    if (typeof window === 'undefined') return;
+    const key = storeIdentifier ? `RESTROPROSAAS__CART_${storeIdentifier}` : DEFAULT_CART_KEY;
+    localStorage.setItem(key, JSON.stringify(cart));
 }
 
 export async function createOrderFromQrMenu(deliveryType, cartItems, customerType, customer, tableId, qrcode, deliveryFee = 0) {

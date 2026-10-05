@@ -4,7 +4,8 @@ import {
   IconShoppingCartX, IconChevronLeft, IconX, IconNote,
   IconBike, IconBuildingStore, IconArmchair,
 } from '@tabler/icons-react';
-import { createOrderFromQrMenu, getCart, setCart } from '../controllers/qrmenu.controller';
+import { createOrderFromQrMenu, getCart, setCart, getQRMenuInit } from '../controllers/qrmenu.controller';
+import { CURRENCIES } from '../config/currencies.config';
 import { getImageURL } from '../helpers/ImageHelper';
 import { iconStroke } from '../config/config';
 import { useLocation, useParams, useNavigate } from 'react-router-dom';
@@ -39,7 +40,16 @@ const CartPage = () => {
   const navigate = useNavigate();
 
   const location = useLocation();
-  const { storeTable, currency, serviceCharge, storeSettings } = location.state || {};
+  const initialState = location.state || {};
+
+  const [meta, setMeta] = useState({
+    storeTable: initialState.storeTable || null,
+    currency: initialState.currency || "₦",
+    serviceCharge: initialState.serviceCharge || null,
+    storeSettings: initialState.storeSettings || null,
+  });
+
+  const { storeTable, currency, serviceCharge, storeSettings } = meta;
   const isDeliveryEnabled = storeSettings?.is_delivery_enabled == 1;
   const deliveryFeeAmount = Number(storeSettings?.delivery_fee || 0);
 
@@ -50,9 +60,9 @@ const CartPage = () => {
   const dialogNotesTextRef = useRef();
 
   useEffect(() => {
-    const storedCart = getCart() || [];
+    const storedCart = getCart(qrcode) || [];
     updateCart(storedCart);
-    // Default delivery type based on context
+
     if (storeTable) {
       setDeliveryType('dinein');
     } else if (isDeliveryEnabled) {
@@ -64,6 +74,37 @@ const CartPage = () => {
       navigate(`/${targetSlug}/cart${window.location.search}`, { replace: true, state: location.state });
     }
   }, []);
+
+  useEffect(() => {
+    async function loadMeta() {
+      if (!meta.storeSettings && qrcode) {
+        try {
+          const res = await getQRMenuInit(qrcode);
+          if (res.status === 200) {
+            const data = res.data;
+            const cur = CURRENCIES.find((c) => c.cc === data?.storeSettings?.currency);
+            const newMeta = {
+              storeTable: data?.storeTable || null,
+              currency: cur?.symbol || "₦",
+              serviceCharge: data?.serviceCharge || null,
+              storeSettings: data?.storeSettings || null,
+            };
+            setMeta(newMeta);
+            const storedCart = getCart(qrcode) || [];
+            updateCart(storedCart, undefined, newMeta);
+            if (data?.storeTable) {
+              setDeliveryType('dinein');
+            } else if (data?.storeSettings?.is_delivery_enabled == 1) {
+              setDeliveryType('pickup');
+            }
+          }
+        } catch (e) {
+          console.error("Cart metadata fetch error:", e);
+        }
+      }
+    }
+    loadMeta();
+  }, [qrcode]);
 
   const { cartItems, itemsTotal, taxTotal, serviceChargeTotal, deliveryFeeTotal, payableTotal } = state;
 
@@ -78,14 +119,14 @@ const CartPage = () => {
 
   function removeItemFromCart(index) {
     const newCartItems = cartItems.filter((_, i) => i !== index);
-    setCart(newCartItems);
+    setCart(newCartItems, qrcode);
     updateCart(newCartItems);
   }
 
   function addCartItemQuantity(index, currentQuantity) {
     const newCartItems = [...cartItems];
     newCartItems[index].quantity = currentQuantity + 1;
-    setCart(newCartItems);
+    setCart(newCartItems, qrcode);
     updateCart(newCartItems);
   }
 
@@ -95,11 +136,11 @@ const CartPage = () => {
     if (newCartItems[index].quantity === 0) {
       newCartItems = newCartItems.filter((_, i) => i !== index);
     }
-    setCart(newCartItems);
+    setCart(newCartItems, qrcode);
     updateCart(newCartItems);
   }
 
-  const calculateOrderSummary = (items, dType) => {
+  const calculateOrderSummary = (items, dType, currentMeta = meta) => {
     let itemsTotal = 0;
     let taxTotal = 0;
     let serviceChargeTotal = 0;
@@ -107,7 +148,7 @@ const CartPage = () => {
     let payableTotal = 0;
 
     items.forEach((item) => {
-      const taxRate = Number(item.tax_rate);
+      const taxRate = Number(item.tax_rate) || 0;
       const taxType = item.tax_type;
       const itemPrice = Number(item.price) * Number(item.quantity);
 
@@ -127,24 +168,26 @@ const CartPage = () => {
       }
     });
 
-    if (serviceCharge) {
-      const calculatedServiceCharge = (itemsTotal * Number(serviceCharge)) / 100;
+    const activeServiceCharge = currentMeta?.serviceCharge ?? serviceCharge;
+    if (activeServiceCharge) {
+      const calculatedServiceCharge = (itemsTotal * Number(activeServiceCharge)) / 100;
       serviceChargeTotal += calculatedServiceCharge;
       payableTotal += calculatedServiceCharge;
     }
 
+    const currentFee = Number(currentMeta?.storeSettings?.delivery_fee || deliveryFeeAmount || 0);
     // Add delivery fee only when delivery type is 'delivery'
-    if ((dType || deliveryType) === 'delivery' && deliveryFeeAmount > 0) {
-      deliveryFeeTotal = deliveryFeeAmount;
-      payableTotal += deliveryFeeAmount;
+    if ((dType || deliveryType) === 'delivery' && currentFee > 0) {
+      deliveryFeeTotal = currentFee;
+      payableTotal += currentFee;
     }
 
     return { itemsTotal, taxTotal, serviceChargeTotal, deliveryFeeTotal, payableTotal };
   };
 
-  const updateCart = (items, dType) => {
-    const summary = calculateOrderSummary(items, dType);
-    setState({ ...state, cartItems: items, ...summary });
+  const updateCart = (items, dType, currentMeta = meta) => {
+    const summary = calculateOrderSummary(items, dType, currentMeta);
+    setState(prev => ({ ...prev, cartItems: items, ...summary }));
   };
 
   // Recalculate when delivery type changes
@@ -209,7 +252,7 @@ const CartPage = () => {
         try { new Audio('/new_order_sound.mp3').play().catch(() => {}); } catch {}
 
         setState({ ...state, cartItems: [] });
-        setCart([]);
+        setCart([], qrcode);
         setSelectedCustomerType(null);
         sendNewOrderEvent();
 
@@ -261,7 +304,7 @@ const CartPage = () => {
 
           {/* Header */}
           <div className="relative flex items-center justify-between p-4">
-            <button className="absolute left-0 p-2" onClick={() => window.history.back()}>
+            <button className="absolute left-0 p-2" onClick={() => (window.history.length > 1 ? window.history.back() : navigate(`/${storeSettings?.slug || qrcode}`))}>
               <IconChevronLeft size={24} stroke={2} />
             </button>
             <h3 className="text-xl md:text-2xl font-bold text-center w-full">{t('cart.title')}</h3>

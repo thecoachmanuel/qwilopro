@@ -53,7 +53,7 @@ export default function QRMenuPage() {
     try {
       const res = await getQRMenuInit(qrcode, encryptedTableId);
 
-      const storedCart = getCart();
+      const storedCart = getCart(qrcode);
       if (res.status == 200) {
         const data = res.data;
 
@@ -61,8 +61,8 @@ export default function QRMenuPage() {
           (c) => c.cc == data?.storeSettings?.currency
         );
 
-        setState({
-          ...state,
+        setState((prevState) => ({
+          ...prevState,
           isLoading: false,
           storeSettings: data?.storeSettings,
           categories: data?.categories,
@@ -71,16 +71,27 @@ export default function QRMenuPage() {
           serviceCharge: data?.serviceCharge || null,
           cartItems: [...storedCart],
           currency: currency?.symbol || "",
-        });
+        }));
 
         // Normalize legacy /m/... route to clean storefront slug URL seamlessly
         if (typeof window !== "undefined" && window.location.pathname.startsWith("/m/")) {
           const targetSlug = data?.storeSettings?.slug || qrcode;
           navigate(`/${targetSlug}${window.location.search}`, { replace: true });
         }
+      } else {
+        setState((prevState) => ({
+          ...prevState,
+          isLoading: false,
+          storeSettings: null,
+        }));
       }
     } catch (error) {
       console.log(error);
+      setState((prevState) => ({
+        ...prevState,
+        isLoading: false,
+        storeSettings: null,
+      }));
     }
   };
 
@@ -211,7 +222,7 @@ export default function QRMenuPage() {
       ...state,
       cartItems: [...newCart],
     });
-    setCart(newCart);
+    setCart(newCart, qrcode);
   }
 
   const btnAddMenuItemToCartWithVariantsAndAddon = () => {

@@ -12,6 +12,9 @@ const {
   PrintSetting,
   InvoiceSequence,
   TokenSequence,
+  Category,
+  MenuItem,
+  StoreTable,
 } = require("../models");
 
 exports.signInDB = async (username, password) => {
@@ -180,12 +183,65 @@ exports.signUpDB = async (bizName, username, password) => {
       tenant_id: tenant.id,
     });
 
-    // Create default records for tenant
+    // Generate clean slug, unique QR code, and uniqueId for the new restaurant
+    const { nanoid } = require("nanoid");
+    const baseSlug = (bizName || `store-${tenant.id}`)
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+    
+    let storeSlug = baseSlug || `store-${tenant.id}`;
+    const slugExists = await StoreDetails.findOne({ slug: storeSlug });
+    if (slugExists) {
+      storeSlug = `${baseSlug}-${tenant.id}`;
+    }
+
+    const uniqueQRCode = nanoid ? nanoid() : `qr-${tenant.id}-${Date.now()}`;
+    const uniqueId = nanoid ? nanoid() : `id-${tenant.id}`;
+
+    // Create default records for tenant with live QR menu enabled
     await StoreDetails.create({
       tenant_id: tenant.id,
       store_name: bizName,
       currency: "NGN",
+      slug: storeSlug,
+      unique_qr_code: uniqueQRCode,
+      unique_id: uniqueId,
+      is_qr_menu_enabled: 1,
+      is_qr_order_enabled: 1,
+      is_feedback_enabled: 1,
+      is_delivery_enabled: 1,
+      delivery_fee: 500,
     }).catch(() => {});
+
+    // Seed default dining tables
+    await StoreTable.insertMany([
+      { tenant_id: tenant.id, id: 1, table_title: "Table 1", floor: "Main Floor", seating_capacity: 4 },
+      { tenant_id: tenant.id, id: 2, table_title: "Table 2", floor: "Main Floor", seating_capacity: 2 },
+      { tenant_id: tenant.id, id: 3, table_title: "Table 3", floor: "Main Floor", seating_capacity: 4 },
+      { tenant_id: tenant.id, id: 4, table_title: "VIP Lounge", floor: "First Floor", seating_capacity: 6 },
+    ]).catch(() => {});
+
+    // Seed starter categories and menu items so the digital menu is immediately alive
+    try {
+      const cat1 = await Category.create({ tenant_id: tenant.id, id: 1, title: "Starters & Appetizers", is_enabled: true });
+      const cat2 = await Category.create({ tenant_id: tenant.id, id: 2, title: "Main Dishes", is_enabled: true });
+      const cat3 = await Category.create({ tenant_id: tenant.id, id: 3, title: "Drinks & Refreshments", is_enabled: true });
+
+      if (cat1 && cat2 && cat3) {
+        await MenuItem.insertMany([
+          { tenant_id: tenant.id, id: 1, category_id: cat1.id, title: "Crispy Spring Rolls", price: 2500, is_enabled: true, description: "Crisp golden spring rolls with seasoned vegetables and house sweet chili sauce." },
+          { tenant_id: tenant.id, id: 2, category_id: cat1.id, title: "Spicy Peppered Wings", price: 3500, is_enabled: true, description: "Juicy fried chicken wings tossed in rich scotch bonnet pepper sauce." },
+          { tenant_id: tenant.id, id: 3, category_id: cat2.id, title: "Signature Jollof Rice", price: 4500, is_enabled: true, description: "Rich firewood-scented party jollof rice served with golden fried plantains." },
+          { tenant_id: tenant.id, id: 4, category_id: cat2.id, title: "Gourmet Beef Burger", price: 5000, is_enabled: true, description: "Prime beef patty, cheddar, crisp lettuce, fresh tomato, and garlic aioli." },
+          { tenant_id: tenant.id, id: 5, category_id: cat3.id, title: "Chilled Chapman Cooler", price: 1800, is_enabled: true, description: "Traditional citrus mocktail garnished with cucumber, orange slices, and mint." },
+          { tenant_id: tenant.id, id: 6, category_id: cat3.id, title: "Iced Hibiscus Zobo", price: 1500, is_enabled: true, description: "Infused hibiscus blossom with crushed cloves, fresh ginger, and pineapple juice." },
+        ]).catch(() => {});
+      }
+    } catch (e) {
+      console.error("Default menu seeding error:", e);
+    }
 
     await PrintSetting.create({
       tenant_id: tenant.id,

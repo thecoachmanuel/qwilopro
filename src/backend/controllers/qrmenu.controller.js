@@ -80,6 +80,18 @@ exports.placeOrderViaQrMenu = async (req, res) => {
 
       const result = await placeOrderViaQrMenuDB(tenantId, deliveryType, cartItems, customerType, customer.phone || null, tableId || null, customer.name || null, 'pending', deliveryFee || 0);
 
+      // Realtime notification to restaurant POS / Kitchen
+      if (global.io && tenantId) {
+        try {
+          global.io.to(String(tenantId)).emit("new_qrorder", {
+            orderId: result.orderId,
+            invoiceId: result.invoiceId || null,
+          });
+        } catch (socketErr) {
+          console.error("Error broadcasting new_qrorder via socket:", socketErr);
+        }
+      }
+
       return res.status(200).json({
         success: true,
         message: req.__("order_placed_successfully"), // Translate message
@@ -120,6 +132,15 @@ exports.collectFeedback = async (req, res) => {
     const finalCustomerId = customerId || invoiceData?.customer_id || null;
 
     await saveFeedbackDB(tenantId, invoice_id, finalCustomerId, phone, name, email, birthdate, averageRating, food_quality, service, ambiance, staff_behavior, recommend, remarks);
+
+    // Realtime notification to restaurant dashboard
+    if (global.io && tenantId) {
+      try {
+        global.io.to(String(tenantId)).emit("new_feedback", {});
+      } catch (socketErr) {
+        console.error("Error broadcasting new_feedback via socket:", socketErr);
+      }
+    }
 
     return res.status(200).json({
       success: true,
