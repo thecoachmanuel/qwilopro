@@ -50,6 +50,7 @@ const userSchema = new mongoose.Schema({
   scope: { type: String, default: null },
   tenant_id: { type: Number, index: true, default: null },
 });
+userSchema.index({ tenant_id: 1, role: 1 });
 
 // 3. SuperAdmin
 const superAdminSchema = new mongoose.Schema({

@@ -117,19 +117,22 @@ export default function SuperAdminTenantsPage() {
 
   const fetchData = async () => {
     try {
-      const superAdminTenantsData = await getSuperAdminTenantsData();
-      const { activeTenants, inactiveTenants, allTenants } =
-        superAdminTenantsData.data;
+      const [superAdminTenantsRes, tenantsRes] = await Promise.all([
+        getSuperAdminTenantsData(),
+        getTenantsData({
+          page: state.page,
+          perPage: state.perPage,
+          search: state.search,
+          status: state.status,
+          type: state.filter,
+          from: state.fromDate,
+          to: state.toDate,
+        }),
+      ]);
 
-      const { data } = await getTenantsData({
-        page: state.page,
-        perPage: state.perPage,
-        search: state.search,
-        status: state.status,
-        type: state.filter,
-        from: state.fromDate,
-        to: state.toDate,
-      });
+      const { activeTenants, inactiveTenants, allTenants } =
+        superAdminTenantsRes.data;
+      const data = tenantsRes.data;
 
       if (data) {
         const { tenants, currentPage, perPage } = data;

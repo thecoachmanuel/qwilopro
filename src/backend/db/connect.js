@@ -1,6 +1,15 @@
 const mongoose = require("mongoose");
 const { CONFIG } = require("../config");
 
+const dns = require("dns");
+
+// Proactively set reliable DNS servers to ensure MongoDB Atlas SRV records resolve immediately without Windows ISP DNS stalls
+try {
+  dns.setServers(["8.8.8.8", "1.1.1.1"]);
+} catch (e) {
+  // Ignore if restricted
+}
+
 let isConnected = false;
 let connectionPromise = null;
 
@@ -20,8 +29,10 @@ const connectDB = async () => {
     try {
       const conn = await mongoose.connect(uri, {
         bufferCommands: true, // Buffer commands gracefully so queries don't crash during reconnects
-        serverSelectionTimeoutMS: 20000,
-        connectTimeoutMS: 20000,
+        family: 4, // Force IPv4 to prevent Windows Node.js dual-stack stalls/timeouts to Atlas
+        maxPoolSize: 10,
+        serverSelectionTimeoutMS: 30000,
+        connectTimeoutMS: 30000,
         socketTimeoutMS: 45000,
       });
       isConnected = true;
@@ -30,14 +41,20 @@ const connectDB = async () => {
     } catch (error) {
       console.error("❌ MongoDB Connection Error:", error.message);
       // If SRV lookup failed, try DNS fallback
-      if (error.message.includes("ENOTFOUND") || error.message.includes("ETIMEDOUT")) {
+      if (
+        error.message.includes("ENOTFOUND") ||
+        error.message.includes("ETIMEDOUT") ||
+        error.message.includes("ECONNREFUSED") ||
+        error.message.includes("querySrv")
+      ) {
         try {
-          const dns = require("dns");
-          dns.setServers(["8.8.8.8", "1.1.1.1"]);
+          dns.setServers(["8.8.8.8", "1.1.1.1", "208.67.222.222"]);
           const conn = await mongoose.connect(uri, {
             bufferCommands: true,
-            serverSelectionTimeoutMS: 20000,
-            connectTimeoutMS: 20000,
+            family: 4,
+            maxPoolSize: 10,
+            serverSelectionTimeoutMS: 30000,
+            connectTimeoutMS: 30000,
           });
           isConnected = true;
           console.log(`✅ MongoDB Connected (via DNS fallback): ${conn.connection.host}/${conn.connection.name}`);

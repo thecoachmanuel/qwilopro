@@ -13,6 +13,7 @@ const {
   PaymentGateway,
   RefreshToken,
   Plan,
+  PlanPrice,
 } = require("../models");
 const { doUserExistDB } = require("./user.service");
 const { CONFIG } = require("../config");
@@ -125,8 +126,11 @@ exports.getOrdersProcessedTodayDB = async () => {
   const end = new Date(now);
   end.setHours(23, 59, 59, 999);
 
-  const count = await Order.countDocuments({ date: { $gte: start, $lte: end } });
-  return count;
+  const [ordersCount, invoicesCount] = await Promise.all([
+    Order.countDocuments({ date: { $gte: start, $lte: end } }),
+    Invoice.countDocuments({ created_at: { $gte: start, $lte: end } }),
+  ]);
+  return Math.max(ordersCount, invoicesCount);
 };
 
 exports.getSalesVolumeTodayDB = async () => {
@@ -140,7 +144,7 @@ exports.getSalesVolumeTodayDB = async () => {
     { $match: { created_at: { $gte: start, $lte: end } } },
     {
       $lookup: {
-        from: "store_details",
+        from: "storedetails",
         localField: "tenant_id",
         foreignField: "tenant_id",
         as: "store",
@@ -149,7 +153,7 @@ exports.getSalesVolumeTodayDB = async () => {
     { $unwind: { path: "$store", preserveNullAndEmptyArrays: true } },
     {
       $lookup: {
-        from: "exchange_rates",
+        from: "exchangerates",
         localField: "store.currency",
         foreignField: "currency_code",
         as: "rate",
@@ -158,30 +162,88 @@ exports.getSalesVolumeTodayDB = async () => {
     { $unwind: { path: "$rate", preserveNullAndEmptyArrays: true } },
     {
       $project: {
+        total: 1,
+        currency: { $ifNull: ["$store.currency", "NGN"] },
+        rate_to_usd: { $ifNull: ["$rate.rate_to_usd", 0.00074] },
         usd_total: {
-          $multiply: ["$total", { $ifNull: ["$rate.rate_to_usd", 1] }],
+          $multiply: ["$total", { $ifNull: ["$rate.rate_to_usd", 0.00074] }],
         },
       },
     },
     {
       $group: {
         _id: null,
-        sales_volume: { $sum: "$usd_total" },
+        sales_volume_usd: { $sum: "$usd_total" },
+        sales_volume_native: { $sum: "$total" },
       },
     },
   ]);
 
-  return results[0]?.sales_volume || 0;
+  const salesVolumeNgn = results[0]?.sales_volume_native || 0;
+  const salesVolumeUsd = results[0]?.sales_volume_usd || 0;
+
+  return {
+    salesVolumeTodayNgn: Math.round(salesVolumeNgn),
+    salesVolumeTodayUsd: Math.round(salesVolumeUsd * 100) / 100,
+    sales_volume: Math.round(salesVolumeUsd * 100) / 100,
+  };
+};
+
+exports.getMRRAndARRDB = async () => {
+  const activeTenants = await Tenant.find({ is_active: 1 }).lean();
+  const planPrices = await PlanPrice.find({ is_active: true }).lean();
+
+  const priceMap = {};
+  for (const pp of planPrices) {
+    const key = `${pp.plan_id}_${(pp.frequency || "monthly").toLowerCase()}_${(pp.currency || "NGN").toUpperCase()}`;
+    priceMap[key] = pp.amount;
+  }
+
+  let totalMrrNgn = 0;
+  let totalMrrUsd = 0;
+
+  for (const tenant of activeTenants) {
+    const planId = tenant.plan_id || 1;
+    const freq = tenant.frequency === "yearly" ? "yearly" : "monthly";
+
+    let amountNgn = priceMap[`${planId}_${freq}_NGN`];
+    if (amountNgn === undefined) {
+      amountNgn = priceMap[`${planId}_monthly_NGN`] || (planId === 2 ? 12000 : planId === 3 ? 25000 : 5000);
+    }
+    const monthlyNgn = freq === "yearly" ? amountNgn / 12 : amountNgn;
+
+    let amountUsd = priceMap[`${planId}_${freq}_USD`];
+    if (amountUsd === undefined) {
+      amountUsd = priceMap[`${planId}_monthly_USD`] || (planId === 2 ? 12 : planId === 3 ? 25 : 5);
+    }
+    const monthlyUsd = freq === "yearly" ? amountUsd / 12 : amountUsd;
+
+    totalMrrNgn += monthlyNgn;
+    totalMrrUsd += monthlyUsd;
+  }
+
+  const mrrNgn = Math.round(totalMrrNgn);
+  const mrrUsd = Math.round(totalMrrUsd);
+  const arrNgn = Math.round(totalMrrNgn * 12);
+  const arrUsd = Math.round(totalMrrUsd * 12);
+
+  return {
+    mrrNgn,
+    mrrUsd,
+    arrNgn,
+    arrUsd,
+    activeCount: activeTenants.length,
+  };
 };
 
 exports.getMRRValueDB = async () => {
-  const count = await Tenant.countDocuments({ is_active: 1 });
-  return count;
+  const data = await exports.getMRRAndARRDB();
+  return data.mrrUsd;
 };
 
 exports.getARRValueDB = async () => {
-  const count = await Tenant.countDocuments({ is_active: 1 });
-  return count;
+  const data = await exports.getMRRAndARRDB();
+  return data.arrUsd;
 };
 
 exports.getActiveTenantsDB = async () => {
@@ -577,7 +639,7 @@ exports.getSuperAdminTopSellingItemsDB = async (type, from, to) => {
     { $limit: 50 },
     {
       $lookup: {
-        from: "menu_items",
+        from: "menuitems",
         localField: "_id.item_id",
         foreignField: "id",
         as: "item",
@@ -615,7 +677,7 @@ exports.getSuperAdminSalesVolumeDB = async (type, from, to) => {
     { $match: dateFilter },
     {
       $lookup: {
-        from: "store_details",
+        from: "storedetails",
         localField: "tenant_id",
         foreignField: "tenant_id",
         as: "store",
@@ -624,7 +686,7 @@ exports.getSuperAdminSalesVolumeDB = async (type, from, to) => {
     { $unwind: { path: "$store", preserveNullAndEmptyArrays: true } },
     {
       $lookup: {
-        from: "exchange_rates",
+        from: "exchangerates",
         localField: "store.currency",
         foreignField: "currency_code",
         as: "rate",
@@ -633,26 +695,39 @@ exports.getSuperAdminSalesVolumeDB = async (type, from, to) => {
     { $unwind: { path: "$rate", preserveNullAndEmptyArrays: true } },
     {
       $project: {
+        total: 1,
         usd_total: {
-          $multiply: ["$total", { $ifNull: ["$rate.rate_to_usd", 1] }],
+          $multiply: ["$total", { $ifNull: ["$rate.rate_to_usd", 0.00074] }],
         },
       },
     },
     {
       $group: {
         _id: null,
-        sales_volume: { $sum: "$usd_total" },
+        sales_volume_usd: { $sum: "$usd_total" },
+        sales_volume_native: { $sum: "$total" },
       },
     },
   ]);
 
-  return results[0]?.sales_volume || 0;
+  const salesVolumeNgn = results[0]?.sales_volume_native || 0;
+  const salesVolumeUsd = results[0]?.sales_volume_usd || 0;
+
+  return {
+    sales_volume_usd: Math.round(salesVolumeUsd * 100) / 100,
+    sales_volume_ngn: Math.round(salesVolumeNgn),
+    sales_volume: Math.round(salesVolumeUsd * 100) / 100,
+  };
 };
 
 exports.getSuperAdminOrdersProcessedDB = async (type, from, to) => {
-  const dateFilter = buildDateFilter("date", type, from, to);
-  const count = await Order.countDocuments(dateFilter);
-  return count;
+  const orderDateFilter = buildDateFilter("date", type, from, to);
+  const invoiceDateFilter = buildDateFilter("created_at", type, from, to);
+  const [ordersCount, invoicesCount] = await Promise.all([
+    Order.countDocuments(orderDateFilter),
+    Invoice.countDocuments(invoiceDateFilter),
+  ]);
+  return Math.max(ordersCount, invoicesCount);
 };
 
 exports.upsertGatewayDB = async (gatewayName, credentials) => {

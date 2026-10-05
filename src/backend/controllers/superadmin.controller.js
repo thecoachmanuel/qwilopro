@@ -2,7 +2,7 @@ const Stripe = require("stripe");
 const { CONFIG } = require("../config");
 const { getCookieOptions, getClearCookieOptions } = require("../utils/cookieHelper");
 const { removeRefreshTokenDB, addRefreshTokenDB, verifyRefreshTokenDB } = require("../services/auth.service");
-const { signInDB, getAdminUserDB, getActiveTenantsDB, getInActiveTenantsDB, getAllTenantsDB, getOrdersProcessedTodayDB, getSalesVolumeTodayDB, getMRRValueDB, getARRValueDB, getRestaurantsTotalCustomersDB, getSuperAdminTopSellingItemsDB, getSuperAdminSalesVolumeDB, getSuperAdminOrdersProcessedDB, getTenantsDB, addTenantDB, updateTenantDB, getTenantCntByIdDB, getTenantDetailsByIdDB, logoutAllUsersOfTenantDB, deleteTenantDB, getTenantsDataByStatusDB, getTenantSubscriptionHistoryDB, getTenantTotalUsersDB, getTenantDetailsDB, getTenantStoreDetailsDB, upsertGatewayDB, getGatewayDB, updateGatewayStatusDB, getAllPaymentGatewaysDB, activatePaymentGatewayDB } = require("../services/superadmin.service")
+const { signInDB, getAdminUserDB, getActiveTenantsDB, getInActiveTenantsDB, getAllTenantsDB, getOrdersProcessedTodayDB, getSalesVolumeTodayDB, getMRRValueDB, getARRValueDB, getMRRAndARRDB, getRestaurantsTotalCustomersDB, getSuperAdminTopSellingItemsDB, getSuperAdminSalesVolumeDB, getSuperAdminOrdersProcessedDB, getTenantsDB, addTenantDB, updateTenantDB, getTenantCntByIdDB, getTenantDetailsByIdDB, logoutAllUsersOfTenantDB, deleteTenantDB, getTenantsDataByStatusDB, getTenantSubscriptionHistoryDB, getTenantTotalUsersDB, getTenantDetailsDB, getTenantStoreDetailsDB, upsertGatewayDB, getGatewayDB, updateGatewayStatusDB, getAllPaymentGatewaysDB, activatePaymentGatewayDB } = require("../services/superadmin.service")
 const { generateAccessToken, generateRefreshToken } = require("../utils/jwt");
 const { checkEmailExistsSuperadminDB } = require('../services/auth.service');
 const { encryptCredentials, sanitizeCredentialsForUI } = require("../utils/encryptCredentials");
@@ -197,31 +197,57 @@ exports.getSuperAdminTenantsCntData = async (req, res) => {
     }
 }
 
+let dashboardCache = null;
+let dashboardCacheExpiry = 0;
+
+const invalidateDashboardCache = () => {
+    dashboardCache = null;
+    dashboardCacheExpiry = 0;
+};
+exports.invalidateDashboardCache = invalidateDashboardCache;
+
 exports.getSuperAdminDashboardData = async (req, res) => {
     try {
+        const now = Date.now();
+        if (dashboardCache && now < dashboardCacheExpiry) {
+            return res.status(200).json(dashboardCache);
+        }
 
-        const [activeTenants, ordersProcessedToday, salesVolumeToday, mrr, arr] = await Promise.all([
+        const [activeTenants, ordersProcessedToday, salesData, mrrArrData] = await Promise.all([
             getActiveTenantsDB(),
             getOrdersProcessedTodayDB(),
             getSalesVolumeTodayDB(),
-            getMRRValueDB(),
-            getARRValueDB()
+            getMRRAndARRDB()
         ]);
 
-        const NAIRA_PER_USD = 1350;
-        const subscriptionAmountUsd = 5;
-        const mrrUsd = Number(mrr || 0) * subscriptionAmountUsd;
-        const arrUsd = Number(arr || 0) * subscriptionAmountUsd * 12;
-        const mrrNgn = Math.round(mrrUsd * NAIRA_PER_USD);
-        const arrNgn = Math.round(arrUsd * NAIRA_PER_USD);
-        const salesVolumeTodayNgn = Math.round(Number(salesVolumeToday || 0) * NAIRA_PER_USD);
+        const mrrUsd = mrrArrData.mrrUsd;
+        const arrUsd = mrrArrData.arrUsd;
+        const mrrNgn = mrrArrData.mrrNgn;
+        const arrNgn = mrrArrData.arrNgn;
+        const salesVolumeTodayNgn = salesData.salesVolumeTodayNgn;
+        const salesVolumeTodayUsd = salesData.salesVolumeTodayUsd;
 
-        return res.status(200).json({
-            activeTenants, ordersProcessedToday, salesVolumeToday, mrr, arr,
-            mrrUsd, arrUsd, mrrNgn, arrNgn, salesVolumeTodayNgn,
+        const payload = {
+            activeTenants,
+            ordersProcessedToday,
+            salesVolumeToday: salesVolumeTodayUsd,
+            salesVolumeTodayUsd,
+            salesVolumeTodayNgn,
+            mrr: mrrUsd,
+            arr: arrUsd,
+            mrrUsd,
+            arrUsd,
+            mrrNgn,
+            arrNgn,
             currency: "NGN",
             currencySymbol: "₦"
-        });
+        };
+
+        // Cache for 20 seconds to give super snappy responses while remaining fresh
+        dashboardCache = payload;
+        dashboardCacheExpiry = now + 20000;
+
+        return res.status(200).json(payload);
     } catch (error) {
         console.error(error);
         return res.status(500).json({
@@ -243,6 +269,7 @@ exports.addTenant = async (req, res) => {
         const isAdmin = 1;
 
         const tenantData = await addTenantDB({ name, email, password, isAdmin, isActive });
+        invalidateDashboardCache();
 
         return res.status(200).json({ message: req.__("tenant_added_successfully"), tenant: tenantData }); // Translate message
     } catch (error) {
@@ -317,6 +344,8 @@ exports.updateTenant = async (req, res) => {
             await logoutAllUsersOfTenantDB(tenantId);
         }
 
+        invalidateDashboardCache();
+
         return res.status(200).json({ message: req.__("tenant_updated_successfully") }); // Translate message
     } catch (error) {
         console.error('Error updating tenant:', error);
@@ -339,6 +368,7 @@ exports.deleteTenant = async (req, res) => {
         }
 
         await deleteTenantDB(tenantId);
+        invalidateDashboardCache();
 
         return res.status(200).json({
             success: true,
@@ -441,28 +471,35 @@ exports.getSuperAdminReportsData = async (req, res) => {
             }
         }
 
-        const [activeTenants, mrr, arr, totalCustomers, topSellingItems, salesVolume, ordersProcessed] = await Promise.all([
+        const [activeTenants, mrrArrData, totalCustomers, topSellingItems, salesData, ordersProcessed] = await Promise.all([
             getActiveTenantsDB(),
-            getMRRValueDB(),
-            getARRValueDB(),
+            getMRRAndARRDB(),
             getRestaurantsTotalCustomersDB(),
             getSuperAdminTopSellingItemsDB(type, from, to),
             getSuperAdminSalesVolumeDB(type, from, to),
             getSuperAdminOrdersProcessedDB(type, from, to)
         ]);
 
-        const NAIRA_PER_USD = 1350;
-        const subscriptionAmountUsd = 5;
-        const mrrUsd = Number(mrr || 0) * subscriptionAmountUsd;
-        const arrUsd = Number(arr || 0) * subscriptionAmountUsd * 12;
-        const mrrNgn = Math.round(mrrUsd * NAIRA_PER_USD);
-        const arrNgn = Math.round(arrUsd * NAIRA_PER_USD);
-        const salesVolumeNgn = Math.round(Number(salesVolume || 0) * NAIRA_PER_USD);
+        const mrrUsd = mrrArrData.mrrUsd;
+        const arrUsd = mrrArrData.arrUsd;
+        const mrrNgn = mrrArrData.mrrNgn;
+        const arrNgn = mrrArrData.arrNgn;
+        const salesVolumeUsd = typeof salesData === "object" ? salesData.sales_volume_usd : Number(salesData || 0);
+        const salesVolumeNgn = typeof salesData === "object" ? salesData.sales_volume_ngn : Math.round(salesVolumeUsd * 1350);
 
         return res.status(200).json({
-            activeTenants, mrr, arr, totalCustomers, topSellingItems,
-            salesVolume, ordersProcessed,
-            mrrUsd, arrUsd, mrrNgn, arrNgn, salesVolumeNgn,
+            activeTenants,
+            mrr: mrrUsd,
+            arr: arrUsd,
+            totalCustomers,
+            topSellingItems,
+            salesVolume: salesVolumeUsd,
+            ordersProcessed,
+            mrrUsd,
+            arrUsd,
+            mrrNgn,
+            arrNgn,
+            salesVolumeNgn,
             currency: "NGN",
             currencySymbol: "₦"
         });

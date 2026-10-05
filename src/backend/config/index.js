@@ -1,3 +1,5 @@
+require("dotenv").config({});
+
 exports.CONFIG = {
     MONGODB_URI: process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/restropro_saas",
     DATABASE_URL: process.env.MONGODB_URI || process.env.DATABASE_URL,

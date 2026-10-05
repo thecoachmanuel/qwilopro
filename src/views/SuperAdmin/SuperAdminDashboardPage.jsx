@@ -39,6 +39,7 @@ export default function SuperAdminDashboardPage() {
   const mrrNgn = data.mrrNgn ?? Math.round(mrrValue / nairaRate);
   const arrNgn = data.arrNgn ?? Math.round(arrValue / nairaRate);
   const salesVolumeNgn = data.salesVolumeTodayNgn ?? Math.round((salesVolumeToday || 0) / nairaRate);
+  const salesVolumeUsd = data.salesVolumeTodayUsd ?? salesVolumeToday ?? 0;
 
   return (
     <Page className='px-4 py-3 overflow-x-hidden h-full'>
@@ -94,7 +95,7 @@ export default function SuperAdminDashboardPage() {
             ₦{Number(salesVolumeNgn).toLocaleString('en-NG', { notation: "compact" })}
           </p>
           <p className='text-xs opacity-60 mt-1 font-medium'>
-            ≈ ${Number(salesVolumeToday).toLocaleString('en', { notation: "compact" })} USD
+            ≈ ${Number(salesVolumeUsd).toLocaleString('en', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} USD
           </p>
         </div>
 
