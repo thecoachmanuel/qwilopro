@@ -99,13 +99,11 @@ export default function SuperAdminLoginPage() {
       />
 
       <div className="flex flex-col md:flex-row items-center justify-end md:justify-between gap-10 h-screen container mx-auto px-4 md:px-0 py-4 md:py-0 relative lg:px-12">
-        <div>
+        <div className="lg:mx-12">
           <h3 className="text-2xl lg:text-6xl font-black text-restro-green-dark dark:text-restro-green-dark-mode">
             {t("superadmin_login.title")}
           </h3>
-          <h3
-            className="text-2xl lg:text-6xl font-black outline-text text-transparent"
-          >
+          <h3 className="text-2xl lg:text-6xl font-black outline-text text-restro-green-light dark:text-restro-green">
             {t("superadmin_login.login")}.
           </h3>
         </div>
