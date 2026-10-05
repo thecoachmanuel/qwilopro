@@ -63,22 +63,53 @@ exports.getQRMenuInit = async (req, res) => {
     }
 };
 
+
 exports.placeOrderViaQrMenu = async (req, res) => {
     try {
       const qrcode = req.params.qrcode;
 
       const tenantId = await getTenantIdFromQRCode(qrcode);
 
-      const {deliveryType, cartItems, customerType, customer, tableId, deliveryFee} = req.body;
-
-      if(cartItems?.length == 0) {
-        return res.status(400).json({
+      if (!tenantId) {
+        return res.status(404).json({
           success: false,
-          message: req.__("cart_is_empty") // Translate message
+          message: req.__("qr_digital_menu_not_found"),
         });
       }
 
-      const result = await placeOrderViaQrMenuDB(tenantId, deliveryType, cartItems, customerType, customer.phone || null, tableId || null, customer.name || null, 'pending', deliveryFee || 0);
+      const {cartItems, customerType, customer, tableId, deliveryFee} = req.body;
+      let { deliveryType } = req.body;
+
+      // Normalize delivery type: 'pickup' → 'takeaway'
+      if (!deliveryType || deliveryType === 'pickup') deliveryType = 'takeaway';
+      deliveryType = String(deliveryType).toLowerCase().trim();
+
+      if (!cartItems || cartItems.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: req.__("cart_is_empty"),
+        });
+      }
+
+      // Safely extract customer fields — customer may be undefined (WALKIN)
+      const customerPhone = customer?.phone || (typeof customer === 'string' ? customer : null) || null;
+      const customerName  = customer?.name  || null;
+
+      // Sanitize tableId — must be numeric
+      const safeTableId = (tableId && !isNaN(Number(tableId))) ? Number(tableId) : null;
+      const safeDeliveryFee = Number(deliveryFee) || 0;
+
+      const result = await placeOrderViaQrMenuDB(
+        tenantId,
+        deliveryType,
+        cartItems,
+        customerType,
+        customerPhone,
+        safeTableId,
+        customerName,
+        'pending',
+        safeDeliveryFee
+      );
 
       // Realtime notification to restaurant POS / Kitchen
       if (global.io && tenantId) {
@@ -94,19 +125,20 @@ exports.placeOrderViaQrMenu = async (req, res) => {
 
       return res.status(200).json({
         success: true,
-        message: req.__("order_placed_successfully"), // Translate message
+        message: req.__("order_placed_successfully"),
         orderId: result.orderId,
         invoiceId: result.invoiceId || null,
       });
 
     } catch (error) {
-      console.error(error);
+      console.error("placeOrderViaQrMenu Error:", error);
       return res.status(500).json({
         success: false,
-        message: req.__("error_processing_request_try_later") // Translate message
+        message: req.__("error_processing_request_try_later"),
       });
     }
 };
+
 
 exports.collectFeedback = async (req, res) => {
   try {

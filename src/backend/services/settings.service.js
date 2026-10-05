@@ -508,13 +508,15 @@ exports.placeOrderViaQrMenuDB = async (
   deliveryFee = 0
 ) => {
   try {
+    const validTableId = (tableId && !isNaN(Number(tableId))) ? Number(tableId) : null;
+
     const order = await QROrder.create({
       delivery_type: deliveryType,
       customer_type: customerType,
       customer_id: customerId,
       customer_name: customerName || null,
-      table_id: tableId,
-      delivery_fee: deliveryFee || 0,
+      table_id: validTableId,
+      delivery_fee: Number(deliveryFee) || 0,
       payment_status: paymentStatus || "pending",
       tenant_id: tenantId,
     });
@@ -526,9 +528,9 @@ exports.placeOrderViaQrMenuDB = async (
       const itemsToInsert = cartItems.map((item) => ({
         order_id: orderId,
         item_id: item.id,
-        variant_id: item.variant_id || null,
-        price: item.price,
-        quantity: item.quantity,
+        variant_id: item.variant_id ? Number(item.variant_id) : null,
+        price: Number(item.price) || 0,
+        quantity: Number(item.quantity) || 1,
         notes: item.notes || "",
         addons: item?.addons_ids?.length > 0 ? JSON.stringify(item.addons_ids) : null,
         tenant_id: tenantId,
@@ -562,7 +564,9 @@ exports.placeOrderViaQrMenuDB = async (
   }
 };
 
+
 exports.saveFeedbackDB = async (
+
   tenantId,
   invoiceId,
   customerId,

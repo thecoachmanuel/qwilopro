@@ -94,6 +94,7 @@ export default function POSPage() {
     deliveryType: "dinein",
     deliveryAddress: "",
     deliveryFeeTotal: 0,
+    selectedTableId: null,
   });
 
   const [isSoundMuted, setIsSoundMuted] = useState(() => {
@@ -600,6 +601,7 @@ export default function POSPage() {
       deliveryType: "dinein",
       deliveryAddress: "",
       deliveryFeeTotal: 0,
+      selectedTableId: null,
     });
     playTapSound();
   }
@@ -880,13 +882,17 @@ export default function POSPage() {
 
     const { itemsTotal, taxTotal, serviceChargeTotal, deliveryFeeTotal, payableTotal } = calculateOrderSummary();
 
+    // Auto-select first payment type if none is selected
+    const defaultPayment = state.selectedPaymentType || (paymentTypes?.length > 0 ? paymentTypes[0].id : null);
+
     setState({
       ...state,
       itemsTotal,
       taxTotal,
       serviceChargeTotal,
       deliveryFeeTotal,
-      payableTotal
+      payableTotal,
+      selectedPaymentType: defaultPayment,
     });
     document.getElementById('modal-pay-and-send-kitchen-summary').showModal();
   }
@@ -896,7 +902,7 @@ export default function POSPage() {
     }
 
     const deliveryType = state.deliveryType || diningOptionRef.current?.value || "dinein";
-    const tableId = (deliveryType === "delivery" || deliveryType === "takeaway") ? null : (tableRef.current?.value || null);
+    const tableId = (deliveryType === "delivery" || deliveryType === "takeaway") ? null : (state.selectedTableId || tableRef.current?.value || null);
     const customerType = state.customerType;
     const customer = state.customer;
     const deliveryFee = state.deliveryFeeTotal || 0;
@@ -1010,6 +1016,8 @@ export default function POSPage() {
           qrOrders: newQROrders,
           qrOrdersCount: newQROrderItemCount,
           selectedPaymentType: null,
+          selectedTableId: null,
+          deliveryAddress: "",
         }))
 
         _initPOS()
@@ -1122,7 +1130,7 @@ export default function POSPage() {
 
   const btnSendToKitchen = async () => {
     const deliveryType = state.deliveryType || diningOptionRef.current?.value || "dinein";
-    const tableId = (deliveryType === "delivery" || deliveryType === "takeaway") ? null : (tableRef.current?.value || null);
+    const tableId = (deliveryType === "delivery" || deliveryType === "takeaway") ? null : (state.selectedTableId || tableRef.current?.value || null);
     const customerType = state.customerType;
     const customer = state.customer;
     const deliveryFee = state.deliveryFeeTotal || 0;
@@ -1226,7 +1234,9 @@ export default function POSPage() {
           orderId: data.orderId,
           selectedQrOrderItem: null,
           qrOrders: newQROrders,
-          qrOrdersCount: newQROrderItemCount
+          qrOrdersCount: newQROrderItemCount,
+          selectedTableId: null,
+          deliveryAddress: "",
         }))
 
         _initPOS()
@@ -1540,6 +1550,7 @@ export default function POSPage() {
                   setState((prev) => ({
                     ...prev,
                     deliveryType: newType,
+                    selectedTableId: (newType === "delivery" || newType === "takeaway") ? null : prev.selectedTableId,
                   }));
                 }}
                 className="text-sm w-full border rounded-lg px-4 py-2 justify-center bg-restro-gray border-restro-border-green hover:bg-restro-button-hover focus:outline-restro-border-green font-medium cursor-pointer"
@@ -1581,6 +1592,11 @@ export default function POSPage() {
               ) : (
                 <select
                   ref={tableRef}
+                  value={state.selectedTableId || ""}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setState((prev) => ({ ...prev, selectedTableId: val }));
+                  }}
                   className="text-sm w-full border rounded-lg px-4 py-2 justify-center bg-restro-gray border-restro-border-green hover:bg-restro-button-hover focus:outline-restro-border-green font-medium cursor-pointer"
                 >
                   <option value="">{t('pos.select_table')}</option>

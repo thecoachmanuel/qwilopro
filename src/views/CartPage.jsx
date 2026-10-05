@@ -273,12 +273,18 @@ const CartPage = () => {
         });
       }
     } catch (error) {
+      const statusCode = error?.response?.status;
       const message = error?.response?.data?.message || t('cart.something_went_wrong');
       console.error(error);
       toast.dismiss();
       toast.error(message);
-      navigate('/order-failed');
+      // Only redirect to /order-failed for server errors (5xx) or network failures
+      // For 4xx (bad request, not found), just show the error and let user retry
+      if (!statusCode || statusCode >= 500) {
+        navigate('/order-failed');
+      }
     }
+
   };
 
   const btnOpenNotesModal = (index, notes) => {

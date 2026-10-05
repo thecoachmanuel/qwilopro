@@ -150,6 +150,12 @@ export default function PrintReceiptPage() {
               <span>{t("print_receipt.order_type") || "Order Type"}:</span>
               <span className="capitalize font-semibold">{deliveryType}</span>
             </div>
+            {tableId && (
+              <div className="flex justify-between text-xs mt-0.5">
+                <span>{t("print_receipt.table") || "Table"}:</span>
+                <span className="font-semibold">{tableId}</span>
+              </div>
+            )}
             {deliveryAddress && (
               <p className="text-xs text-gray-700 mt-0.5">Destination: {deliveryAddress}</p>
             )}
