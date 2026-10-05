@@ -219,7 +219,7 @@ exports.getInvoiceOrders = async (req, res) => {
     const invoiceId = req.body.invoiceId;
 
     if (!orderIds || orderIds?.length == 0) {
-      return res.status(400).JSON({
+      return res.status(400).json({
         success: false,
         message: req.__("invalid_request"), // Translate message
       });
@@ -245,9 +245,9 @@ exports.getInvoiceOrders = async (req, res) => {
 
         if (addonsIds) {
           const itemAddons = addonsIds.map((addonId) => {
-            const addon = addons.filter((a) => a.id == addonId);
-            return addon[0];
-          });
+            const addon = (addons || []).find((a) => a.id == addonId);
+            return addon;
+          }).filter(Boolean);
           orderItems[index].addons = [...itemAddons];
         }
       });

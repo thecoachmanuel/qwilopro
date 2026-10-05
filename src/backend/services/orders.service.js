@@ -336,7 +336,9 @@ exports.getOrdersPaymentSummaryDB = async (orderIdsToFindSummary, tenantId) => {
       ];
 
       if (allAddonIds.length > 0) {
-        addons = await MenuItemAddon.find({ id: { $in: allAddonIds }, tenant_id: tenantId })
+        const numericIds = allAddonIds.map(Number).filter((n) => !isNaN(n));
+        const combined = [...new Set([...allAddonIds, ...numericIds])];
+        addons = await MenuItemAddon.find({ id: { $in: combined }, tenant_id: tenantId })
           .select("id item_id title price")
           .lean();
       }

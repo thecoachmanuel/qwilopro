@@ -104,7 +104,7 @@ exports.createOrder = async (req, res) => {
       });
     }
 
-    const customerPhone = typeof customerId === 'object' ? (customerId?.phone || customerId?.id || null) : (customerId || null);
+    const customerPhone = typeof customerId === 'object' ? (customerId?.phone || customerId?.id || customerId?.value || null) : (customerId || null);
     const validTableId = (tableId && !isNaN(Number(tableId))) ? Number(tableId) : null;
     const validCustomerType = String(customerType || "WALKIN").toUpperCase() === "CUSTOMER" ? "CUSTOMER" : "WALKIN";
     const safeDeliveryFee = Number(deliveryFee) || 0;
@@ -223,7 +223,7 @@ exports.createOrderAndInvoice = async (req, res) => {
     const invoiceId = await createInvoiceDB(safeNetTotal, safeTaxTotal, safeServiceChargeTotal, safeTotal, date, selectedPaymentType, tenantId, username);
     // create invoice
 
-    const customerPhone = typeof customerId === 'object' ? (customerId?.phone || customerId?.id || null) : (customerId || null);
+    const customerPhone = typeof customerId === 'object' ? (customerId?.phone || customerId?.id || customerId?.value || null) : (customerId || null);
     const validTableId = (tableId && !isNaN(Number(tableId))) ? Number(tableId) : null;
     const validCustomerType = String(customerType || "WALKIN").toUpperCase() === "CUSTOMER" ? "CUSTOMER" : "WALKIN";
 

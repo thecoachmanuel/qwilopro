@@ -12,9 +12,28 @@ function getStoreMetaFromCache(tenantId) {
       ? `RESTROPROSAAS__POS_CACHE_t${tenantId}`
       : 'RESTROPROSAAS__POS_CACHE';
     const raw = localStorage.getItem(key);
-    if (!raw) return null;
+    if (!raw) {
+      // Try generic POS cache
+      const generic = localStorage.getItem('RESTROPROSAAS__POS_CACHE');
+      if (generic) {
+        const parsedGen = JSON.parse(generic);
+        return parsedGen?.storeSettings || null;
+      }
+      return null;
+    }
     const parsed = JSON.parse(raw);
     return parsed?.storeSettings || null;
+  } catch {
+    return null;
+  }
+}
+
+// Read local display payload if active on same device / secondary monitor
+function getLocalDisplayPayload() {
+  try {
+    const raw = localStorage.getItem('RESTROPROSAAS__CUSTOMER_DISPLAY_PAYLOAD');
+    if (!raw) return null;
+    return JSON.parse(raw);
   } catch {
     return null;
   }
@@ -25,8 +44,12 @@ export default function CustomerDisplayPage() {
   const user = getUserDetailsInLocalStorage();
   const { theme } = useTheme();
 
-  const [cartData, setCartData] = useState(null);
-  const [storeMeta, setStoreMeta] = useState(null);
+  const [cartData, setCartData] = useState(() => getLocalDisplayPayload());
+  const [storeMeta, setStoreMeta] = useState(() => {
+    const fromPayload = getLocalDisplayPayload()?.storeSettings;
+    if (fromPayload) return fromPayload;
+    return getStoreMetaFromCache(user?.tenant_id);
+  });
   const [resolvedTenantId, setResolvedTenantId] = useState(user?.tenant_id || null);
 
   // 1. Resolve tenant from URL query parameters (?tenant_id=, ?tenant=, ?t=) or localStorage
@@ -49,10 +72,22 @@ export default function CustomerDisplayPage() {
     if (tId) {
       setResolvedTenantId(tId);
       const cached = getStoreMetaFromCache(tId);
-      if (cached) setStoreMeta(cached);
+      if (cached && !storeMeta) setStoreMeta(cached);
     }
 
-    // If store branding is not yet in cache, fetch public store settings
+    // Sync from local display payload on mount
+    const localPayload = getLocalDisplayPayload();
+    if (localPayload) {
+      setCartData(localPayload);
+      if (localPayload.storeSettings && !storeMeta) {
+        setStoreMeta(localPayload.storeSettings);
+      }
+      if (localPayload.tenantId && !tId) {
+        setResolvedTenantId(localPayload.tenantId);
+      }
+    }
+
+    // Fallback: Fetch public store settings if not available in cache
     const identifier = tSlug || tId || 'royal-savor';
     if (!storeMeta || !storeMeta.store_name) {
       fetch(`/api/v1/qrmenu/${identifier}`)
@@ -69,7 +104,25 @@ export default function CustomerDisplayPage() {
     }
   }, [user?.tenant_id]);
 
-  // 2. Connect socket and authenticate tenant channel/room
+  // 2. Listen to storage events for 0-latency dual-monitor / multi-tab synchronization
+  useEffect(() => {
+    const handleStorageChange = (e) => {
+      if (!e || e.key === 'RESTROPROSAAS__CUSTOMER_DISPLAY_PAYLOAD' || !e.key) {
+        const payload = getLocalDisplayPayload();
+        if (payload) {
+          setCartData(payload);
+          if (payload.storeSettings) setStoreMeta(payload.storeSettings);
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, []);
+
+  // 3. Connect socket and authenticate tenant channel/room for remote/tablet displays
   useEffect(() => {
     if (!resolvedTenantId || !socket) return;
 
@@ -77,6 +130,9 @@ export default function CustomerDisplayPage() {
 
     const handleCartUpdate = (payload) => {
       setCartData(payload);
+      if (payload?.storeSettings) {
+        setStoreMeta(payload.storeSettings);
+      }
     };
 
     socket.on('cart_update', handleCartUpdate);
@@ -96,7 +152,7 @@ export default function CustomerDisplayPage() {
   const logoUrl = storeImage ? getImageURL(storeImage) : null;
   const currency = summary.currency || storeMeta?.currency || '$';
 
-  const isConnected = socket && socket.connected;
+  const isConnected = (socket && socket.connected) || Boolean(cartData);
 
   const outerCls =
     "min-h-screen flex flex-col font-['Nunito'] transition-colors duration-300 " +
@@ -108,13 +164,13 @@ export default function CustomerDisplayPage() {
 
   const leftBg = isDark
     ? 'bg-gradient-to-br from-[#161616] to-[#0f0f0f] border-r border-[#222]'
-    : 'bg-gradient-to-br from-emerald-600 via-emerald-700 to-teal-800 text-white';
+    : 'bg-gradient-to-br from-[#008B5E] via-[#007b52] to-[#006040] text-white';
 
   const rightBg =
     'w-full md:w-[460px] lg:w-[500px] flex flex-col ' +
     (isDark ? 'bg-[#141414]' : 'bg-white shadow-xl');
 
-  const totalAmtCls = isDark ? 'text-emerald-400' : 'text-emerald-700';
+  const totalAmtCls = isDark ? 'text-emerald-400' : 'text-[#008B5E]';
 
   return (
     <div className={outerCls} style={{ userSelect: 'none' }}>
@@ -129,15 +185,15 @@ export default function CustomerDisplayPage() {
               onError={(e) => { e.target.style.display = 'none'; }}
             />
           ) : (
-            <div className="h-11 w-11 rounded-2xl bg-emerald-600 text-white flex items-center justify-center font-extrabold text-base shadow-md">
+            <div className="h-11 w-11 rounded-2xl bg-[#008B5E] text-white flex items-center justify-center font-extrabold text-base shadow-md">
               {storeName.charAt(0).toUpperCase()}
             </div>
           )}
           <div>
-            <h1 className="font-extrabold text-base tracking-tight leading-none text-emerald-600 dark:text-emerald-400">
+            <h1 className="font-extrabold text-base tracking-tight leading-none text-[#008B5E] dark:text-emerald-400">
               {storeName}
             </h1>
-            <p className="text-xs opacity-50 font-medium mt-0.5">Customer Display Screen</p>
+            <p className="text-xs opacity-50 font-medium mt-0.5">Customer Display</p>
           </div>
         </div>
 
@@ -149,7 +205,7 @@ export default function CustomerDisplayPage() {
             }`}
           ></span>
           <span className="opacity-80">
-            {isConnected ? 'Connected' : 'Connecting...'}
+            {isConnected ? 'Live Sync Active' : 'Connecting...'}
           </span>
         </div>
       </header>
@@ -158,7 +214,7 @@ export default function CustomerDisplayPage() {
       <main className="flex-1 flex flex-col md:flex-row overflow-hidden">
         {/* Left Side: Branded Welcome Hero & Big Total Display */}
         <section className={`flex-1 flex flex-col items-center justify-center p-8 md:p-14 ${leftBg}`}>
-          <div className="flex flex-col items-center text-center max-w-md w-full animate-fadeIn">
+          <div className="flex flex-col items-center text-center max-w-md w-full">
             {/* Prominent Store Logo */}
             {logoUrl ? (
               <img
@@ -183,7 +239,7 @@ export default function CustomerDisplayPage() {
             </p>
 
             {/* Total Card */}
-            <div className="w-full p-6 md:p-8 rounded-3xl bg-black/20 backdrop-blur-lg border border-white/10 shadow-2xl text-center">
+            <div className="w-full p-6 md:p-8 rounded-3xl bg-black/25 backdrop-blur-xl border border-white/15 shadow-2xl text-center">
               <p className="text-white/70 text-xs font-bold uppercase tracking-widest mb-1.5">
                 Total Payable
               </p>
@@ -191,8 +247,8 @@ export default function CustomerDisplayPage() {
                 {currency}{Number(summary.payableTotal || 0).toFixed(2)}
               </p>
               {Number(summary.itemsTotal || 0) > 0 && (
-                <p className="text-xs text-white/60 mt-2 font-medium">
-                  {cart.reduce((acc, it) => acc + (Number(it.quantity) || 1), 0)} items in order
+                <p className="text-xs text-white/70 mt-2 font-medium">
+                  {cart.reduce((acc, it) => acc + (Number(it.quantity) || 1), 0)} items in your order
                 </p>
               )}
             </div>
@@ -202,8 +258,8 @@ export default function CustomerDisplayPage() {
         {/* Right Side: Live Order Items List */}
         <section className={rightBg}>
           <div className="px-6 py-4 border-b flex items-center justify-between font-bold text-xs uppercase tracking-wider text-gray-500 dark:text-gray-400">
-            <span>Order Summary</span>
-            <span className="text-emerald-600 dark:text-emerald-400">
+            <span>Order Items</span>
+            <span className="text-[#008B5E] dark:text-emerald-400">
               {cart.length > 0 ? `${cart.length} item${cart.length > 1 ? 's' : ''}` : 'Empty'}
             </span>
           </div>
@@ -215,8 +271,8 @@ export default function CustomerDisplayPage() {
                 <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-3xl mb-3">
                   🛍️
                 </div>
-                <p className="font-bold text-base">Your cart is empty</p>
-                <p className="text-xs mt-1">Items added at the POS will appear here live</p>
+                <p className="font-bold text-base">Your cart is currently empty</p>
+                <p className="text-xs mt-1">Items added at the POS register will appear here in real-time</p>
               </div>
             ) : (
               cart.map((item, index) => (
@@ -234,7 +290,7 @@ export default function CustomerDisplayPage() {
                       <p className="text-xs opacity-60 mt-0.5">{item.variant.title}</p>
                     )}
                     {item.addons && item.addons.length > 0 && (
-                      <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-0.5">
+                      <p className="text-xs text-[#008B5E] dark:text-emerald-400 mt-0.5">
                         + {item.addons.filter(Boolean).map((a) => a.title).join(', ')}
                       </p>
                     )}
@@ -276,6 +332,12 @@ export default function CustomerDisplayPage() {
                 <div className="flex justify-between text-xs opacity-70">
                   <span>Service Charge</span>
                   <span>{currency}{Number(summary.serviceChargeTotal).toFixed(2)}</span>
+                </div>
+              )}
+              {Number(summary.deliveryFeeTotal) > 0 && (
+                <div className="flex justify-between text-xs opacity-70">
+                  <span>Delivery Fee</span>
+                  <span>{currency}{Number(summary.deliveryFeeTotal).toFixed(2)}</span>
                 </div>
               )}
               <div

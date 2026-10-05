@@ -183,17 +183,74 @@ export default function POSPage() {
       } else {
         localStorage.removeItem(tenantKey);
       }
-      sendCartUpdateEvent(state.cartItems, {
-        itemsTotal: state.itemsTotal,
-        taxTotal: state.taxTotal,
-        serviceChargeTotal: state.serviceChargeTotal,
-        payableTotal: state.payableTotal,
-        currency: state.currency,
+
+      // Compute dynamic totals in real time for live customer screen sync
+      let liveItemsTotal = 0;
+      let liveTaxTotal = 0;
+      let liveServiceChargeTotal = 0;
+      let livePayableTotal = 0;
+      let liveDeliveryFeeTotal = 0;
+
+      (state.cartItems || []).forEach((item) => {
+        const taxRate = Number(item.tax_rate) || 0;
+        const taxType = item.tax_type;
+        const itemPrice = (Number(item.price) || 0) * (Number(item.quantity) || 1);
+
+        if (taxType == "exclusive") {
+          const tax = (itemPrice * taxRate) / 100;
+          liveTaxTotal += tax;
+          liveItemsTotal += itemPrice;
+          livePayableTotal += itemPrice + tax;
+        } else if (taxType == "inclusive") {
+          const tax = itemPrice - (itemPrice * (100 / (100 + taxRate)));
+          liveTaxTotal += tax;
+          liveItemsTotal += itemPrice - tax;
+          livePayableTotal += itemPrice;
+        } else {
+          liveItemsTotal += itemPrice;
+          livePayableTotal += itemPrice;
+        }
       });
+
+      if (state.serviceCharge) {
+        const sc = (Number(liveItemsTotal) * Number(state.serviceCharge)) / 100;
+        liveServiceChargeTotal += sc;
+        livePayableTotal += sc;
+      }
+
+      const currentDeliveryType = state.deliveryType || "dinein";
+      if (currentDeliveryType === "delivery" && state.storeSettings?.delivery_fee) {
+        liveDeliveryFeeTotal = Number(state.storeSettings.delivery_fee) || 0;
+        livePayableTotal += liveDeliveryFeeTotal;
+      }
+
+      const summary = {
+        itemsTotal: liveItemsTotal,
+        taxTotal: liveTaxTotal,
+        serviceChargeTotal: liveServiceChargeTotal,
+        deliveryFeeTotal: liveDeliveryFeeTotal,
+        payableTotal: livePayableTotal,
+        currency: state.currency,
+      };
+
+      sendCartUpdateEvent(state.cartItems, summary);
+
+      // Also persist to localStorage for instant same-browser / dual-screen customer display sync
+      const displayPayload = {
+        cart: state.cartItems,
+        summary,
+        customer: state.customer,
+        customerType: state.customerType,
+        storeSettings: state.storeSettings,
+        tenantId: user?.tenant_id,
+        timestamp: Date.now(),
+      };
+      localStorage.setItem("RESTROPROSAAS__CUSTOMER_DISPLAY_PAYLOAD", JSON.stringify(displayPayload));
+      window.dispatchEvent(new Event("storage"));
     } catch (e) {
-      console.warn("Failed to persist cart:", e);
+      console.warn("Failed to persist cart or sync customer display:", e);
     }
-  }, [state.cartItems, state.itemsTotal, state.payableTotal, state.customer, state.customerType, state.currency, user?.tenant_id]);
+  }, [state.cartItems, state.customer, state.customerType, state.deliveryType, state.serviceCharge, state.storeSettings, state.currency, user?.tenant_id]);
 
   const { categories, menuItems, paymentTypes, printSettings, storeSettings, storeTables, currency, cartItems, searchQuery, selectedCategory, selectedItemId, drafts, customer, customerType, isLoading } = state;
 
