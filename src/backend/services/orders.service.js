@@ -364,16 +364,24 @@ exports.createInvoiceDB = async (
   username = null
 ) => {
   try {
-    const invoiceId = await getNextSequenceValue(`invoice_tenant_${tenantId}`);
+    const key = `invoice_tenant_${tenantId}`;
+    let invoiceId = await getNextSequenceValue(key);
+
+    // Guard against collision with pre-existing invoice IDs
+    let exists = await Invoice.findOne({ id: invoiceId, tenant_id: tenantId });
+    while (exists) {
+      invoiceId = await getNextSequenceValue(key);
+      exists = await Invoice.findOne({ id: invoiceId, tenant_id: tenantId });
+    }
 
     await Invoice.create({
       id: invoiceId,
-      sub_total: subtotal,
-      tax_total: taxTotal,
-      service_charge_total: serviceChargeTotal,
-      total,
-      created_at: date || new Date(),
-      payment_type_id: selectedPaymentType,
+      sub_total: Number(subtotal) || 0,
+      tax_total: Number(taxTotal) || 0,
+      service_charge_total: Number(serviceChargeTotal) || 0,
+      total: Number(total) || 0,
+      created_at: date ? new Date(date) : new Date(),
+      payment_type_id: selectedPaymentType ? Number(selectedPaymentType) : null,
       tenant_id: tenantId,
       created_by: username,
     });

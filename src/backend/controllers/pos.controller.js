@@ -79,17 +79,49 @@ exports.createOrder = async (req, res) => {
     const username = req.user.username;
     const {cart, deliveryType, customerType, customerId, tableId, selectedQrOrderItem, deliveryFee, deliveryAddress} = req.body;
 
-    if(cart?.length == 0) {
+    if(!cart || cart.length === 0) {
       return res.status(400).json({
         success: false,
         message: req.__("cart_is_empty") // Translate message
       });
     }
 
-    const result = await createOrderDB(tenantId, cart, deliveryType, customerType, customerId?.phone || null, tableId || null, 'pending', null, username, deliveryFee, deliveryAddress);
+    let allInsufficientIngredients = [];
+    for (const item of cart) {
+      const result = canPrepareMenuItem(item, item.quantity);
+      if (result && result.length > 0) {
+        allInsufficientIngredients = [...allInsufficientIngredients, ...result];
+      }
+    }
+    if (allInsufficientIngredients.length > 0) {
+      const messages = allInsufficientIngredients.map(i =>
+        `‘${i.itemTitle} ${i.variantTitle ? `(${i.variantTitle})` : ''}${i.addonTitle ? ` + ${i.addonTitle}` : ''}’ is missing '${i.ingredientTitle}' (need ${i.requiredQty}, have ${i.currentQty})`
+      );
+
+      return res.status(400).json({
+        success: false,
+        message: "Unavailable: Not enough stock." + "\n" + messages.join("; "),
+      });
+    }
+
+    const customerPhone = typeof customerId === 'object' ? (customerId?.phone || customerId?.id || null) : (customerId || null);
+    const validTableId = (tableId && !isNaN(Number(tableId))) ? Number(tableId) : null;
+    const validCustomerType = String(customerType || "WALKIN").toUpperCase() === "CUSTOMER" ? "CUSTOMER" : "WALKIN";
+    const safeDeliveryFee = Number(deliveryFee) || 0;
+
+    const result = await createOrderDB(tenantId, cart, deliveryType, validCustomerType, customerPhone, validTableId, 'pending', null, username, safeDeliveryFee, deliveryAddress);
 
     if(selectedQrOrderItem) {
       await updateQROrderStatusDB(tenantId, selectedQrOrderItem, "completed");
+    }
+
+    if (global.io && tenantId) {
+      try {
+        global.io.to(String(tenantId)).emit("new_order", {
+          orderId: result.orderId,
+          tokenNo: result.tokenNo,
+        });
+      } catch (e) {}
     }
 
     return res.status(200).json({
@@ -100,20 +132,24 @@ exports.createOrder = async (req, res) => {
     });
 
   } catch (error) {
-    console.error(error);
+    console.error("createOrder Error:", error);
     return res.status(500).json({
       success: false,
-      message: req.__("error_processing_request_try_later") // Translate message
+      message: error?.message || req.__("error_processing_request_try_later") // Translate message
     });
   }
 };
 
 
 function canPrepareMenuItem(menuItem, quantity = 1) {
-  const selectedVariantId = parseInt(menuItem.variant_id);
+  if (!menuItem || !menuItem.recipeItems || !Array.isArray(menuItem.recipeItems) || menuItem.recipeItems.length === 0) {
+    return [];
+  }
+  const selectedVariantId = menuItem.variant_id ? parseInt(menuItem.variant_id) : null;
   const selectedAddonIds = (menuItem.addons_ids || []).map(String);
 
-  const relevantRecipeItems = menuItem.recipeItems.filter((recipe) => {
+  const relevantRecipeItems = (menuItem.recipeItems || []).filter((recipe) => {
+    if (!recipe) return false;
     if (recipe.variant_id === 0 && recipe.addon_id === 0) return true;
     if (recipe.variant_id > 0 && recipe.variant_id == selectedVariantId) return true;
     if (recipe.addon_id > 0 && selectedAddonIds.includes(String(recipe.addon_id))) return true;
@@ -123,14 +159,14 @@ function canPrepareMenuItem(menuItem, quantity = 1) {
   const insufficientIngredients = [];
 
   for (const recipe of relevantRecipeItems) {
-    const currentQty = parseFloat(recipe.current_quantity);
-    const requiredQty = parseFloat(recipe.recipe_quantity) * quantity;
-    if (currentQty < requiredQty) {
+    const currentQty = parseFloat(recipe.current_quantity || 0);
+    const requiredQty = parseFloat(recipe.recipe_quantity || 0) * (Number(quantity) || 1);
+    if (!isNaN(currentQty) && !isNaN(requiredQty) && currentQty < requiredQty) {
       insufficientIngredients.push({
         itemTitle: menuItem.title,
         variantTitle: menuItem.variant?.title || '',
         addonTitle: recipe.addon_title || '',
-        ingredientTitle: recipe.ingredient_title,
+        ingredientTitle: recipe.ingredient_title || 'Ingredient',
         requiredQty,
         currentQty,
       });
@@ -146,7 +182,7 @@ exports.createOrderAndInvoice = async (req, res) => {
     const username = req.user.username;
     const {cart, deliveryType, customerType, customerId, tableId, netTotal, taxTotal, serviceChargeTotal, total, selectedQrOrderItem, selectedPaymentType, deliveryFee, deliveryAddress} = req.body;
 
-    if(cart?.length == 0) {
+    if(!cart || cart.length === 0) {
       return res.status(400).json({
         success: false,
         message: req.__("cart_is_empty") // Translate message
@@ -157,7 +193,7 @@ exports.createOrderAndInvoice = async (req, res) => {
 
     for (const item of cart) {
       const result = canPrepareMenuItem(item, item.quantity);
-      if (result.length > 0) {
+      if (result && result.length > 0) {
         allInsufficientIngredients = [...allInsufficientIngredients, ...result];
       }
     }
@@ -173,19 +209,40 @@ exports.createOrderAndInvoice = async (req, res) => {
       });
     }
 
+    // Safe numbers
+    const safeNetTotal = Number(netTotal) || 0;
+    const safeTaxTotal = Number(taxTotal) || 0;
+    const safeServiceChargeTotal = Number(serviceChargeTotal) || 0;
+    const safeDeliveryFee = Number(deliveryFee) || 0;
+    const safeTotal = Number(total) || (safeNetTotal + safeTaxTotal + safeServiceChargeTotal + safeDeliveryFee);
+
     // create invoice
     const now = new Date();
     const date = `${now.getFullYear()}-${(now.getMonth()+1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
 
-    const invoiceId = await createInvoiceDB(netTotal, taxTotal, serviceChargeTotal, total, date, selectedPaymentType, tenantId, username);
+    const invoiceId = await createInvoiceDB(safeNetTotal, safeTaxTotal, safeServiceChargeTotal, safeTotal, date, selectedPaymentType, tenantId, username);
     // create invoice
 
-    const result = await createOrderDB(tenantId, cart, deliveryType, customerType, customerId?.phone || null, tableId || null, 'paid', invoiceId, username, deliveryFee, deliveryAddress);
+    const customerPhone = typeof customerId === 'object' ? (customerId?.phone || customerId?.id || null) : (customerId || null);
+    const validTableId = (tableId && !isNaN(Number(tableId))) ? Number(tableId) : null;
+    const validCustomerType = String(customerType || "WALKIN").toUpperCase() === "CUSTOMER" ? "CUSTOMER" : "WALKIN";
+
+    const result = await createOrderDB(tenantId, cart, deliveryType, validCustomerType, customerPhone, validTableId, 'paid', invoiceId, username, safeDeliveryFee, deliveryAddress);
     const orderId = result.orderId;
     const tokenNo = result.tokenNo;
 
     if(selectedQrOrderItem) {
       await updateQROrderStatusDB(tenantId, selectedQrOrderItem, "completed");
+    }
+
+    if (global.io && tenantId) {
+      try {
+        global.io.to(String(tenantId)).emit("new_order", {
+          orderId,
+          tokenNo,
+          invoiceId,
+        });
+      } catch (e) {}
     }
 
     return res.status(200).json({
@@ -197,10 +254,10 @@ exports.createOrderAndInvoice = async (req, res) => {
     });
 
   } catch (error) {
-    console.error(error);
+    console.error("createOrderAndInvoice Error:", error);
     return res.status(500).json({
       success: false,
-      message: req.__("error_processing_request_try_later") // Translate message
+      message: error?.message || req.__("error_processing_request_try_later") // Translate message
     });
   }
 };

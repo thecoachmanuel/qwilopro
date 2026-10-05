@@ -30,17 +30,19 @@ exports.createOrderDB = async (
 ) => {
   try {
     const tokenNo = await getNextDailyTokenValue(tenantId);
+    const validTableId = (tableId && !isNaN(Number(tableId))) ? Number(tableId) : null;
+    const validCustomerType = String(customerType || "WALKIN").toUpperCase() === "CUSTOMER" ? "CUSTOMER" : "WALKIN";
 
     const order = await Order.create({
-      delivery_type: deliveryType,
+      delivery_type: deliveryType || "dinein",
       delivery_fee: Number(deliveryFee) || 0,
       delivery_address: deliveryAddress || null,
-      customer_type: customerType,
-      customer_id: customerId,
-      table_id: tableId,
+      customer_type: validCustomerType,
+      customer_id: customerId ? String(customerId) : null,
+      table_id: validTableId,
       token_no: tokenNo,
       payment_status: paymentStatus || "pending",
-      invoice_id: invoiceId || null,
+      invoice_id: invoiceId ? Number(invoiceId) : null,
       tenant_id: tenantId,
       created_by: username,
     });
