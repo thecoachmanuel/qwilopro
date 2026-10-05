@@ -8,7 +8,10 @@ import {
 } from "../controllers/auth.controller";
 import { toast } from "react-hot-toast";
 import { Link, useNavigate } from "react-router-dom";
-import { getUserDetailsInLocalStorage } from "../helpers/UserDetails";
+import {
+  getUserDetailsInLocalStorage,
+  saveUserDetailsInLocalStorage,
+} from "../helpers/UserDetails";
 import AppBarDropdown from "../components/AppBarDropdown";
 import { useTranslation } from "react-i18next";
 import { useTheme } from "../contexts/ThemeContext";
@@ -20,6 +23,7 @@ import {
   getPlans,
   getUserCountry,
   createPaystackPaymentLink,
+  activateTrial,
 } from "../controllers/plans.controller";
 import PricingPlans from "./PricingPlans";
 import useAuth from "../helpers/useAuth";
@@ -33,7 +37,7 @@ export default function InActiveSubscriptionPage() {
   const [isYearly, setIsYearly] = useState(false);
   const [planLoading, setPlanLoading] = useState(false);
   const [isTrial, setIsTrial] = useState(false);
-  const [trialDays, setTrialDays] = useState(7);
+  const [trialDays, setTrialDays] = useState(14);
   const [plans, setPlans] = useState("");
   const [country, setCountry] = useState("Nigeria");
   const [stripeProductId, setStripeProductId] = useState("");
@@ -42,22 +46,21 @@ export default function InActiveSubscriptionPage() {
 
   useAuth();
 
-  // redirect to dashboard only if subscription is truly active and not expired
+  // redirect to dashboard only if subscription is truly active and has valid end date
   useEffect(() => {
+    const hasSubEnd = Boolean(user?.subscription_end);
     const isEndExpired =
-      user?.subscription_end &&
+      hasSubEnd &&
       new Date(user.subscription_end).getTime() <
         new Date().setHours(0, 0, 0, 0);
 
     const isSubActive =
-      (user?.subscription_is_active === 1 ||
-        user?.subscription_is_active === true) ||
-      (Number(user?.is_active) === 1 && !isEndExpired);
+      Number(user?.is_active) === 1 && hasSubEnd && !isEndExpired;
 
-    if (user && isSubActive && !isEndExpired) {
-      navigate("/dashboard", { replace: true });
+    if (user && isSubActive) {
+      navigate("/dashboard/home", { replace: true });
     }
-  }, [user?.is_active, user?.subscription_end, user?.subscription_is_active, navigate]);
+  }, [user?.is_active, user?.subscription_end, navigate]);
 
   const fetchPlans = async () => {
     try {
@@ -78,40 +81,55 @@ export default function InActiveSubscriptionPage() {
     fetchPlans();
   }, []);
 
-  useEffect(() => {
-    const fetchCountry = async () => {
-      try {
-        const res = await getUserCountry();
-        const detected = res?.data?.country || res?.data?.result?.country;
-        if (detected) setCountry(detected);
-      } catch (err) {
-        setCountry("Nigeria");
-      }
-    };
-
-    fetchCountry();
-  }, []);
-
-  const btnSubscribe = async (priceId, trial, days) => {
-    toast.loading(t("inactive_subscription.loading_message"));
-
+  const btnSubscribe = async (priceId, trial, days, planId) => {
     const selectedPriceId = priceId || stripePriceId;
     const selectedTrial = trial !== undefined ? trial : isTrial;
     const selectedTrialDays = days !== undefined ? days : trialDays;
 
+    // 1. FREE TRIAL ACTIVATION: Instant activation without charging
+    if (selectedTrial) {
+      try {
+        toast.loading("Activating free trial...");
+        const res = await activateTrial(planId, selectedTrialDays);
+        toast.dismiss();
+
+        if (res.status === 200 && res.data?.success) {
+          toast.success("Free trial activated! Welcome to QwiloPRO.");
+          if (res.data?.userDetails) {
+            saveUserDetailsInLocalStorage(res.data.userDetails);
+          }
+          if (res.data?.newAccessToken) {
+            localStorage.setItem("restroprosaas_token", res.data.newAccessToken);
+          }
+          navigate("/dashboard/home", { replace: true });
+          return;
+        } else {
+          toast.error(res.data?.message || "Failed to activate trial");
+          return;
+        }
+      } catch (trialErr) {
+        toast.dismiss();
+        console.error("Trial activation failed:", trialErr);
+        toast.error(trialErr?.response?.data?.message || "Failed to start free trial");
+        return;
+      }
+    }
+
+    // 2. PAID SUBSCRIPTION FLOW
     if (!selectedPriceId) {
-      toast.dismiss();
       toast.error(t("inactive_subscription.select_plan"));
       return;
     }
 
     try {
+      toast.loading(t("inactive_subscription.loading_message"));
+
       if (activePaymentGateway === "stripe") {
         // Stripe flow
         const res = await getStripeSubscriptionURL(
           selectedPriceId,
-          selectedTrial,
-          selectedTrialDays
+          false,
+          0
         );
         toast.dismiss();
 

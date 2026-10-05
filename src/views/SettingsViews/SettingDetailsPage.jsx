@@ -14,9 +14,11 @@ import { mutate } from "swr";
 import Popover from "../../components/Popover";
 import {
   IconExternalLink,
+  IconLock,
   IconQrcode,
   IconTrash,
   IconUpload,
+  IconWorld,
 } from "@tabler/icons-react";
 import { iconStroke } from "../../config/config";
 import QRCode from "qrcode";
@@ -38,6 +40,7 @@ export default function SettingDetailsPage() {
   const isQRMenuEnabledRef = useRef();
   const isQROrderEnabledRef = useRef();
   const isFeedbackEnabledRef = useRef();
+  const customDomainRef = useRef();
   const { theme } = useTheme();
   const user = getUserDetailsInLocalStorage();
   const rawFeatures = user?.planFeatures || user?.planFeautures || user?.plan_features || user?.features;
@@ -46,6 +49,11 @@ export default function SettingDetailsPage() {
     : (typeof rawFeatures === 'string' ? rawFeatures.split(",").map(f => f.trim().toUpperCase()) : []);
 
   const isQrMenuAccess = user?.role === "admin" || userPlanFeatures.includes(PLAN_FEATURES?.QRMENU || 'QRMENU');
+  const isCustomDomainAccess =
+    user?.role === "admin" ||
+    userPlanFeatures.includes(PLAN_FEATURES?.CUSTOM_DOMAIN || "CUSTOM_DOMAIN") ||
+    userPlanFeatures.includes("CUSTOM_DOMAIN") ||
+    (user?.plan_title && String(user.plan_title).toLowerCase().includes("business"));
 
   const { APIURL, data, error, isLoading } = useStoreSettings();
 
@@ -70,6 +78,7 @@ export default function SettingDetailsPage() {
     isQRMenuEnabled,
     uniqueQRCode,
     slug,
+    custom_domain,
     isQROrderEnabled,
     isFeedbackEnabled,
     uniqueId,
@@ -87,6 +96,7 @@ export default function SettingDetailsPage() {
     const isQRMenuEnabled = isQRMenuEnabledRef.current.checked;
     const isQROrderEnabled = isQROrderEnabledRef.current.checked;
     const isFeedbackEnabled = isFeedbackEnabledRef.current.checked;
+    const customDomainVal = customDomainRef.current ? customDomainRef.current.value : (custom_domain || null);
 
     try {
       toast.loading(t("settings.please_wait"));
@@ -99,7 +109,9 @@ export default function SettingDetailsPage() {
         null,
         isQRMenuEnabled,
         isQROrderEnabled,
-        isFeedbackEnabled
+        isFeedbackEnabled,
+        storeSlug,
+        customDomainVal
       );
 
       if (res.status == 200) {
@@ -433,6 +445,84 @@ export default function SettingDetailsPage() {
             </label>
             {/* switch */}
           </div>
+        </div>
+
+        {/* Custom Domain Section (Business Plan) */}
+        <div className="mt-8 pt-6 border-t border-restro-border-green w-full lg:min-w-96">
+          <div className="flex items-center justify-between mb-2">
+            <label htmlFor="custom_domain" className="flex items-center gap-2 font-semibold text-base text-restro-text">
+              <IconWorld size={20} stroke={iconStroke} className="text-restro-green" />
+              Custom Domain (White-Label)
+              <Popover text="Connect your custom branded domain or subdomain (e.g. order.myrestaurant.com) to your digital storefront." />
+            </label>
+            {isCustomDomainAccess ? (
+              <span className="badge badge-success text-xs font-bold text-white px-3 py-2">
+                Business Feature Active
+              </span>
+            ) : (
+              <span className="badge badge-warning text-xs font-bold px-3 py-2 flex items-center gap-1">
+                <IconLock size={12} stroke={iconStroke} />
+                Business Plan Only
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-restro-text-light mb-3">
+            Serve your digital menu and QR ordering directly on your custom domain without any QwiloPRO platform branding.
+          </p>
+          <div className="relative">
+            <input
+              ref={customDomainRef}
+              type="text"
+              name="custom_domain"
+              id="custom_domain"
+              defaultValue={custom_domain || ""}
+              disabled={!isCustomDomainAccess}
+              placeholder="e.g. order.myrestaurant.com"
+              className={`block w-full lg:min-w-96 rounded-lg px-4 py-2 text-restro-text border ${
+                isCustomDomainAccess
+                  ? "bg-restro-gray border-restro-border-green focus:outline-restro-button-hover"
+                  : "bg-gray-100 dark:bg-zinc-900 border-gray-300 dark:border-zinc-800 opacity-60 cursor-not-allowed"
+              }`}
+            />
+          </div>
+
+          {isCustomDomainAccess ? (
+            <div className="mt-3 p-3 rounded-xl bg-restro-card-bg border border-restro-border-green text-xs text-restro-text space-y-1.5">
+              <div className="font-semibold text-restro-green flex items-center gap-1">
+                <span>DNS Configuration Instructions:</span>
+              </div>
+              <p>
+                Create a <strong>CNAME</strong> record in your domain host DNS provider (Cloudflare, Namecheap, GoDaddy):
+              </p>
+              <div className="font-mono bg-restro-gray px-3 py-1.5 rounded-lg text-xs break-all">
+                Host: <span className="font-bold text-restro-green">order</span> (or your subdomain) &rarr; Target: <span className="font-bold text-restro-green">cname.qwilopro.com</span>
+              </div>
+              {custom_domain && (
+                <div className="pt-1 flex items-center gap-2">
+                  <span>Storefront Live Link:</span>
+                  <a
+                    href={`https://${custom_domain}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-restro-green font-semibold underline flex items-center gap-1 hover:opacity-80"
+                  >
+                    https://{custom_domain} <IconExternalLink size={14} stroke={iconStroke} />
+                  </a>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="mt-3 p-3 rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-amber-800 dark:text-amber-300">
+              <span>Upgrade to the Business Plan to unlock custom domains and fully white-label your storefront.</span>
+              <button
+                type="button"
+                onClick={handleUpgradeClick}
+                className="btn btn-xs rounded-lg bg-restro-green text-white hover:bg-restro-green-button-hover whitespace-nowrap"
+              >
+                Upgrade to Business Plan
+              </button>
+            </div>
+          )}
         </div>
 
         <button

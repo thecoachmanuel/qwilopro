@@ -154,3 +154,18 @@ export async function verifyPaystackPayment(reference) {
         throw error;
     }
 }
+
+// Activate free trial directly without charge
+export async function activateTrial(planId, trialDays = 14) {
+    axios.defaults.withCredentials = true;
+    try {
+        const response = await apiClient.post(`/plans/activate-trial`, {
+            planId,
+            trialDays,
+        });
+        return response;
+    } catch (error) {
+        throw error;
+    }
+}
+

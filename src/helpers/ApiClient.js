@@ -25,6 +25,14 @@ apiClient.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token}`;
     }
 
+    const refreshToken =
+      typeof localStorage !== "undefined" &&
+      localStorage.getItem("restroprosaas_refresh_token");
+    if (refreshToken) {
+      config.headers = config.headers || {};
+      config.headers["x-refresh-token"] = refreshToken;
+    }
+
     // Add 'lang' as a query parameter from localStorage
     const lang = getLanguage(); // Get 'lang' from localStorage
 
@@ -57,6 +65,11 @@ apiClient.interceptors.response.use(
       ) {
         window.location.href = "/dashboard/inactive-subscription";
       }
+      return Promise.reject(error);
+    }
+
+    // NEVER retry a refresh-token endpoint
+    if (originalRequest?.url && originalRequest.url.includes("refresh-token")) {
       return Promise.reject(error);
     }
 
@@ -106,6 +119,9 @@ apiClient.interceptors.response.use(
           localStorage.setItem("restroprosaas_token", newAccessToken);
           originalRequest.headers = originalRequest.headers || {};
           originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+        }
+        if (res.data?.refreshToken && typeof localStorage !== "undefined") {
+          localStorage.setItem("restroprosaas_refresh_token", res.data.refreshToken);
         }
 
         retryCounter = 0;

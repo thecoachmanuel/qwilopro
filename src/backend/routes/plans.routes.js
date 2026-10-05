@@ -21,9 +21,12 @@ const {
     updatePaystackPlan,
     deletePaystackPlan,
     generatePaystackManageSubscriptionLink,
+    activateTrial,
 } = require("../controllers/plans.controller");
 
 const router = express.Router();
+
+router.post("/activate-trial", isLoggedIn, isAuthenticated, activateTrial);
 
 router.get("/", getPlans);
 router.get("/country-details", getUserCountry);

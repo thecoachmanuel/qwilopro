@@ -6,7 +6,10 @@ export const metadata = {
   description: 'Full-stack POS software for Restaurant, Cafe, Hotel, Food Truck',
   manifest: '/manifest.json',
   icons: {
-    icon: '/favicon.png',
+    icon: [
+      { url: '/favicon.png', sizes: '64x64', type: 'image/png' },
+      { url: '/favicon.ico', sizes: 'any' },
+    ],
     apple: '/logo_192.png',
   },
 };
@@ -15,6 +18,9 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en" data-theme="light">
       <head>
+        <link rel="icon" type="image/png" sizes="64x64" href="/favicon.png" />
+        <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+        <link rel="apple-touch-icon" href="/logo_192.png" />
         <link rel="manifest" href="/manifest.json" />
         <meta name="theme-color" content="#10b981" />
         <meta name="apple-mobile-web-app-capable" content="yes" />

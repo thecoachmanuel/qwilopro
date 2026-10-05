@@ -35,6 +35,16 @@ export default function LoginPage() {
         return;
       }
       if (role == "admin") {
+        const userDetails = getUserDetailsInLocalStorage();
+        const hasSubEnd = Boolean(userDetails?.subscription_end);
+        const isEndExpired =
+          hasSubEnd &&
+          new Date(userDetails.subscription_end).getTime() <
+            new Date().setHours(0, 0, 0, 0);
+        if (Number(userDetails?.is_active) !== 1 || !hasSubEnd || isEndExpired) {
+          navigate("/dashboard/inactive-subscription", { replace: true });
+          return;
+        }
         navigate("/dashboard/home", {
           replace: true,
         });
@@ -127,9 +137,23 @@ export default function LoginPage() {
         if (res.data.accessToken) {
           localStorage.setItem("restroprosaas_token", res.data.accessToken);
         }
+        if (res.data.refreshToken) {
+          localStorage.setItem("restroprosaas_refresh_token", res.data.refreshToken);
+        }
 
         const { role, scope } = getUserDetailsInLocalStorage();
         if (role == "admin") {
+          const hasSubEnd = Boolean(user.subscription_end);
+          const isEndExpired =
+            hasSubEnd &&
+            new Date(user.subscription_end).getTime() <
+              new Date().setHours(0, 0, 0, 0);
+          if (Number(user.is_active) !== 1 || !hasSubEnd || isEndExpired) {
+            navigate("/dashboard/inactive-subscription", {
+              replace: true,
+            });
+            return;
+          }
           navigate("/dashboard/home", {
             replace: true,
           });

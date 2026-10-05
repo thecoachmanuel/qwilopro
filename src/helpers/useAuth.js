@@ -52,7 +52,7 @@ export default function useAuth() {
           if (role === "superadmin") {
             navigate("/admin", { replace: true });
           } else {
-            navigate("/refresh", { replace: true });
+            navigate("/login", { replace: true });
           }
         }
       }

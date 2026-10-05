@@ -166,17 +166,17 @@ const seedPlans = async () => {
     },
     {
       id: 3,
-      title: "Enterprise",
+      title: "Business Plan",
       payment_gateway: "paystack",
-      payment_gateway_product_id: "plan_enterprise_ngn",
+      payment_gateway_product_id: "plan_business_ngn",
       is_recommended: false,
       is_trial: false,
       trial_days: 0,
       features_description: JSON.stringify([
         "Everything in Professional, plus:",
+        "Custom Domain & White-Label Storefront",
         "Multi-Outlet & Central Kitchen Sync",
         "Purchase Orders & Supplier Management",
-        "Custom Domain & White-Label Receipts",
         "Dedicated Account Manager",
         "99.9% Uptime SLA & Priority Phone Support"
       ]),
@@ -194,7 +194,8 @@ const seedPlans = async () => {
         "REPORTS",
         "FEEDBACK",
         "USER",
-        "QRMENU"
+        "QRMENU",
+        "CUSTOM_DOMAIN"
       ]),
       discount: 0,
       yearly_discount: 25,

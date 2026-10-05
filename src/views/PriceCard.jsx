@@ -15,25 +15,19 @@ const PricingCard = ({
   country,
 }) => {
   const getPrice = (frequency) => {
-    // 1. If explicit non-Nigerian country is selected, check for it
-    if (country && country !== "Nigeria" && country !== "NG") {
-      const match = plan?.prices?.find((p) => p.country === country && p.frequency === frequency);
-      if (match) return match;
-    }
-
-    // 2. Default to Nigerian Naira (NGN / ₦) as primary platform currency
+    // 1. Always prioritize Nigerian Naira (NGN / ₦) as primary platform currency
     let price = plan?.prices?.find(
       (p) => (p.currency === "NGN" || p.symbol === "₦") && p.frequency === frequency
     );
 
-    // 3. Fallback to is_default
+    // 2. Fallback to is_default
     if (!price) {
       price = plan?.prices?.find(
         (p) => p.is_default && p.frequency === frequency
       );
     }
 
-    // 4. Final fallback
+    // 3. Final fallback
     if (!price) {
       price = plan?.prices?.find((p) => p.frequency === frequency);
     }
@@ -194,7 +188,7 @@ const PricingCard = ({
           setStripePriceId(priceId);
           setIsTrial(plan?.is_trial);
           setTrialDays(plan?.trial_days);
-          onClick(priceId, plan?.is_trial, plan?.trial_days);
+          onClick(priceId, plan?.is_trial, plan?.trial_days, plan?.id);
         }}
       >
         {plan?.is_trial

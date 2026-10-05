@@ -32,6 +32,7 @@ exports.getStoreDetails = async (req, res) => {
             storeImage : result?.store_image || null,
             storeName: result?.store_name || null,
             slug: result?.slug || null,
+            custom_domain: result?.custom_domain || null,
             address: result?.address || null,
             phone: result?.phone || null,
             email: result?.email || null,
@@ -70,20 +71,38 @@ exports.setStoreDetails = async (req, res) => {
             slug = String(storeName).trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
         }
 
+        let custom_domain = req.body.custom_domain;
+        if (custom_domain !== undefined) {
+            if (custom_domain) {
+                custom_domain = String(custom_domain).trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+                const rawFeat = req.user?.plan_features || req.user?.planFeatures || req.user?.features || [];
+                const feats = Array.isArray(rawFeat) ? rawFeat.map(f => String(f).toUpperCase()) : [];
+                if (!feats.includes("CUSTOM_DOMAIN") && req.user?.role !== "admin") {
+                    return res.status(403).json({
+                        success: false,
+                        message: "Custom domain feature requires Business Plan upgrade.",
+                    });
+                }
+            } else {
+                custom_domain = null;
+            }
+        }
+
         const uniqueQRCode = nanoid();
 
         const qrCodeExists = await getQRMenuCodeDB(tenantId);
         if(qrCodeExists) {
-            await setStoreSettingDB(storeName, address, phone, email, currency, isQRMenuEnabled, isQROrderEnabled, uniqueQRCode, isFeedbackEnabled, tenantId, slug);
+            await setStoreSettingDB(storeName, address, phone, email, currency, isQRMenuEnabled, isQROrderEnabled, uniqueQRCode, isFeedbackEnabled, tenantId, slug, custom_domain);
         } else {
             await updateQRMenuCodeDB(uniqueQRCode, tenantId);
-            await setStoreSettingDB(storeName, address, phone, email, currency, isQRMenuEnabled, isQROrderEnabled, uniqueQRCode, isFeedbackEnabled, tenantId, slug);
+            await setStoreSettingDB(storeName, address, phone, email, currency, isQRMenuEnabled, isQROrderEnabled, uniqueQRCode, isFeedbackEnabled, tenantId, slug, custom_domain);
         }
 
         return res.status(200).json({
             success: true,
             message: req.__("details_saved_successfully"),
-            slug
+            slug,
+            custom_domain
         });
     } catch (error) {
         console.error(error);

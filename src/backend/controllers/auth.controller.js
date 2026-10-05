@@ -349,6 +349,7 @@ exports.getNewAccessToken = async (req, res) => {
       success: true,
       message: req.__("new_token_created_successfully"),
       newAccessToken,
+      refreshToken: req.refreshToken || refreshToken,
       userDetails,
     });
   } catch (error) {

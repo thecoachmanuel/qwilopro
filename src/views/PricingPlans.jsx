@@ -50,7 +50,7 @@ const PricingPlans = ({
             <div className="flex flex-col md:flex-row items-center justify-between gap-6">
               <div>
                 <h3 className="text-2xl font-bold text-foreground mb-2">
-                  {t("inactive_subscription.enterprise")}
+                  Custom Solutions & Multi-Outlet
                 </h3>
                 <p className="text-muted-foreground max-w-md">
                   {t("inactive_subscription.need_a_custom_solution")}

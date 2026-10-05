@@ -18,6 +18,7 @@ const {
   updatePaystackPlanDB,
   getPaystackManageSubscriptionLink,
   deletePaystackPlanByIdDB,
+  activateTrialDB,
 } = require("../services/plans.service");
 
 
@@ -579,6 +580,36 @@ exports.deletePaystackPlan = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: req.__("something_went_wrong_try_later"),
+    });
+  }
+};
+
+exports.activateTrial = async (req, res) => {
+  try {
+    const tenantId = req.user?.tenant_id;
+    const username = req.user?.username;
+    const { planId, trialDays } = req.body;
+
+    if (!tenantId) {
+      return res.status(401).json({
+        success: false,
+        message: req.__("login_again_to_access"),
+      });
+    }
+
+    const result = await activateTrialDB({
+      tenantId,
+      planId,
+      trialDays,
+      username,
+    });
+
+    return res.status(200).json(result);
+  } catch (error) {
+    console.error("activateTrial Controller Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || req.__("something_went_wrong_try_later"),
     });
   }
 };

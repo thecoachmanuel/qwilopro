@@ -38,5 +38,6 @@ export const PLAN_FEATURES = {
     REPORTS: "REPORTS",
     FEEDBACK: "FEEDBACK",
     USER: "USER",
-    QRMENU: "QRMENU"
-}
+    QRMENU: "QRMENU",
+    CUSTOM_DOMAIN: "CUSTOM_DOMAIN",
+};

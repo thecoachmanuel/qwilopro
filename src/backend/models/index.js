@@ -33,6 +33,7 @@ const tenantSchema = new mongoose.Schema({
   plan_title: { type: String, default: null },
   token_version: { type: Number, default: 1 },
   stripe_next_price_id: { type: String, default: null },
+  custom_domain: { type: String, default: null, index: true },
 });
 applyAutoIncrementId(tenantSchema, "tenants");
 
@@ -69,6 +70,7 @@ const storeDetailsSchema = new mongoose.Schema({
   is_qr_menu_enabled: { type: Number, default: 0 },
   unique_qr_code: { type: String, default: null, index: true },
   slug: { type: String, default: null, index: true },
+  custom_domain: { type: String, default: null, index: true },
   is_qr_order_enabled: { type: Number, default: 0 },
   is_feedback_enabled: { type: Number, default: 0 },
   unique_id: { type: String, default: null },

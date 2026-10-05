@@ -26,11 +26,32 @@ export function useStoreSettings() {
   };
 }
 
-export async function saveStoreSettings(storeName, address, phone, email, currency, image, isQRMenuEnabled , isQROrderEnabled, isFeedbackEnabled) {
+export async function saveStoreSettings(
+  storeName,
+  address,
+  phone,
+  email,
+  currency,
+  image,
+  isQRMenuEnabled,
+  isQROrderEnabled,
+  isFeedbackEnabled,
+  slug = null,
+  custom_domain = null
+) {
   try {
     const response = await ApiClient.post("/settings/store-setting", {
-      storeName, address, phone, email, currency, image,
-      isQRMenuEnabled, isQROrderEnabled, isFeedbackEnabled
+      storeName,
+      address,
+      phone,
+      email,
+      currency,
+      image,
+      isQRMenuEnabled,
+      isQROrderEnabled,
+      isFeedbackEnabled,
+      slug,
+      custom_domain,
     });
     return response;
   } catch (error) {

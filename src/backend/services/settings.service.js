@@ -50,17 +50,19 @@ exports.getTenantIdFromQRCode = async (qrcode) => {
         { unique_qr_code: qrcode },
         { slug: cleanCode },
         { slug: qrcode },
+        { custom_domain: cleanCode },
       ],
-    }).select("tenant_id slug unique_qr_code").lean();
+    }).select("tenant_id slug unique_qr_code custom_domain").lean();
 
     if (!store) {
       const slugified = cleanCode.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
       store = await StoreDetails.findOne({
         $or: [
           { slug: slugified },
+          { custom_domain: slugified },
           { store_name: new RegExp(`^${qrcode}$`, "i") },
         ],
-      }).select("tenant_id slug unique_qr_code").lean();
+      }).select("tenant_id slug unique_qr_code custom_domain").lean();
     }
 
     return store?.tenant_id || null;
@@ -100,7 +102,8 @@ exports.setStoreSettingDB = async (
   uniqueQRCode,
   isFeedbackEnabled,
   tenantId,
-  slug = null
+  slug = null,
+  custom_domain = null
 ) => {
   try {
     const updateDoc = {
@@ -117,11 +120,21 @@ exports.setStoreSettingDB = async (
     if (slug) {
       updateDoc.slug = slug;
     }
+    if (custom_domain !== undefined) {
+      updateDoc.custom_domain = custom_domain;
+    }
     await StoreDetails.findOneAndUpdate(
       { tenant_id: tenantId },
       { $set: updateDoc },
       { upsert: true, new: true }
     );
+    if (custom_domain !== undefined) {
+      const { Tenant } = require("../models");
+      await Tenant.findOneAndUpdate(
+        { id: tenantId },
+        { $set: { custom_domain } }
+      ).catch(() => {});
+    }
   } catch (error) {
     console.error("setStoreSettingDB Error:", error);
     throw error;

@@ -3,6 +3,13 @@ const { CONFIG } = require("../config");
 
 let isConnected = false;
 
+const dns = require("dns");
+try {
+  dns.setServers(["8.8.8.8", "1.1.1.1"]);
+} catch (e) {
+  // Ignore in restricted environments
+}
+
 const connectDB = async () => {
   if (isConnected || mongoose.connection.readyState === 1) {
     return mongoose.connection;
