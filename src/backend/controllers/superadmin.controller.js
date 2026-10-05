@@ -307,7 +307,13 @@ exports.updateTenant = async (req, res) => {
             payment_gateway_product_id
         );
 
-        if (currentTenant.username !== email || (isActive == 0 && currentTenant.is_active == 1)) {
+        // Only invalidate all sessions on genuine security-relevant changes:
+        // 1. Email/username changed (identity change).
+        // 2. Account was actively deactivated (was active, now not).
+        // Routine updates (name, plan, subscription dates) must NOT log out active tenants.
+        const emailChanged = currentTenant.username !== email;
+        const wasDeactivated = isActive == 0 && currentTenant.is_active == 1;
+        if (emailChanged || wasDeactivated) {
             await logoutAllUsersOfTenantDB(tenantId);
         }
 
@@ -580,4 +586,45 @@ exports.getAllPaymentGateways = async (req, res) => {
             message: req.__("something_went_wrong_try_later") // Translate message
         });
     }
+};
+
+exports.getContactEmail = async (req, res) => {
+  try {
+    const { SystemSetting } = require("../models");
+    const setting = await SystemSetting.findOne({ key: "support_email" }).lean();
+    return res.status(200).json({
+      success: true,
+      email: setting?.value || "support@qwilopro.com",
+    });
+  } catch (error) {
+    console.error("getContactEmail error:", error);
+    return res.status(500).json({ success: false, message: "Error fetching contact email" });
+  }
+};
+
+exports.updateContactEmail = async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email || !email.includes("@")) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide a valid email address",
+      });
+    }
+    const cleanEmail = email.trim().toLowerCase();
+    const { SystemSetting } = require("../models");
+    await SystemSetting.findOneAndUpdate(
+      { key: "support_email" },
+      { key: "support_email", value: cleanEmail, updated_at: new Date() },
+      { upsert: true, new: true }
+    );
+    return res.status(200).json({
+      success: true,
+      message: "Support contact email updated successfully",
+      email: cleanEmail,
+    });
+  } catch (error) {
+    console.error("updateContactEmail error:", error);
+    return res.status(500).json({ success: false, message: "Error updating contact email" });
+  }
 };

@@ -181,13 +181,13 @@ exports.getPOSQROrdersDB = async (tenantId) => {
 
     if (kitchenOrders.length > 0) {
       const orderIds = kitchenOrders.map((o) => o.id);
-      const rawItems = await QROrderItem.find({ order_id: { $in: orderIds } }).lean();
+      const rawItems = await QROrderItem.find({ order_id: { $in: orderIds }, tenant_id: tenantId }).lean();
 
       const itemIds = rawItems.map((i) => i.item_id);
-      const menuItems = await MenuItem.find({ id: { $in: itemIds } }).lean();
+      const menuItems = await MenuItem.find({ id: { $in: itemIds }, tenant_id: tenantId }).lean();
       const taxIds = menuItems.map((m) => m.tax_id).filter(Boolean);
-      const taxes = await Tax.find({ id: { $in: taxIds } }).lean();
-      const variants = await MenuItemVariant.find({ item_id: { $in: itemIds } }).lean();
+      const taxes = await Tax.find({ id: { $in: taxIds }, tenant_id: tenantId }).lean();
+      const variants = await MenuItemVariant.find({ item_id: { $in: itemIds }, tenant_id: tenantId }).lean();
 
       const menuItemMap = new Map(menuItems.map((m) => [m.id, m]));
       const taxMap = new Map(taxes.map((t) => [t.id, t]));
@@ -232,7 +232,7 @@ exports.getPOSQROrdersDB = async (tenantId) => {
       ];
 
       if (allAddonIds.length > 0) {
-        addons = await MenuItemAddon.find({ id: { $in: allAddonIds } })
+        addons = await MenuItemAddon.find({ id: { $in: allAddonIds }, tenant_id: tenantId })
           .select("id item_id title")
           .lean();
       }
@@ -241,7 +241,7 @@ exports.getPOSQROrdersDB = async (tenantId) => {
     // Attach recipes
     const recipes = await MenuItemRecipe.find({ tenant_id: tenantId }).lean();
     const invIds = recipes.map((r) => r.inventory_item_id);
-    const invItems = await InventoryItem.find({ id: { $in: invIds } }).lean();
+    const invItems = await InventoryItem.find({ id: { $in: invIds }, tenant_id: tenantId }).lean();
     const invMap = new Map(invItems.map((i) => [i.id, i]));
 
     kitchenOrdersItems = kitchenOrdersItems.map((oi) => {

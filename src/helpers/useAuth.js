@@ -3,8 +3,35 @@ import { useLocation, useNavigate } from "react-router-dom";
 import {
   getUserDetailsInLocalStorage,
   saveUserDetailsInLocalStorage,
+  clearUserDetailsInLocalStorage,
 } from "./UserDetails";
 import apiClient from "./ApiClient";
+
+/**
+ * Centrally clears all auth state without a hard reload.
+ * ApiClient.js handles hard reload on 401 for API requests;
+ * this handles the safeRefresh polling path.
+ */
+function clearAllAuthState(role, navigate) {
+  if (typeof localStorage !== "undefined") {
+    localStorage.removeItem("restroprosaas_user");
+    localStorage.removeItem("restroprosaas_token");
+    localStorage.removeItem("restroprosaas_refresh_token");
+  }
+  // Clear js-cookie values if available
+  try {
+    if (typeof document !== "undefined") {
+      document.cookie = "restroprosaas__authenticated=; Max-Age=0; path=/";
+      document.cookie = "accessToken=; Max-Age=0; path=/";
+      document.cookie = "refreshToken=; Max-Age=0; path=/";
+    }
+  } catch {}
+  if (role === "superadmin") {
+    navigate("/admin", { replace: true });
+  } else {
+    navigate("/login", { replace: true });
+  }
+}
 
 export default function useAuth() {
   const location = useLocation();
@@ -33,6 +60,9 @@ export default function useAuth() {
         if (res?.data?.newAccessToken) {
           localStorage.setItem("restroprosaas_token", res.data.newAccessToken);
         }
+        if (res?.data?.refreshToken) {
+          localStorage.setItem("restroprosaas_refresh_token", res.data.refreshToken);
+        }
       }
     } catch (error) {
       // If offline or network error occurred, do not boot user
@@ -43,19 +73,17 @@ export default function useAuth() {
       ) {
         return;
       }
-      console.error("Token refresh failed:", error);
 
-      // Only redirect on actual 401 Unauthorized errors if we have no valid token in storage
-      if (error?.response?.status === 401) {
-        const existingToken = localStorage.getItem("restroprosaas_token");
-        if (!existingToken) {
-          if (role === "superadmin") {
-            navigate("/admin", { replace: true });
-          } else {
-            navigate("/login", { replace: true });
-          }
-        }
+      const status = error?.response?.status;
+      const loginNeeded = error?.response?.data?.loginNeeded;
+
+      // Only hard-clear and redirect on explicit 401 with loginNeeded flag
+      // (meaning the server deliberately revoked the session — e.g. email change/deactivation).
+      // Do NOT redirect on transient 401s (e.g. race condition during token rotation).
+      if (status === 401 && loginNeeded) {
+        clearAllAuthState(role, navigate);
       }
+      // For other 401s (e.g. during rotation), ApiClient interceptor already handles retry.
     }
   };
 
@@ -90,3 +118,4 @@ export default function useAuth() {
     safeRefresh();
   }, [location.pathname]);
 }
+

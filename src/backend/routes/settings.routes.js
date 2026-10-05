@@ -34,10 +34,13 @@ const {
   getCategories,
   updateCategory,
   deleteCategory,
-  changeCategoryVisibilty
+  changeCategoryVisibilty,
+  getPublicContactEmail,
 } = require("../controllers/settings.controller");
 
 const router = Router();
+
+router.get("/contact-email", getPublicContactEmail);
 
 router.get(
   "/store-setting",

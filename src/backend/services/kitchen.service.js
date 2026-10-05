@@ -53,12 +53,12 @@ exports.getKitchenOrdersDB = async (tenantId) => {
 
     if (kitchenOrders.length > 0) {
       const orderIds = kitchenOrders.map((o) => o.id);
-      const rawItems = await OrderItem.find({ order_id: { $in: orderIds } }).lean();
+      const rawItems = await OrderItem.find({ order_id: { $in: orderIds }, tenant_id: tenantId }).lean();
 
       const itemIds = rawItems.map((i) => i.item_id);
       const [menuItems, variants] = await Promise.all([
-        MenuItem.find({ id: { $in: itemIds } }).select("id title").lean(),
-        MenuItemVariant.find({ item_id: { $in: itemIds } }).select("id item_id title").lean(),
+        MenuItem.find({ id: { $in: itemIds }, tenant_id: tenantId }).select("id title").lean(),
+        MenuItemVariant.find({ item_id: { $in: itemIds }, tenant_id: tenantId }).select("id item_id title").lean(),
       ]);
 
       const menuItemMap = new Map(menuItems.map((m) => [m.id, m.title]));
@@ -91,7 +91,7 @@ exports.getKitchenOrdersDB = async (tenantId) => {
       ];
 
       if (allAddonIds.length > 0) {
-        addons = await MenuItemAddon.find({ id: { $in: allAddonIds } })
+        addons = await MenuItemAddon.find({ id: { $in: allAddonIds }, tenant_id: tenantId })
           .select("id item_id title")
           .lean();
       }
@@ -108,9 +108,13 @@ exports.getKitchenOrdersDB = async (tenantId) => {
   }
 };
 
-exports.updateOrderItemStatusDB = async (orderItemId, status) => {
+exports.updateOrderItemStatusDB = async (orderItemId, status, tenantId = null) => {
   try {
-    await OrderItem.updateOne({ id: orderItemId }, { $set: { status } });
+    const query = { id: orderItemId };
+    if (tenantId) {
+      query.tenant_id = tenantId;
+    }
+    await OrderItem.updateOne(query, { $set: { status } });
   } catch (error) {
     console.error("updateOrderItemStatusDB Error:", error);
     throw error;

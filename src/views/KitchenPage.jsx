@@ -2,7 +2,7 @@ import React, { useContext, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import Page from "../components/Page";
 import { iconStroke } from "../config/config";
-import { IconArmchair, IconBoxSeam, IconCheck, IconChecks, IconClock, IconRefresh, IconX } from "@tabler/icons-react";
+import { IconArmchair, IconBoxSeam, IconCheck, IconChecks, IconClock, IconRefresh, IconSpeakerphone, IconX, IconTruck } from "@tabler/icons-react";
 import { getKitchenOrders, updateKitchenOrderItemStatus, useKitchenOrders } from "../controllers/kitchen.controller";
 import { toast } from "react-hot-toast";
 import { SocketContext } from "../contexts/SocketContext";
@@ -122,12 +122,28 @@ export default function KitchenPage() {
     socket.emit("authenticate", tenantId);
     socket.on('new_order', (payload) => {
       playNewOrderSound();
+      const token = payload?.tokenNo || payload?.token_no;
+      if (token) {
+        try {
+          textToSpeech(`New order received! Token number ${token}`);
+        } catch {}
+      }
       btnRefresh();
     });
 
     socket.on("order_update", () => {
       btnRefresh();
     });
+  };
+
+  const btnCallToken = (tokenNo) => {
+    const tenantId = user?.tenant_id;
+    if (!tenantId || !tokenNo) return;
+    socket?.emit?.('token_call_backend', { tokenNo }, tenantId);
+    try {
+      textToSpeech(`Token number ${tokenNo}, please collect your order.`);
+    } catch {}
+    toast.success(`Calling Token #${tokenNo}`);
   };
 
   const sendOrderUpdateEvent = () => {
@@ -266,16 +282,54 @@ export default function KitchenPage() {
               <div key={index} className='border  rounded-2xl px-4 py-5 flex flex-col border-restro-border-green'>
               <div className="flex items-center flex-col md:flex-row md:justify-between text-center gap-2">
                 <div className="flex items-center gap-2">
-                  <div className='flex w-12 h-12 rounded-full items-center justify-center bg-restro-gray text-restro-text'>
-                    {delivery_type == "dinein" ? <IconArmchair size={24} stroke={iconStroke} />:<IconBoxSeam size={24} stroke={iconStroke} />}
+                  <div className={`flex w-12 h-12 rounded-2xl items-center justify-center ${
+                    delivery_type === "delivery"
+                      ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                      : delivery_type === "takeaway"
+                      ? "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                      : "bg-restro-gray text-restro-text"
+                  }`}>
+                    {delivery_type === "delivery" ? (
+                      <IconTruck size={24} stroke={iconStroke} />
+                    ) : delivery_type === "dinein" ? (
+                      <IconArmchair size={24} stroke={iconStroke} />
+                    ) : (
+                      <IconBoxSeam size={24} stroke={iconStroke} />
+                    )}
                   </div>
-                  <div>
-                    <p className="font-bold">{table_id?`${table_title}`:new String(`${delivery_type} ${customer_type}`).toUpperCase()}</p>
-                    {floor && <p className="text-sm">{floor}</p>}
+                  <div className="text-left">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {delivery_type === "delivery" ? (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/30">
+                          🚚 DELIVERY
+                        </span>
+                      ) : delivery_type === "takeaway" ? (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-600 border border-amber-500/30">
+                          🛍️ TAKEAWAY
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/10 text-blue-600 border border-blue-500/30">
+                          🍽️ DINE IN
+                        </span>
+                      )}
+                      <p className="font-bold text-sm text-gray-900 dark:text-white">
+                        {table_id ? `${table_title}` : (customer_name || "Customer")}
+                      </p>
+                    </div>
+                    {floor && <p className="text-xs text-gray-400">{floor}</p>}
                   </div>
                 </div>
-                <div className="text-end">
+                <div className="text-end flex items-center justify-end gap-2">
                   <p className="font-bold">{t('kitchen.token')} {token_no}</p>
+                  {token_no && (
+                    <button
+                      onClick={() => btnCallToken(token_no)}
+                      title="Announce token on display and speakers"
+                      className="p-1 px-2.5 rounded-xl bg-restro-border-green-light text-restro-green-dark hover:bg-restro-green hover:text-white transition active:scale-95 text-xs font-semibold flex items-center gap-1 shadow-sm"
+                    >
+                      <IconSpeakerphone size={15} stroke={iconStroke} /> Call
+                    </button>
+                  )}
                 </div>
               </div>
 

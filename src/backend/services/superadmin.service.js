@@ -474,8 +474,14 @@ exports.updateTenantDB = async (
     tenantUpdates.subscription_end = oneYearLater;
   }
 
-  // Bump token version so any old cached token is superseded
-  tenantUpdates.token_version = (tenant.token_version || 1) + 1;
+  // Only bump token_version for security-relevant changes (email or active status change).
+  // Routine updates (name, plan, subscription dates) must NOT invalidate active sessions.
+  const currentUser = await User.findOne({ tenant_id: tId, username: existingEmail }).lean();
+  const emailChanging = currentUser && currentUser.username !== email;
+  const activeStatusChanging = tenant.is_active !== (isActive ? 1 : 0);
+  if (emailChanging || activeStatusChanging) {
+    tenantUpdates.token_version = (tenant.token_version || 1) + 1;
+  }
 
   await Tenant.updateOne({ id: tId }, { $set: tenantUpdates });
 
@@ -489,7 +495,6 @@ exports.updateTenantDB = async (
     status: selectedPlan ? "plan_changed" : isActive ? "updated" : "cancelled",
   }).catch((e) => console.error("Subscription history log error:", e));
 
-  const currentUser = await User.findOne({ tenant_id: tId, username: existingEmail });
   if (currentUser) {
     const updates = {};
     if (currentUser.name !== name) {

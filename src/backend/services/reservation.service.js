@@ -120,9 +120,9 @@ exports.searchReservationsDB = async (search, tenant_id) => {
     {
       $lookup: {
         from: "store_tables",
-        let: { tblId: "$table_id" },
+        let: { tblId: "$table_id", tenantId: "$tenant_id" },
         pipeline: [
-          { $match: { $expr: { $eq: ["$id", "$$tblId"] } } },
+          { $match: { $expr: { $and: [{ $eq: ["$id", "$$tblId"] }, { $eq: ["$tenant_id", "$$tenantId"] }] } } },
           { $project: { table_title: 1 } },
         ],
         as: "table",
@@ -174,9 +174,9 @@ exports.getReservationsDB = async (type, from, to, tenantId) => {
     {
       $lookup: {
         from: "store_tables",
-        let: { tblId: "$table_id" },
+        let: { tblId: "$table_id", tenantId: "$tenant_id" },
         pipeline: [
-          { $match: { $expr: { $eq: ["$id", "$$tblId"] } } },
+          { $match: { $expr: { $and: [{ $eq: ["$id", "$$tblId"] }, { $eq: ["$tenant_id", "$$tenantId"] }] } } },
           { $project: { table_title: 1 } },
         ],
         as: "table",

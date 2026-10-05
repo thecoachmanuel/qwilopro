@@ -38,8 +38,9 @@ exports.getKitchenOrders = async (req, res) => {
 
 exports.updateKitchenOrderItemStatus = async (req, res) => {
   try {
+    const tenantId = req.user.tenant_id;
     const orderItemId = req.params.id;
-    const { status } = req.body
+    const { status } = req.body;
 
     if(!status) {
       return res.status(400).json({
@@ -48,7 +49,7 @@ exports.updateKitchenOrderItemStatus = async (req, res) => {
       });
     }
 
-    await updateOrderItemStatusDB(orderItemId, status)
+    await updateOrderItemStatusDB(orderItemId, status, tenantId);
 
     return res.status(200).json({
       success: true,

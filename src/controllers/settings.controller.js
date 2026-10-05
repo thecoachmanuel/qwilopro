@@ -37,7 +37,9 @@ export async function saveStoreSettings(
   isQROrderEnabled,
   isFeedbackEnabled,
   slug = null,
-  custom_domain = null
+  custom_domain = null,
+  isDeliveryEnabled = false,
+  deliveryFee = 0
 ) {
   try {
     const response = await ApiClient.post("/settings/store-setting", {
@@ -52,6 +54,8 @@ export async function saveStoreSettings(
       isFeedbackEnabled,
       slug,
       custom_domain,
+      isDeliveryEnabled: isDeliveryEnabled ? 1 : 0,
+      deliveryFee: Number(deliveryFee) || 0,
     });
     return response;
   } catch (error) {

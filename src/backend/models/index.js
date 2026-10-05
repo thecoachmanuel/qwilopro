@@ -73,6 +73,8 @@ const storeDetailsSchema = new mongoose.Schema({
   custom_domain: { type: String, default: null, index: true },
   is_qr_order_enabled: { type: Number, default: 0 },
   is_feedback_enabled: { type: Number, default: 0 },
+  is_delivery_enabled: { type: Number, default: 0 },
+  delivery_fee: { type: Number, default: 0 },
   unique_id: { type: String, default: null },
   service_charge: { type: Number, default: 0 },
 });
@@ -187,10 +189,13 @@ const orderSchema = new mongoose.Schema({
   invoice_id: { type: Number, default: null },
   tenant_id: { type: Number, required: true, index: true },
   created_by: { type: String, default: null },
-  client_request_id: { type: String, default: null },
+  client_request_id: { type: String },
 });
 applyAutoIncrementId(orderSchema, "orders");
-orderSchema.index({ tenant_id: 1, client_request_id: 1 }, { unique: true, sparse: true });
+orderSchema.index(
+  { tenant_id: 1, client_request_id: 1 },
+  { unique: true, partialFilterExpression: { client_request_id: { $type: "string" } } }
+);
 orderSchema.index({ tenant_id: 1, date: -1 });
 orderSchema.index({ tenant_id: 1, status: 1 });
 orderSchema.index({ tenant_id: 1, payment_status: 1 });
@@ -431,12 +436,15 @@ const qrOrderSchema = new mongoose.Schema({
   delivery_type: { type: String, default: null },
   customer_type: { type: String, default: "WALKIN" },
   customer_id: { type: String, default: null },
+  customer_name: { type: String, default: null },
   table_id: { type: Number, default: null },
+  delivery_fee: { type: Number, default: 0 },
   status: { type: String, enum: ["created", "completed", "cancelled"], default: "created" },
   payment_status: { type: String, enum: ["pending", "paid"], default: "pending" },
   tenant_id: { type: Number, required: true, index: true },
 });
 applyAutoIncrementId(qrOrderSchema, "qr_orders");
+
 
 // 32. QROrderItem
 const qrOrderItemSchema = new mongoose.Schema({
@@ -557,4 +565,9 @@ module.exports = {
   InventoryPurchaseOrderDraft: mongoose.models.InventoryPurchaseOrderDraft || mongoose.model("InventoryPurchaseOrderDraft", inventoryPurchaseOrderDraftSchema),
   InventoryPurchaseOrder: mongoose.models.InventoryPurchaseOrder || mongoose.model("InventoryPurchaseOrder", inventoryPurchaseOrderSchema),
   InventoryPurchaseOrderItem: mongoose.models.InventoryPurchaseOrderItem || mongoose.model("InventoryPurchaseOrderItem", inventoryPurchaseOrderItemSchema),
+  SystemSetting: mongoose.models.SystemSetting || mongoose.model("SystemSetting", new mongoose.Schema({
+    key: { type: String, required: true, unique: true },
+    value: { type: mongoose.Schema.Types.Mixed },
+    updated_at: { type: Date, default: Date.now },
+  })),
 };

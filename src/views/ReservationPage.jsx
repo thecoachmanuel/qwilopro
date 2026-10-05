@@ -1,4 +1,5 @@
 import React, { useRef, useState, Fragment } from "react";
+import { Link } from "react-router-dom";
 import Page from "../components/Page";
 import {
   IconFilter,
@@ -114,6 +115,24 @@ export default function ReservationPage() {
     return <Page>{t("reservations.loading_message")}</Page>;
   }
   if (errorStoreTables) {
+    if (errorStoreTables?.response?.status === 403) {
+      return (
+        <Page className="flex flex-col items-center justify-center min-h-[60vh] text-center p-6">
+          <div className="max-w-md bg-white dark:bg-[#202020] p-8 rounded-2xl border border-restro-border-green shadow-sm">
+            <h2 className="text-xl font-bold mb-2">Reservations Not Available</h2>
+            <p className="text-sm text-gray-500 mb-6">
+              Your current subscription plan or user permissions do not include the Reservations module. Upgrade your plan to manage table reservations seamlessly.
+            </p>
+            <Link
+              to="/dashboard/inactive-subscription?manage=1"
+              className="inline-block px-5 py-2.5 rounded-full bg-restro-green text-white font-medium text-sm hover:opacity-90 transition"
+            >
+              Upgrade Plan
+            </Link>
+          </div>
+        </Page>
+      );
+    }
     return <Page>{t("reservations.error_message")}</Page>;
   }
 
@@ -122,6 +141,24 @@ export default function ReservationPage() {
   }
 
   if (error) {
+    if (error?.response?.status === 403) {
+      return (
+        <Page className="flex flex-col items-center justify-center min-h-[60vh] text-center p-6">
+          <div className="max-w-md bg-white dark:bg-[#202020] p-8 rounded-2xl border border-restro-border-green shadow-sm">
+            <h2 className="text-xl font-bold mb-2">Reservations Not Available</h2>
+            <p className="text-sm text-gray-500 mb-6">
+              Your current subscription plan does not include the Reservations feature. Upgrade your subscription to start booking tables and managing reservations.
+            </p>
+            <Link
+              to="/dashboard/inactive-subscription?manage=1"
+              className="inline-block px-5 py-2.5 rounded-full bg-restro-green text-white font-medium text-sm hover:opacity-90 transition"
+            >
+              Upgrade Plan
+            </Link>
+          </div>
+        </Page>
+      );
+    }
     return <Page>{t("reservations.error_message")}</Page>;
   }
 

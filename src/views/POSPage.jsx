@@ -132,6 +132,52 @@ export default function POSPage() {
     };
   }, []);
 
+  const sendCartUpdateEvent = (cart, summary) => {
+    const tenantId = user?.tenant_id;
+    if (!tenantId) return;
+    socket?.emit?.('cart_update_backend', { cart, summary, customer: state.customer, customerType: state.customerType }, tenantId);
+  };
+
+  // Restore persisted ongoing checkout cart across navigation
+  useEffect(() => {
+    try {
+      const tenantKey = user?.tenant_id ? `restro_pos_cart_${user.tenant_id}` : 'restro_pos_cart';
+      const savedCart = localStorage.getItem(tenantKey);
+      if (savedCart) {
+        const parsed = JSON.parse(savedCart);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setState((prev) => ({
+            ...prev,
+            cartItems: parsed,
+          }));
+        }
+      }
+    } catch (e) {
+      console.warn("Failed to restore saved cart:", e);
+    }
+  }, [user?.tenant_id]);
+
+  // Persist cart to localStorage & sync customer display
+  useEffect(() => {
+    try {
+      const tenantKey = user?.tenant_id ? `restro_pos_cart_${user.tenant_id}` : 'restro_pos_cart';
+      if (state.cartItems && state.cartItems.length > 0) {
+        localStorage.setItem(tenantKey, JSON.stringify(state.cartItems));
+      } else {
+        localStorage.removeItem(tenantKey);
+      }
+      sendCartUpdateEvent(state.cartItems, {
+        itemsTotal: state.itemsTotal,
+        taxTotal: state.taxTotal,
+        serviceChargeTotal: state.serviceChargeTotal,
+        payableTotal: state.payableTotal,
+        currency: state.currency,
+      });
+    } catch (e) {
+      console.warn("Failed to persist cart:", e);
+    }
+  }, [state.cartItems, state.itemsTotal, state.payableTotal, user?.tenant_id]);
+
   const { categories, menuItems, paymentTypes, printSettings, storeSettings, storeTables, currency, cartItems, searchQuery, selectedCategory, selectedItemId, drafts, customer, customerType, isLoading } = state;
 
   const sendNewOrderEvent = (tokenNo, orderId) => {
@@ -242,12 +288,17 @@ export default function POSPage() {
     socket.emit("authenticate", tenantId);
     socket.on('new_qrorder', async (payload) => {
       try {
+        const audio = new Audio("/new_order_sound.mp3");
+        audio.play().catch(() => {});
+      } catch {}
+      try {
         const totalQROrders = await _getQROrdersCount();
 
         setState((prevState) => ({
           ...prevState,
           qrOrdersCount: totalQROrders || 0
         }));
+        toast.success(t('pos.new_qr_order_received') || "New QR Order received!");
       } catch (error) {
         console.log(error);
       }
@@ -813,7 +864,7 @@ export default function POSPage() {
       return toast.error(t('orders.select_payment_method'));
     }
 
-    const deliveryType = diningOptionRef.current?.value || "dinein";
+    const deliveryType = diningOptionRef.current?.value || state.deliveryType || "dinein";
     const tableId = tableRef.current?.value || null;
     const customerType = state.customerType;
     const customer = state.customer;
@@ -1034,7 +1085,7 @@ export default function POSPage() {
   }
 
   const btnSendToKitchen = async () => {
-    const deliveryType = diningOptionRef.current?.value || "dinein";
+    const deliveryType = diningOptionRef.current?.value || state.deliveryType || "dinein";
     const tableId = tableRef.current?.value || null;
     const customerType = state.customerType;
     const customer = state.customer;
@@ -1957,27 +2008,38 @@ export default function POSPage() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 px-6 pb-6">
             {state?.qrOrders?.map((qrOrder, index)=>{
-              const { customer_type, customer_id, customer_name, table_id, table_title, items, id } = qrOrder;
+              const { customer_type, customer_id, customer_name, table_id, table_title, items, id, delivery_type, delivery_fee } = qrOrder;
 
-              return <div key={index} className='flex items-center gap-1 rounded-2xl p-2 border dark:border-restro-gray'>
-                <div className='w-12 h-12 rounded-full bg-gray-100 dark:bg-restro-gray dark:text-white text-gray-500 flex items-center justify-center'>
-                  <IconClipboardList stroke={iconStroke} />
+              return <div key={index} className='flex items-center gap-2 rounded-2xl p-3 border dark:border-restro-gray bg-white dark:bg-black/40 shadow-sm'>
+                <div className='w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center flex-shrink-0'>
+                  <IconClipboardList stroke={iconStroke} size={22} />
                 </div>
-                <div className='flex-1'>
-                  <div className="flex items-center gap-1 text-xs text-gray-500">
-                    <IconArmchair2 stroke={iconStroke} size={14} />
-                    <p className=''>{table_title || "N/A"}</p>
+                <div className='flex-1 min-w-0'>
+                  <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                    {delivery_type === 'delivery' ? (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/30">
+                        🚚 Delivery {delivery_fee > 0 ? `(+${currency}${delivery_fee})` : ''}
+                      </span>
+                    ) : delivery_type === 'takeaway' ? (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-600 border border-amber-500/30">
+                        🛍️ Takeaway
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/10 text-blue-600 border border-blue-500/30">
+                        🍽️ Table {table_title || "Dine-in"}
+                      </span>
+                    )}
                   </div>
-                  <div className="flex items-center gap-1 text-xs">
-                    <IconUser stroke={iconStroke} size={14} />
-                    <p className=''>{customer_type == "WALKIN" ? "WALKIN" : customer_name}</p>
+                  <div className="flex items-center gap-1 text-xs font-semibold text-gray-800 dark:text-gray-200 truncate">
+                    <IconUser stroke={iconStroke} size={13} className="text-gray-400 flex-shrink-0" />
+                    <p className='truncate'>{customer_type == "WALKIN" ? (customer_name || "Walk-in") : customer_name}</p>
+                    {customer_id && <span className="text-[10px] text-gray-400 font-normal">({customer_id})</span>}
                   </div>
-                  <p className='text-xs'>{items?.length} {t('pos.cart_items')}</p>
+                  <p className='text-[11px] text-gray-500 dark:text-gray-400 mt-0.5'>{items?.length || 0} {t('pos.cart_items')}</p>
                 </div>
-                <div className="flex flex-col gap-1">
-                  <button onClick={()=>{btnSelectQROrder(qrOrder)}} className='rounded-full transition active:scale-95 w-6 h-6 flex items-center justify-center text-restro-text bg-restro-gray hover:bg-restro-button-hover'><IconPencil size={14} stroke={iconStroke} /></button>
-
-                  <button onClick={()=>{btnCancelQROrder(id)}} className='rounded-full transition active:scale-95 text-red-500 w-6 h-6 flex items-center justify-center bg-restro-gray hover:bg-restro-button-hover'><IconTrash size={14} stroke={iconStroke} /></button>
+                <div className="flex flex-col gap-1.5">
+                  <button title="Load into POS cart" onClick={()=>{btnSelectQROrder(qrOrder)}} className='rounded-full transition active:scale-95 w-7 h-7 flex items-center justify-center text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm'><IconPencil size={15} stroke={iconStroke} /></button>
+                  <button title="Cancel order" onClick={()=>{btnCancelQROrder(id)}} className='rounded-full transition active:scale-95 text-red-500 w-7 h-7 flex items-center justify-center bg-red-500/10 hover:bg-red-500/20'><IconTrash size={15} stroke={iconStroke} /></button>
                 </div>
               </div>
             })}

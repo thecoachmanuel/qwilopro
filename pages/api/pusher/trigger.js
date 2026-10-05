@@ -67,6 +67,20 @@ export default async function pusherTrigger(req, res) {
         break;
       }
 
+      case 'token_call_backend': {
+        // Kitchen calls a token number → notify token display screen
+        if (!tenantId) return res.status(400).json({ message: 'tenantId required' });
+        await p.trigger(`tenant-${tenantId}`, 'token_call', payload || {});
+        break;
+      }
+
+      case 'cart_update_backend': {
+        // POS updates cart → notify customer-facing display screen
+        if (!tenantId) return res.status(400).json({ message: 'tenantId required' });
+        await p.trigger(`tenant-${tenantId}`, 'cart_update', payload || {});
+        break;
+      }
+
       default:
         return res.status(400).json({ message: `Unknown event: ${event}` });
     }

@@ -49,6 +49,33 @@ apiClient.interceptors.request.use(
 
 let retryCounter = 0;
 
+const clearAuthAndRedirect = (role) => {
+  if (typeof localStorage !== "undefined") {
+    localStorage.removeItem("restroprosaas_user");
+    localStorage.removeItem("restroprosaas_token");
+    localStorage.removeItem("restroprosaas_refresh_token");
+  }
+  Cookie.remove("restroprosaas__authenticated");
+  Cookie.remove("accessToken");
+  Cookie.remove("refreshToken");
+
+  if (typeof window !== "undefined") {
+    const currentPath = window.location.pathname;
+    const isAlreadyAtLogin =
+      currentPath === "/login" ||
+      currentPath === "/admin" ||
+      currentPath === "/admin/login" ||
+      currentPath === "/superadmin/login";
+    if (!isAlreadyAtLogin) {
+      if (role === "superadmin") {
+        window.location.href = "/admin";
+      } else {
+        window.location.href = "/login";
+      }
+    }
+  }
+};
+
 apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
@@ -83,14 +110,7 @@ apiClient.interceptors.response.use(
       retryCounter += 1;
 
       if (retryCounter > 3) {
-        Cookie.remove("restroprosaas__authenticated");
-        if (typeof window !== "undefined") {
-          if (role === "superadmin") {
-            window.location.href = "/admin";
-          } else {
-            window.location.href = "/login";
-          }
-        }
+        clearAuthAndRedirect(role);
         return Promise.reject(error);
       }
 
@@ -103,13 +123,7 @@ apiClient.interceptors.response.use(
         }
 
         if (res.status === 401 || res.status === 403) {
-          if (typeof window !== "undefined") {
-            if (role === "superadmin") {
-              window.location.href = "/admin";
-            } else {
-              window.location.href = "/login";
-            }
-          }
+          clearAuthAndRedirect(role);
           return Promise.reject(error);
         }
 
@@ -136,13 +150,7 @@ apiClient.interceptors.response.use(
         ) {
           return Promise.reject(refreshErr);
         }
-        if (typeof window !== "undefined") {
-          if (role === "superadmin") {
-            window.location.href = "/admin";
-          } else {
-            window.location.href = "/login";
-          }
-        }
+        clearAuthAndRedirect(role);
         return Promise.reject(refreshErr);
       }
     }

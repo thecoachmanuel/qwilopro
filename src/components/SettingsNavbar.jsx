@@ -51,16 +51,16 @@ export default function SettingsNavbar() {
       text: t("settings.payment_types"),
       path: "/dashboard/settings/payment-types",
     },
-    // {
-    //   icon: <IconDevices stroke={iconStroke} />,
-    //   text: "Devices",
-    //   path: "/dashboard/settings/devices",
-    // },
-    // {
-    //   icon: <IconLifebuoy stroke={iconStroke} />,
-    //   text: "Contact Support",
-    //   path: "/dashboard/settings/contact-support",
-    // },
+    {
+      icon: <IconLifebuoy stroke={iconStroke} />,
+      text: t("contact_support") || "Contact Support",
+      path: "/dashboard/contact-support",
+    },
+    {
+      icon: <IconCreditCard stroke={iconStroke} />,
+      text: "Subscription",
+      path: "/dashboard/inactive-subscription?manage=1",
+    },
   ];
 
   return (

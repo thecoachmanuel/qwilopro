@@ -86,12 +86,12 @@ exports.getOrdersDB = async (tenantId) => {
 
     if (kitchenOrders.length > 0) {
       const orderIds = kitchenOrders.map((o) => o.id);
-      const rawItems = await OrderItem.find({ order_id: { $in: orderIds } }).lean();
+      const rawItems = await OrderItem.find({ order_id: { $in: orderIds }, tenant_id: tenantId }).lean();
 
       const itemIds = rawItems.map((i) => i.item_id);
       const [menuItems, variants] = await Promise.all([
-        MenuItem.find({ id: { $in: itemIds } }).select("id title").lean(),
-        MenuItemVariant.find({ item_id: { $in: itemIds } }).select("id item_id title").lean(),
+        MenuItem.find({ id: { $in: itemIds }, tenant_id: tenantId }).select("id title").lean(),
+        MenuItemVariant.find({ item_id: { $in: itemIds }, tenant_id: tenantId }).select("id item_id title").lean(),
       ]);
 
       const menuItemMap = new Map(menuItems.map((m) => [m.id, m.title]));
@@ -125,7 +125,7 @@ exports.getOrdersDB = async (tenantId) => {
       ];
 
       if (allAddonIds.length > 0) {
-        addons = await MenuItemAddon.find({ id: { $in: allAddonIds } })
+        addons = await MenuItemAddon.find({ id: { $in: allAddonIds }, tenant_id: tenantId })
           .select("id item_id title")
           .lean();
       }
@@ -208,16 +208,26 @@ exports.getEncryptedInvoiceIdDB = async (invoiceId, tenantId) => {
   }
 };
 
+exports.encryptInvoiceId = encryptInvoiceId;
+exports.decryptInvoiceId = decryptInvoiceId;
+
 exports.checkInvoiceIdDB = async (encryptedInvoiceId) => {
   try {
+    if (!encryptedInvoiceId) return { invoice_id: null, customer_id: null };
     const decryptedId = decryptInvoiceId(encryptedInvoiceId);
-    if (!decryptedId) return null;
+    if (!decryptedId) return { invoice_id: null, customer_id: null };
 
     const order = await Order.findOne({ invoice_id: decryptedId }).select("invoice_id customer_id").lean();
-    return order || null;
+    if (order) return order;
+
+    const { QROrder } = require("../models");
+    const qrOrder = await QROrder.findOne({ id: decryptedId }).select("id customer_id").lean();
+    if (qrOrder) return { invoice_id: qrOrder.id, customer_id: qrOrder.customer_id };
+
+    return { invoice_id: decryptedId, customer_id: null };
   } catch (error) {
     console.error("checkInvoiceIdDB Error:", error);
-    throw error;
+    return { invoice_id: null, customer_id: null };
   }
 };
 
@@ -273,14 +283,15 @@ exports.getOrdersPaymentSummaryDB = async (orderIdsToFindSummary, tenantId) => {
       const orderIds = kitchenOrders.map((o) => o.id);
       const rawItems = await OrderItem.find({
         order_id: { $in: orderIds },
+        tenant_id: tenantId,
         status: { $ne: "cancelled" },
       }).lean();
 
       const itemIds = rawItems.map((i) => i.item_id);
-      const menuItems = await MenuItem.find({ id: { $in: itemIds } }).lean();
+      const menuItems = await MenuItem.find({ id: { $in: itemIds }, tenant_id: tenantId }).lean();
       const taxIds = menuItems.map((m) => m.tax_id).filter(Boolean);
-      const taxes = await Tax.find({ id: { $in: taxIds } }).lean();
-      const variants = await MenuItemVariant.find({ item_id: { $in: itemIds } }).lean();
+      const taxes = await Tax.find({ id: { $in: taxIds }, tenant_id: tenantId }).lean();
+      const variants = await MenuItemVariant.find({ item_id: { $in: itemIds }, tenant_id: tenantId }).lean();
 
       const menuItemMap = new Map(menuItems.map((m) => [m.id, m]));
       const taxMap = new Map(taxes.map((t) => [t.id, t]));
@@ -325,7 +336,7 @@ exports.getOrdersPaymentSummaryDB = async (orderIdsToFindSummary, tenantId) => {
       ];
 
       if (allAddonIds.length > 0) {
-        addons = await MenuItemAddon.find({ id: { $in: allAddonIds } })
+        addons = await MenuItemAddon.find({ id: { $in: allAddonIds }, tenant_id: tenantId })
           .select("id item_id title price")
           .lean();
       }

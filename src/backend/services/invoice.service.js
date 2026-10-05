@@ -189,23 +189,35 @@ exports.searchInvoicesDB = async (search, tenantId) => {
   }
 };
 
-exports.getInvoiceOrdersDB = async (orderIdsToFindSummary) => {
+exports.getInvoiceOrdersDB = async (orderIdsToFindSummary, tenantId = null) => {
   try {
     const ids = Array.isArray(orderIdsToFindSummary)
       ? orderIdsToFindSummary
       : String(orderIdsToFindSummary).split(",").map(Number);
 
-    const rawOrders = await Order.find({
+    const orderQuery = {
       id: { $in: ids },
       status: { $ne: "cancelled" },
-    }).lean();
+    };
+    if (tenantId) {
+      orderQuery.tenant_id = tenantId;
+    }
+
+    const rawOrders = await Order.find(orderQuery).lean();
 
     const customerIds = rawOrders.map((o) => o.customer_id).filter(Boolean);
     const tableIds = rawOrders.map((o) => o.table_id).filter(Boolean);
 
+    const customerQuery = { phone: { $in: customerIds } };
+    const tableQuery = { id: { $in: tableIds } };
+    if (tenantId) {
+      customerQuery.tenant_id = tenantId;
+      tableQuery.tenant_id = tenantId;
+    }
+
     const [customers, tables] = await Promise.all([
-      Customer.find({ phone: { $in: customerIds } }).select("phone name").lean(),
-      StoreTable.find({ id: { $in: tableIds } }).select("id table_title floor").lean(),
+      Customer.find(customerQuery).select("phone name").lean(),
+      StoreTable.find(tableQuery).select("id table_title floor").lean(),
     ]);
 
     const customerMap = new Map(customers.map((c) => [c.phone, c.name]));
@@ -234,16 +246,28 @@ exports.getInvoiceOrdersDB = async (orderIdsToFindSummary) => {
 
     if (kitchenOrders.length > 0) {
       const orderIds = kitchenOrders.map((o) => o.id);
-      const rawItems = await OrderItem.find({
+      const itemQuery = {
         order_id: { $in: orderIds },
         status: { $ne: "cancelled" },
-      }).lean();
+      };
+      if (tenantId) {
+        itemQuery.tenant_id = tenantId;
+      }
+      const rawItems = await OrderItem.find(itemQuery).lean();
 
       const itemIds = rawItems.map((i) => i.item_id);
-      const menuItems = await MenuItem.find({ id: { $in: itemIds } }).lean();
+      const menuQuery = { id: { $in: itemIds } };
+      if (tenantId) menuQuery.tenant_id = tenantId;
+      const menuItems = await MenuItem.find(menuQuery).lean();
+
       const taxIds = menuItems.map((m) => m.tax_id).filter(Boolean);
-      const taxes = await Tax.find({ id: { $in: taxIds } }).lean();
-      const variants = await MenuItemVariant.find({ item_id: { $in: itemIds } }).lean();
+      const taxQuery = { id: { $in: taxIds } };
+      if (tenantId) taxQuery.tenant_id = tenantId;
+      const taxes = await Tax.find(taxQuery).lean();
+
+      const variantQuery = { item_id: { $in: itemIds } };
+      if (tenantId) variantQuery.tenant_id = tenantId;
+      const variants = await MenuItemVariant.find(variantQuery).lean();
 
       const menuItemMap = new Map(menuItems.map((m) => [m.id, m]));
       const taxMap = new Map(taxes.map((t) => [t.id, t]));
@@ -288,7 +312,9 @@ exports.getInvoiceOrdersDB = async (orderIdsToFindSummary) => {
       ];
 
       if (allAddonIds.length > 0) {
-        addons = await MenuItemAddon.find({ id: { $in: allAddonIds } })
+        const addonQuery = { id: { $in: allAddonIds } };
+        if (tenantId) addonQuery.tenant_id = tenantId;
+        addons = await MenuItemAddon.find(addonQuery)
           .select("id item_id title price")
           .lean();
       }

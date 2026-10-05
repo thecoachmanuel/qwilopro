@@ -1,6 +1,26 @@
 const { Router } = require("express");
 const { hasRefreshToken, isAuthenticated, isLoggedIn, isSuperAdmin } = require("../middlewares/auth.middleware");
-const { signIn, signOut, getNewAccessToken, getSuperAdminDashboardData, getTenants, getSuperAdminTenantsCntData, addTenant, updateTenant, deleteTenant, getSuperAdminReportsData, getTenantsDataByStatus, getTenantSubscriptionHistory, updateGatewayStatus, updateGatewayCredentials, getGatewayDetails, getAllPaymentGateways, activatePaymentGateway } = require("../controllers/superadmin.controller");
+const {
+  signIn,
+  signOut,
+  getNewAccessToken,
+  getSuperAdminDashboardData,
+  getTenants,
+  getSuperAdminTenantsCntData,
+  addTenant,
+  updateTenant,
+  deleteTenant,
+  getSuperAdminReportsData,
+  getTenantsDataByStatus,
+  getTenantSubscriptionHistory,
+  updateGatewayStatus,
+  updateGatewayCredentials,
+  getGatewayDetails,
+  getAllPaymentGateways,
+  activatePaymentGateway,
+  getContactEmail,
+  updateContactEmail,
+} = require("../controllers/superadmin.controller");
 const router = Router();
 
 
@@ -9,6 +29,10 @@ router.post("/signout", hasRefreshToken, signOut)
 router.post("/refresh-token", hasRefreshToken, getNewAccessToken);
 
 router.get("/dashboard", isLoggedIn, isAuthenticated, isSuperAdmin, getSuperAdminDashboardData);
+
+// contact support email
+router.get("/contact-email", isLoggedIn, isAuthenticated, isSuperAdmin, getContactEmail);
+router.put("/contact-email", isLoggedIn, isAuthenticated, isSuperAdmin, updateContactEmail);
 
 router.get('/tenantsData', isLoggedIn, isAuthenticated, isSuperAdmin, getSuperAdminTenantsCntData);
 router.get('/tenants', isLoggedIn, isAuthenticated, isSuperAdmin, getTenants);

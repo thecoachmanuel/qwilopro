@@ -54,6 +54,12 @@ exports.getUserDB = async (username, tenantId) => {
         username: 1,
         role: 1,
         scope: 1,
+        designation: 1,
+        photo: 1,
+        phone: 1,
+        email: 1,
+        tenant_id: { $ifNull: ["$tenant.id", "$tenant_id"] },
+        plan_id: "$tenant.plan_id",
         plan_features: "$plan.features",
         features_description: "$plan.features_description",
         plan_title: "$plan.title",
@@ -69,6 +75,9 @@ exports.getUserDB = async (username, tenantId) => {
 
   if (!results[0]) return null;
   const user = results[0];
+  if (!user.tenant_id && tenantId) {
+    user.tenant_id = Number(tenantId);
+  }
 
   let parsedFeatures = [];
   if (user.plan_features) {

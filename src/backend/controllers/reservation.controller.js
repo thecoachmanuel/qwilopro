@@ -166,14 +166,7 @@ exports.getReservations = async (req, res) => {
 
         const from = req.query.from || null;
         const to = req.query.to || null;
-        const type = req.query.type;
-
-        if(!type) {
-            return res.status(400).json({
-                success: false,
-                message: req.__("please_provide_required_details") // Translate message
-            });
-        }
+        const type = req.query.type || "today";
 
         if(type == 'custom') {
             if(!(from && to)) {

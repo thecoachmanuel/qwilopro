@@ -944,8 +944,20 @@ exports.verifyPaystackPaymentDB = async (reference, tenantId) => {
     const isYearly = price?.frequency === "yearly" || meta.frequency === "yearly";
     const durationDays = isYearly ? 365 : 30;
 
-    const startDate = new Date();
-    const endDate = new Date();
+    // Check if tenant already has an active subscription end date in the future (stacking)
+    const existingTenant = await Tenant.findOne({ id: effectiveTenantId }).lean();
+    let baseDate = new Date();
+    if (existingTenant?.subscription_end) {
+      const existingEnd = new Date(existingTenant.subscription_end);
+      if (existingEnd.getTime() > baseDate.getTime()) {
+        baseDate = existingEnd; // Extend from current end date without losing remaining days
+      }
+    }
+
+    const startDate = existingTenant?.subscription_start && new Date(existingTenant.subscription_start).getTime() <= Date.now()
+      ? new Date(existingTenant.subscription_start)
+      : new Date();
+    const endDate = new Date(baseDate);
     endDate.setDate(endDate.getDate() + durationDays);
 
     const startDateStr = startDate.toISOString().split("T")[0];

@@ -41,14 +41,7 @@ exports.getInvoices = async (req, res) => {
 
     const from = req.query.from || null;
     const to = req.query.to || null;
-    const type = req.query.type;
-
-    if (!type) {
-      return res.status(400).json({
-        success: false,
-        message: req.__("please_provide_required_details"), // Translate message
-      });
-    }
+    const type = req.query.type || "today";
 
     if (type == "custom") {
       if (!(from && to)) {
@@ -235,7 +228,7 @@ exports.getInvoiceOrders = async (req, res) => {
     const orderIdsParams = orderIds.join(",");
 
     const [invoiceOrdersData, invoiceData] = await Promise.all([
-        getInvoiceOrdersDB(orderIdsParams),
+        getInvoiceOrdersDB(orderIdsParams, tenantId),
         getInvoiceByIdDB(invoiceId, tenantId),
       ]);
 

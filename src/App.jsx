@@ -30,6 +30,8 @@ const CategoriesPage = lazy(() => import("./views/SettingsViews/CategoriesPage")
 const MenuItemViewPage = lazy(() => import("./views/SettingsViews/MenuItemViewPage"));
 const PrintReceiptPage = lazy(() => import("./views/PrintReceiptPage"));
 const PrintTokenPage = lazy(() => import("./views/PrintTokenPage"));
+const TokenDisplayPage = lazy(() => import("./views/TokenDisplayPage"));
+const CustomerDisplayPage = lazy(() => import("./views/CustomerDisplayPage"));
 const NoAccessPage = lazy(() => import("./views/NoAccessPage"));
 const ProfilePage = lazy(() => import("./views/ProfilePage"));
 const RegistrationPage = lazy(() => import("./views/RegistrationPage"));
@@ -96,6 +98,8 @@ export default function App() {
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/print-receipt" element={<PrintReceiptPage />} />
           <Route path="/print-token" element={<PrintTokenPage />} />
+          <Route path="/display/token" element={<TokenDisplayPage />} />
+          <Route path="/display/customer" element={<CustomerDisplayPage />} />
           <Route path="/no-access" element={<NoAccessPage />} />
           <Route path="/success" element={<PaymentSuccessPage />} />
           <Route path="/cancelled-payment" element={<PaymentCancelledPage />} />

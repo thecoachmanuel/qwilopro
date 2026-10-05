@@ -23,10 +23,10 @@ export function setCart(cart) {
     localStorage.setItem(CART_KEY, JSON.stringify(cart));
 }
 
-export async function createOrderFromQrMenu(deliveryType , cartItems, customerType, customer, tableId , qrcode) {
+export async function createOrderFromQrMenu(deliveryType, cartItems, customerType, customer, tableId, qrcode, deliveryFee = 0) {
     try {
-        const response = await axios.post(`${API}/qrmenu/${qrcode}/place-order` , {
-           deliveryType, cartItems, customerType, customer, tableId
+        const response = await axios.post(`${API}/qrmenu/${qrcode}/place-order`, {
+           deliveryType, cartItems, customerType, customer, tableId, deliveryFee
         });
         return response;
     } catch (error) {

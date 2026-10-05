@@ -23,8 +23,10 @@ import {
   IconExternalLink,
   IconReceipt,
   IconRefresh,
+  IconSpeakerphone,
   IconStars,
   IconX,
+  IconTruck,
 } from "@tabler/icons-react";
 import { FRONTEND_DOMAIN, VITE_BACKEND_SOCKET_IO, iconStroke } from "../config/config";
 import { CURRENCIES } from "../config/currencies.config";
@@ -262,12 +264,28 @@ export default function OrdersPage() {
     socket.emit("authenticate", tenantId);
     socket.on("new_order", (payload) => {
       playNewOrderAudio();
+      const token = payload?.tokenNo || payload?.token_no;
+      if (token) {
+        try {
+          textToSpeech(`New order received! Token number ${token}`);
+        } catch {}
+      }
       refreshOrders();
     });
 
     socket.on("order_update", () => {
       refreshOrders();
     });
+  };
+
+  const btnCallToken = (tokenNo) => {
+    const tenantId = user?.tenant_id;
+    if (!tenantId || !tokenNo) return;
+    socket?.emit?.("token_call_backend", { tokenNo }, tenantId);
+    try {
+      textToSpeech(`Token number ${tokenNo}, please collect your order.`);
+    } catch {}
+    toast.success(`Calling Token #${tokenNo}...`);
   };
 
   const sendOrderUpdateEvent = () => {
@@ -686,16 +704,18 @@ export default function OrdersPage() {
               >
                 <div className="flex md:items-center flex-col md:flex-row md:justify-between md:text-center gap-2 pb-2">
                   <div className="flex items-center gap-2">
-                    <div className = "flex w-12 h-12 rounded-full items-center justify-center bg-restro-gray">
+                    <div className="flex w-12 h-12 rounded-2xl items-center justify-center bg-restro-gray">
                       {table_id ? (
                         <IconArmchair size={24} stroke={iconStroke} />
+                      ) : orders[0]?.delivery_type === "delivery" ? (
+                        <IconTruck size={24} stroke={iconStroke} className="text-emerald-500" />
                       ) : (
                         <IconReceipt size={24} stroke={iconStroke} />
                       )}
                     </div>
                     <div>
                       <p className="font-bold">
-                        {table_id ? `${table_title}` : "Dine Out / Delivery"}
+                        {table_id ? `${table_title}` : orders[0]?.delivery_type === "delivery" ? "🚚 Delivery" : "🛍️ Takeaway / Dine Out"}
                       </p>
                       {floor && <p className="text-sm">{floor}</p>}
                     </div>
@@ -722,6 +742,18 @@ export default function OrdersPage() {
                           <IconReceipt size={18} stroke={iconStroke} /> {t('orders.print_receipt')}
                         </button>
                       </li>
+                      {tokens ? (
+                        <li>
+                          <button
+                            className="flex items-center gap-2 bg-transparent border-none shadow-none text-restro-green"
+                            onClick={() => {
+                              btnCallToken(tokens);
+                            }}
+                          >
+                            <IconSpeakerphone size={18} stroke={iconStroke} /> Call Token ({tokens})
+                          </button>
+                        </li>
+                      ) : null}
                       {storeSettings?.is_feedback_enabled ? <li>
                         <button
                           className="flex items-center gap-2 bg-transparent border-none shadow-none "
@@ -796,6 +828,15 @@ export default function OrdersPage() {
                           <div className = "w-12 h-12 flex items-center justify-center font-bold rounded-full bg-gray-700 dark:bg-[#0a0a0a] text-white" >
                             {token_no}
                           </div>
+                          {token_no && (
+                            <button
+                              onClick={() => btnCallToken(token_no)}
+                              title="Announce token on displays and speakers"
+                              className="mt-1 text-[11px] px-2 py-0.5 rounded-lg bg-restro-border-green-light text-restro-green-dark hover:bg-restro-green hover:text-white transition active:scale-95 flex items-center gap-1 font-semibold"
+                            >
+                              <IconSpeakerphone size={12} stroke={iconStroke} /> Call
+                            </button>
+                          )}
                         </div>
                         <div className="text-end">
                           <p>

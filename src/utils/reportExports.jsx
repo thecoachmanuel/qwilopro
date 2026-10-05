@@ -1,4 +1,10 @@
-import LogoUrl from "../assets/logo.svg";
+// Safe logo URL for @react-pdf/renderer (requires PNG/JPG, does not support SVG)
+const getLogoUrl = () => {
+  if (typeof window !== "undefined") {
+    return `${window.location.origin}/logo.png`;
+  }
+  return "/logo.png";
+};
 
 const RESTRO_GREEN = "70B56A";
 const RESTRO_GREEN_DARK = "243922";
@@ -203,7 +209,7 @@ export async function exportReportToPdf(report, currency, filterLabel) {
             {[store.phone, store.email].filter(Boolean).length ? <Text style={styles.storeMeta}>{[store.phone, store.email].filter(Boolean).join(" | ")}</Text> : null}
             <Text style={styles.badge}>QwiloPro Report</Text>
           </View>
-          <Image src={LogoUrl?.src || LogoUrl} style={styles.logo} />
+          <Image src={getLogoUrl()} style={styles.logo} />
         </View>
         <Text style={styles.title}>{report.title}</Text>
         <Text style={styles.subtitle}>Showing data for {filterLabel} • Exported {new Date().toLocaleDateString()}</Text>

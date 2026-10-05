@@ -42,6 +42,8 @@ exports.getStoreDetails = async (req, res) => {
             isQROrderEnabled: result?.is_qr_order_enabled || false,
             uniqueQRCode: result?.unique_qr_code || null,
             isFeedbackEnabled: result?.is_feedback_enabled || false,
+            isDeliveryEnabled: result?.is_delivery_enabled || false,
+            deliveryFee: result?.delivery_fee || 0,
             uniqueId:result?.unique_id || null,
         };
 
@@ -66,6 +68,8 @@ exports.setStoreDetails = async (req, res) => {
         const isQRMenuEnabled = req.body.isQRMenuEnabled;
         const isQROrderEnabled = req.body.isQROrderEnabled;
         const isFeedbackEnabled = req.body.isFeedbackEnabled;
+        const isDeliveryEnabled = req.body.isDeliveryEnabled ? 1 : 0;
+        const deliveryFee = Number(req.body.deliveryFee) || 0;
         let slug = req.body.slug ? String(req.body.slug).trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") : null;
         if (!slug && storeName) {
             slug = String(storeName).trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
@@ -94,10 +98,10 @@ exports.setStoreDetails = async (req, res) => {
 
         const qrCodeExists = await getQRMenuCodeDB(tenantId);
         if(qrCodeExists) {
-            await setStoreSettingDB(storeName, address, phone, email, currency, isQRMenuEnabled, isQROrderEnabled, uniqueQRCode, isFeedbackEnabled, tenantId, slug, custom_domain);
+            await setStoreSettingDB(storeName, address, phone, email, currency, isQRMenuEnabled, isQROrderEnabled, uniqueQRCode, isFeedbackEnabled, tenantId, slug, custom_domain, isDeliveryEnabled, deliveryFee);
         } else {
             await updateQRMenuCodeDB(uniqueQRCode, tenantId);
-            await setStoreSettingDB(storeName, address, phone, email, currency, isQRMenuEnabled, isQROrderEnabled, uniqueQRCode, isFeedbackEnabled, tenantId, slug, custom_domain);
+            await setStoreSettingDB(storeName, address, phone, email, currency, isQRMenuEnabled, isQROrderEnabled, uniqueQRCode, isFeedbackEnabled, tenantId, slug, custom_domain, isDeliveryEnabled, deliveryFee);
         }
 
         return res.status(200).json({
@@ -710,4 +714,17 @@ exports.changeCategoryVisibilty = async (req, res) => {
             message: req.__("something_went_wrong_try_later")
         });
     }
+};
+
+exports.getPublicContactEmail = async (req, res) => {
+  try {
+    const { SystemSetting } = require("../models");
+    const setting = await SystemSetting.findOne({ key: "support_email" }).lean();
+    return res.status(200).json({
+      success: true,
+      email: setting?.value || "support@qwilopro.com",
+    });
+  } catch (error) {
+    return res.status(200).json({ success: true, email: "support@qwilopro.com" });
+  }
 };

@@ -1,5 +1,8 @@
-import { API_IMAGES_BASE_URL } from "../config/config";
-
 export function getImageURL(path) {
-    return API_IMAGES_BASE_URL + path;
+    if (!path) return "";
+    if (path.startsWith("http://") || path.startsWith("https://") || path.startsWith("data:") || path.startsWith("blob:")) {
+        return path;
+    }
+    const cleanPath = path.startsWith("/") ? path : `/${path}`;
+    return (API_IMAGES_BASE_URL || "") + cleanPath;
 }

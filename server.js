@@ -100,10 +100,7 @@ app.prepare().then(async () => {
   // Auto-connect / retry DB connection on API calls if not connected
   server.use("/api/v1", async (req, res, next) => {
     if (mongoose.connection.readyState !== 1) {
-      const conn = await connectDB();
-      if (conn) {
-        await seedDatabase();
-      }
+      await connectDB();
     }
     next();
   });
@@ -172,6 +169,24 @@ app.prepare().then(async () => {
     socket.on("order_update_backend", (payload, tenantId) => {
       if (tenantId) {
         socket.to(String(tenantId)).emit("order_update", payload);
+      }
+    });
+
+    socket.on("cart_update_backend", (payload, tenantId) => {
+      if (tenantId) {
+        socket.to(String(tenantId)).emit("cart_update", payload);
+      }
+    });
+
+    socket.on("token_call_backend", (payload, tenantId) => {
+      if (tenantId) {
+        socket.to(String(tenantId)).emit("token_call", payload);
+      }
+    });
+
+    socket.on("table_update_backend", (payload, tenantId) => {
+      if (tenantId) {
+        socket.to(String(tenantId)).emit("table_update", payload);
       }
     });
   });

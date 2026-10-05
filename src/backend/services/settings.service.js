@@ -103,7 +103,9 @@ exports.setStoreSettingDB = async (
   isFeedbackEnabled,
   tenantId,
   slug = null,
-  custom_domain = null
+  custom_domain = null,
+  isDeliveryEnabled = 0,
+  deliveryFee = 0
 ) => {
   try {
     const updateDoc = {
@@ -116,6 +118,8 @@ exports.setStoreSettingDB = async (
       is_qr_order_enabled: isQROrderEnabled ? 1 : 0,
       unique_qr_code: uniqueQRCode,
       is_feedback_enabled: isFeedbackEnabled ? 1 : 0,
+      is_delivery_enabled: isDeliveryEnabled ? 1 : 0,
+      delivery_fee: Number(deliveryFee) || 0,
     };
     if (slug) {
       updateDoc.slug = slug;
@@ -496,17 +500,21 @@ exports.placeOrderViaQrMenuDB = async (
   customerId,
   tableId,
   customerName,
-  paymentStatus = "pending"
+  paymentStatus = "pending",
+  deliveryFee = 0
 ) => {
   try {
     const order = await QROrder.create({
       delivery_type: deliveryType,
       customer_type: customerType,
       customer_id: customerId,
+      customer_name: customerName || null,
       table_id: tableId,
+      delivery_fee: deliveryFee || 0,
       payment_status: paymentStatus || "pending",
       tenant_id: tenantId,
     });
+
 
     const orderId = order.id;
 
@@ -535,7 +543,15 @@ exports.placeOrderViaQrMenuDB = async (
       }
     }
 
-    return { orderId };
+    let encryptedInvoiceId = null;
+    try {
+      const { encryptInvoiceId } = require("./orders.service");
+      encryptedInvoiceId = encryptInvoiceId ? encryptInvoiceId(orderId) : String(orderId);
+    } catch {
+      encryptedInvoiceId = String(orderId);
+    }
+
+    return { orderId, invoiceId: encryptedInvoiceId };
   } catch (error) {
     console.error("placeOrderViaQrMenuDB Error:", error);
     throw error;

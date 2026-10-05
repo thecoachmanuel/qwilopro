@@ -41,6 +41,8 @@ export default function SettingDetailsPage() {
   const isQRMenuEnabledRef = useRef();
   const isQROrderEnabledRef = useRef();
   const isFeedbackEnabledRef = useRef();
+  const isDeliveryEnabledRef = useRef();
+  const deliveryFeeRef = useRef();
   const customDomainRef = useRef();
   const { theme } = useTheme();
   const user = getUserDetailsInLocalStorage();
@@ -91,6 +93,8 @@ export default function SettingDetailsPage() {
     custom_domain,
     isQROrderEnabled,
     isFeedbackEnabled,
+    isDeliveryEnabled,
+    deliveryFee,
     uniqueId,
   } = data || {};
 
@@ -106,6 +110,8 @@ export default function SettingDetailsPage() {
     const isQRMenuEnabled = isQRMenuEnabledRef.current.checked;
     const isQROrderEnabled = isQROrderEnabledRef.current.checked;
     const isFeedbackEnabled = isFeedbackEnabledRef.current.checked;
+    const isDeliveryEnabled = isDeliveryEnabledRef.current ? isDeliveryEnabledRef.current.checked : false;
+    const deliveryFee = deliveryFeeRef.current ? Number(deliveryFeeRef.current.value) || 0 : 0;
     const customDomainVal = customDomainRef.current ? customDomainRef.current.value : (custom_domain || null);
 
     try {
@@ -121,7 +127,9 @@ export default function SettingDetailsPage() {
         isQROrderEnabled,
         isFeedbackEnabled,
         storeSlug,
-        customDomainVal
+        customDomainVal,
+        isDeliveryEnabled,
+        deliveryFee
       );
 
       if (res.status == 200) {
@@ -465,6 +473,49 @@ export default function SettingDetailsPage() {
               ></div>
             </label>
             {/* switch */}
+          </div>
+
+          {/* Delivery Orders Toggle */}
+          <div className="w-full lg:min-w-96 flex items-center justify-between mt-4">
+            <label htmlFor="delivery" className="flex items-center gap-2">
+              Enable Delivery Orders
+              <Popover text="Allow customers on your digital storefront to place orders for home delivery." />
+            </label>
+            <label className="relative inline-flex items-center cursor-pointer no-drag">
+              <input
+                ref={isDeliveryEnabledRef}
+                defaultChecked={isDeliveryEnabled}
+                type="checkbox"
+                name="delivery"
+                id="delivery"
+                className="sr-only peer"
+                onChange={(e) => handleToggleChange(e, "delivery")}
+              />
+              <div
+                className={`w-11 h-6 rounded-full peer peer-checked:after:translate-x-full  after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-gray-100 after:border-restro-bg-gray after:border after:rounded-full after:h-5 after:w-5 after:transition-all bg-restro-checkbox peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-restro-ring-light peer-checked:bg-restro-green peer-checked:after:border-restro-border-green`}
+              ></div>
+            </label>
+          </div>
+
+          {/* Delivery Fee Input */}
+          <div className="w-full lg:min-w-96 flex items-center justify-between mt-4">
+            <label htmlFor="delivery_fee" className="flex items-center gap-2">
+              Delivery Fee
+              <Popover text="Standard delivery fee charged to customers when they select delivery on your storefront." />
+            </label>
+            <div className="w-36">
+              <input
+                ref={deliveryFeeRef}
+                type="number"
+                min="0"
+                step="any"
+                defaultValue={deliveryFee || 0}
+                name="delivery_fee"
+                id="delivery_fee"
+                placeholder="0.00"
+                className="input input-sm border border-restro-border-green text-right font-semibold w-full rounded-xl dark:bg-black focus:outline-restro-border-green"
+              />
+            </div>
           </div>
         </div>
 

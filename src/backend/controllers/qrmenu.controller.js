@@ -69,7 +69,7 @@ exports.placeOrderViaQrMenu = async (req, res) => {
 
       const tenantId = await getTenantIdFromQRCode(qrcode);
 
-      const {deliveryType , cartItems, customerType, customer, tableId} = req.body;
+      const {deliveryType, cartItems, customerType, customer, tableId, deliveryFee} = req.body;
 
       if(cartItems?.length == 0) {
         return res.status(400).json({
@@ -78,12 +78,13 @@ exports.placeOrderViaQrMenu = async (req, res) => {
         });
       }
 
-      const result = await placeOrderViaQrMenuDB(tenantId, deliveryType , cartItems, customerType, customer.phone || null, tableId || null , customer.name || null);
+      const result = await placeOrderViaQrMenuDB(tenantId, deliveryType, cartItems, customerType, customer.phone || null, tableId || null, customer.name || null, 'pending', deliveryFee || 0);
 
       return res.status(200).json({
         success: true,
         message: req.__("order_placed_successfully"), // Translate message
         orderId: result.orderId,
+        invoiceId: result.invoiceId || null,
       });
 
     } catch (error) {
@@ -114,9 +115,11 @@ exports.collectFeedback = async (req, res) => {
     }
 
     // 1. check if invoice is valid or not, if yes then get invoice id
-    const { invoice_id, customer_id } = await checkInvoiceIdDB(encryptedInvoiceId);
+    const invoiceData = (await checkInvoiceIdDB(encryptedInvoiceId)) || {};
+    const invoice_id = invoiceData?.invoice_id || null;
+    const finalCustomerId = customerId || invoiceData?.customer_id || null;
 
-    await saveFeedbackDB(tenantId, invoice_id, customer_id, phone, name, email, birthdate, averageRating, food_quality, service, ambiance, staff_behavior, recommend, remarks);
+    await saveFeedbackDB(tenantId, invoice_id, finalCustomerId, phone, name, email, birthdate, averageRating, food_quality, service, ambiance, staff_behavior, recommend, remarks);
 
     return res.status(200).json({
       success: true,

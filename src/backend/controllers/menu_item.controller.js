@@ -65,15 +65,39 @@ exports.uploadMenuItemPhoto = async (req, res) => {
         const tenantId = req.user.tenant_id;
         const id = req.params.id;
 
+        if (!req.files || !req.files.image) {
+            return res.status(400).json({
+                success: false,
+                message: "No image file provided"
+            });
+        }
+
         const file = req.files.image;
 
         const tenantPublicDir = path.resolve(process.cwd(), "public", String(tenantId));
         if(!fs.existsSync(tenantPublicDir)) {
             fs.mkdirSync(tenantPublicDir, { recursive: true });
         }
-        const imagePath = path.join(tenantPublicDir, String(id));
 
-        const imageURL = `/public/${tenantId}/${id}`;
+        const ext = path.extname(file.name || "") || ".png";
+        const filename = `${id}${ext}`;
+        const imagePath = path.join(tenantPublicDir, filename);
+
+        // Remove any previous file variants
+        const possibleOldFiles = [
+            path.join(tenantPublicDir, String(id)),
+            path.join(tenantPublicDir, `${id}.png`),
+            path.join(tenantPublicDir, `${id}.jpg`),
+            path.join(tenantPublicDir, `${id}.jpeg`),
+            path.join(tenantPublicDir, `${id}.webp`),
+        ];
+        for (const oldFile of possibleOldFiles) {
+            if (oldFile !== imagePath && fs.existsSync(oldFile)) {
+                try { fs.unlinkSync(oldFile); } catch(e) {}
+            }
+        }
+
+        const imageURL = `/public/${tenantId}/${filename}`;
 
         await file.mv(imagePath);
         await updateMenuItemImageDB(id, imageURL, tenantId);
@@ -82,7 +106,7 @@ exports.uploadMenuItemPhoto = async (req, res) => {
             success: true,
             message: req.__("menu_item_image_uploaded"), // Translate message
             imageURL: imageURL
-        })
+        });
     } catch (error) {
         console.error(error);
         return res.status(500).json({
@@ -97,11 +121,20 @@ exports.removeMenuItemPhoto = async (req, res) => {
         const tenantId = req.user.tenant_id;
         const id = req.params.id;
         const tenantPublicDir = path.resolve(process.cwd(), "public", String(tenantId));
-        const imagePath = path.join(tenantPublicDir, String(id));
-
-        if (fs.existsSync(imagePath)) {
-            try { fs.unlinkSync(imagePath); } catch (e) {}
+        
+        const possibleFiles = [
+            path.join(tenantPublicDir, String(id)),
+            path.join(tenantPublicDir, `${id}.png`),
+            path.join(tenantPublicDir, `${id}.jpg`),
+            path.join(tenantPublicDir, `${id}.jpeg`),
+            path.join(tenantPublicDir, `${id}.webp`),
+        ];
+        for (const p of possibleFiles) {
+            if (fs.existsSync(p)) {
+                try { fs.unlinkSync(p); } catch (e) {}
+            }
         }
+
         const legacyPath = path.resolve(process.cwd(), "src/public", String(tenantId), String(id));
         if (fs.existsSync(legacyPath)) {
             try { fs.unlinkSync(legacyPath); } catch (e) {}
@@ -112,7 +145,7 @@ exports.removeMenuItemPhoto = async (req, res) => {
         return res.status(200).json({
             success: true,
             message: req.__("menu_item_image_removed") // Translate message
-        })
+        });
     } catch (error) {
         console.error(error);
         return res.status(500).json({
