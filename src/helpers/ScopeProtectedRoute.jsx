@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { getUserDetailsInLocalStorage, saveUserDetailsInLocalStorage } from "./UserDetails";
 import { PLAN_FEATURES, SCOPES } from "../config/scopes";
@@ -8,10 +8,12 @@ const DEFAULT_STARTER_FEATURES = [
   "DASHBOARD",
   "POS",
   "ORDERS",
+  "KITCHEN",
   "INVOICES",
   "SETTINGS",
   "REPORTS",
   "USER",
+  "QRMENU",
 ];
 
 const SCOPE_TO_PLAN_FEATURE = {
@@ -68,8 +70,8 @@ const ScopeProtectedRoute = ({ children, scopes }) => {
   let userPlanFeatures = parseFeatures(
     user?.planFeatures || user?.planFeautures || user?.plan_features || user?.features
   );
-  if (role === "admin" && userPlanFeatures.length === 0 && Number(user?.is_active) === 1) {
-    userPlanFeatures = DEFAULT_STARTER_FEATURES;
+  if (role === "admin" && (userPlanFeatures.length === 0 || !userPlanFeatures.includes("KITCHEN"))) {
+    userPlanFeatures = Array.from(new Set([...userPlanFeatures, ...DEFAULT_STARTER_FEATURES]));
   }
 
   const isActive = Number(user?.is_active) === 1;
@@ -83,24 +85,29 @@ const ScopeProtectedRoute = ({ children, scopes }) => {
 
   let hasAccess = false;
   if (!noUser && !isSuperAdmin && !needsRedirectToInactive && scopes && scopes.length > 0) {
-    const hasPlanAccess = scopes.some((scope) => {
-      const normalized = String(scope).trim().toUpperCase();
-      const parentFeature = SCOPE_TO_PLAN_FEATURE[normalized] || normalized;
-      return (
-        userPlanFeatures.includes(normalized) ||
-        userPlanFeatures.includes(parentFeature)
-      );
-    });
-    if (hasPlanAccess) {
-      if (role === "admin") {
-        hasAccess = true;
-      } else {
-        const userScopes = (user?.scope || "")
-          .split(",")
-          .map((s) => s.trim().toUpperCase());
-        hasAccess = scopes.some((scope) =>
-          userScopes.includes(String(scope).trim().toUpperCase())
+    if (role === "admin" && isActive && !isExpired) {
+      // Active admins always have instant access to POS, Orders, Kitchen, and Settings
+      hasAccess = true;
+    } else {
+      const hasPlanAccess = scopes.some((scope) => {
+        const normalized = String(scope).trim().toUpperCase();
+        const parentFeature = SCOPE_TO_PLAN_FEATURE[normalized] || normalized;
+        return (
+          userPlanFeatures.includes(normalized) ||
+          userPlanFeatures.includes(parentFeature)
         );
+      });
+      if (hasPlanAccess) {
+        if (role === "admin") {
+          hasAccess = true;
+        } else {
+          const userScopes = (user?.scope || "")
+            .split(",")
+            .map((s) => s.trim().toUpperCase());
+          hasAccess = scopes.some((scope) =>
+            userScopes.includes(String(scope).trim().toUpperCase())
+          );
+        }
       }
     }
   }

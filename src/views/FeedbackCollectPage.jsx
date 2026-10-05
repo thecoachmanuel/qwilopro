@@ -45,7 +45,7 @@ export default function FeedbackCollectPage() {
   const params = useParams();
   const navigate = useNavigate();
 
-  const qrcode = params.qrcode;
+  const qrcode = params.slug || params.qrcode;
 
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [transitioning, setTransitioning] = useState(false);

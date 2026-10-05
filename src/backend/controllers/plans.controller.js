@@ -14,6 +14,7 @@ const {
   getUserCountry,
   createPaystackPlanDB,
   createPaystackPaymentLink,
+  verifyPaystackPaymentDB,
   updatePaystackPlanDB,
   getPaystackManageSubscriptionLink,
   deletePaystackPlanByIdDB,
@@ -508,6 +509,37 @@ exports.createPaystackPaymentLink = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: req.__("something_went_wrong_try_later") // Translate message
+    });
+  }
+};
+
+exports.verifyPaystackPayment = async (req, res) => {
+  try {
+    const reference = req.query.reference || req.query.trxref || req.body?.reference;
+    const user = req.user;
+
+    if (!reference) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing payment reference",
+      });
+    }
+
+    const result = await verifyPaystackPaymentDB(reference, user?.tenant_id);
+
+    return res.status(200).json({
+      success: true,
+      message: result.message,
+      tenant: result.tenant,
+      planTitle: result.planTitle,
+      features: result.features,
+      subscriptionEnd: result.subscriptionEnd,
+    });
+  } catch (error) {
+    console.error("verifyPaystackPayment error:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Failed to verify subscription payment",
     });
   }
 };

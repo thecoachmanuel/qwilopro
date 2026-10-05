@@ -143,3 +143,14 @@ export async function createPaystackPaymentLink(planId) {
         throw error;
     }
 }
+
+// Paystack: verify transaction reference and activate subscription
+export async function verifyPaystackPayment(reference) {
+    axios.defaults.withCredentials = true;
+    try {
+        const response = await apiClient.get(`/plans/paystack/verify?reference=${encodeURIComponent(reference)}`);
+        return response;
+    } catch (error) {
+        throw error;
+    }
+}

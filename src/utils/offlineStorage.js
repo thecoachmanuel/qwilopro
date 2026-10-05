@@ -120,7 +120,7 @@ export function validateOfflineFeatureAccess(featureName) {
 
   // Default starter features fallback for admin
   if (user.role === "admin" && features.length === 0) {
-    features = ["DASHBOARD", "POS", "ORDERS", "INVOICES", "SETTINGS", "REPORTS", "USER"];
+    features = ["DASHBOARD", "POS", "ORDERS", "KITCHEN", "INVOICES", "SETTINGS", "REPORTS", "USER", "QRMENU"];
   }
 
   const normalized = String(featureName).trim().toUpperCase();

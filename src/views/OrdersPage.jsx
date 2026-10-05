@@ -180,15 +180,15 @@ export default function OrdersPage() {
           (c) => c.cc == ordersInit?.storeSettings?.currency
         );
 
-        setState({
-          ...state,
+        setState((prev) => ({
+          ...prev,
           kitchenOrders: [...offlineGroups, ...orders],
           printSettings: ordersInit.printSettings || {},
           storeSettings: ordersInit.storeSettings || {},
           paymentTypes: Array.isArray(ordersInit.paymentTypes) ? ordersInit.paymentTypes : [],
           currency: currency?.symbol || "₦",
           isLoading: false,
-        });
+        }));
       }
     } catch (error) {
       console.warn("Online orders load failed, checking offline cache:", error);
@@ -197,15 +197,15 @@ export default function OrdersPage() {
         (c) => c.cc == cached?.ordersInit?.storeSettings?.currency
       );
 
-      setState({
-        ...state,
+      setState((prev) => ({
+        ...prev,
         kitchenOrders: [...offlineGroups, ...(cached?.orders || [])],
         printSettings: cached?.ordersInit?.printSettings || {},
         storeSettings: cached?.ordersInit?.storeSettings || {},
         paymentTypes: Array.isArray(cached?.ordersInit?.paymentTypes) ? cached.ordersInit.paymentTypes : [],
         currency: currency?.symbol || "₦",
         isLoading: false,
-      });
+      }));
     }
   };
 
@@ -230,20 +230,20 @@ export default function OrdersPage() {
       toast.dismiss();
       if (res.status == 200) {
         toast.success(t('orders.orders_loaded'));
-        setState({
-          ...state,
+        setState((prev) => ({
+          ...prev,
           kitchenOrders: [...offlineGroups, ...res.data],
           isLoading: false,
-        });
+        }));
       }
     } catch (error) {
       toast.dismiss();
       const cached = getOrdersSnapshot();
-      setState({
-        ...state,
+      setState((prev) => ({
+        ...prev,
         kitchenOrders: [...offlineGroups, ...(cached?.orders || [])],
         isLoading: false,
-      });
+      }));
       toast("Loaded orders from offline cache.", { icon: "📡" });
     }
   };

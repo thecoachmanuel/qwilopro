@@ -31,6 +31,7 @@ exports.getStoreDetails = async (req, res) => {
         const storeSettings = {
             storeImage : result?.store_image || null,
             storeName: result?.store_name || null,
+            slug: result?.slug || null,
             address: result?.address || null,
             phone: result?.phone || null,
             email: result?.email || null,
@@ -64,20 +65,25 @@ exports.setStoreDetails = async (req, res) => {
         const isQRMenuEnabled = req.body.isQRMenuEnabled;
         const isQROrderEnabled = req.body.isQROrderEnabled;
         const isFeedbackEnabled = req.body.isFeedbackEnabled;
+        let slug = req.body.slug ? String(req.body.slug).trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") : null;
+        if (!slug && storeName) {
+            slug = String(storeName).trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+        }
 
         const uniqueQRCode = nanoid();
 
         const qrCodeExists = await getQRMenuCodeDB(tenantId);
         if(qrCodeExists) {
-            await setStoreSettingDB(storeName, address, phone, email, currency, isQRMenuEnabled,isQROrderEnabled , uniqueQRCode, isFeedbackEnabled, tenantId);
+            await setStoreSettingDB(storeName, address, phone, email, currency, isQRMenuEnabled, isQROrderEnabled, uniqueQRCode, isFeedbackEnabled, tenantId, slug);
         } else {
             await updateQRMenuCodeDB(uniqueQRCode, tenantId);
-            await setStoreSettingDB(storeName, address, phone, email, currency, isQRMenuEnabled, isQROrderEnabled, uniqueQRCode, isFeedbackEnabled, tenantId);
+            await setStoreSettingDB(storeName, address, phone, email, currency, isQRMenuEnabled, isQROrderEnabled, uniqueQRCode, isFeedbackEnabled, tenantId, slug);
         }
 
         return res.status(200).json({
             success: true,
-            message: req.__("details_saved_successfully")
+            message: req.__("details_saved_successfully"),
+            slug
         });
     } catch (error) {
         console.error(error);

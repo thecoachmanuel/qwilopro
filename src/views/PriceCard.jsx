@@ -15,22 +15,28 @@ const PricingCard = ({
   country,
 }) => {
   const getPrice = (frequency) => {
-    // 1. Try selected country
-    let price = plan.prices.find(
-      (p) => p.country === country && p.frequency === frequency,
+    // 1. If explicit non-Nigerian country is selected, check for it
+    if (country && country !== "Nigeria" && country !== "NG") {
+      const match = plan?.prices?.find((p) => p.country === country && p.frequency === frequency);
+      if (match) return match;
+    }
+
+    // 2. Default to Nigerian Naira (NGN / ₦) as primary platform currency
+    let price = plan?.prices?.find(
+      (p) => (p.currency === "NGN" || p.symbol === "₦") && p.frequency === frequency
     );
 
-    // 2. Fallback to default country
+    // 3. Fallback to is_default
     if (!price) {
-      price = plan.prices.find(
-        (p) => p.is_default && p.frequency === frequency,
+      price = plan?.prices?.find(
+        (p) => p.is_default && p.frequency === frequency
       );
     }
 
-    // 3. Final fallback (first available)
-    // if (!price) {
-    //   price = plan.prices.find(p => p.frequency === frequency);
-    // }
+    // 4. Final fallback
+    if (!price) {
+      price = plan?.prices?.find((p) => p.frequency === frequency);
+    }
 
     return price;
   };
@@ -39,12 +45,10 @@ const PricingCard = ({
   const usYearly = getPrice("yearly");
   const { t } = useTranslation();
 
-  // const usMonthly = plan.prices.find(p => p.country === country && p.frequency === "monthly");
-  // const usYearly = plan.prices.find(p => p.country === country && p.frequency === "yearly");
-  // if yearly price 9999 then monthly price is
-  const yearlyPriceInMonth = Math.round(usYearly?.amount / 12);
-  const symbol = isYearly ? usYearly?.symbol : usMonthly?.symbol;
-  const price = isYearly ? yearlyPriceInMonth : usMonthly?.amount;
+  const yearlyPriceInMonth = Math.round((usYearly?.amount || 0) / 12);
+  const symbol = (isYearly ? usYearly?.symbol : usMonthly?.symbol) || "₦";
+  const rawPrice = isYearly ? yearlyPriceInMonth : usMonthly?.amount;
+  const price = typeof rawPrice === "number" ? rawPrice.toLocaleString() : (rawPrice || 0);
 
   // Calculate effective discounts (ignore 0 / null and compute yearly discount if not provided)
   const computedYearlyDiscount =
@@ -175,7 +179,7 @@ const PricingCard = ({
         {isYearly && (
           <p className="text-sm text-accent-foreground mt-1">
             {t("inactive_subscription.billed_annually")} ({symbol}
-            {usYearly?.amount}/{t("inactive_subscription.year")})
+            {(usYearly?.amount || 0).toLocaleString()}/{t("inactive_subscription.year")})
           </p>
         )}
       </div>

@@ -35,10 +35,10 @@ export default function InActiveSubscriptionPage() {
   const [isTrial, setIsTrial] = useState(false);
   const [trialDays, setTrialDays] = useState(7);
   const [plans, setPlans] = useState("");
-  const [country, setCountry] = useState("");
+  const [country, setCountry] = useState("Nigeria");
   const [stripeProductId, setStripeProductId] = useState("");
   const [stripePriceId, setStripePriceId] = useState("");
-  const [activePaymentGateway, setActivePaymentGateway] = useState(null);
+  const [activePaymentGateway, setActivePaymentGateway] = useState("paystack");
 
   useAuth();
 
@@ -64,7 +64,7 @@ export default function InActiveSubscriptionPage() {
       setPlanLoading(true);
       const res = await getPlans();
       const plans = res.data.data;
-      const gateway = plans[0]?.payment_gateway || null;
+      const gateway = plans[0]?.payment_gateway || "paystack";
       setActivePaymentGateway(gateway);
       setPlanLoading(false);
       setPlans(plans);
@@ -80,8 +80,13 @@ export default function InActiveSubscriptionPage() {
 
   useEffect(() => {
     const fetchCountry = async () => {
-      const res = await getUserCountry();
-      setCountry(res.data.result.country);
+      try {
+        const res = await getUserCountry();
+        const detected = res?.data?.country || res?.data?.result?.country;
+        if (detected) setCountry(detected);
+      } catch (err) {
+        setCountry("Nigeria");
+      }
     };
 
     fetchCountry();
@@ -101,7 +106,21 @@ export default function InActiveSubscriptionPage() {
     }
 
     try {
-      if (activePaymentGateway === "paystack") {
+      if (activePaymentGateway === "stripe") {
+        // Stripe flow
+        const res = await getStripeSubscriptionURL(
+          selectedPriceId,
+          selectedTrial,
+          selectedTrialDays
+        );
+        toast.dismiss();
+
+        if (res.status == 200) {
+          const data = res.data;
+          window.location.href = data.url;
+        }
+      } else {
+        // Paystack flow (PRIMARY)
         const res = await createPaystackPaymentLink(selectedPriceId);
         toast.dismiss();
 
@@ -113,19 +132,6 @@ export default function InActiveSubscriptionPage() {
           window.location.href = authorizationUrl;
         } else {
           toast.error(t("error_message"));
-        }
-      } else {
-        // Default / Stripe flow (existing behavior)
-        const res = await getStripeSubscriptionURL(
-          selectedPriceId,
-          selectedTrial,
-          selectedTrialDays
-        );
-        toast.dismiss();
-
-        if (res.status == 200) {
-          const data = res.data;
-          window.location.href = data.url;
         }
       }
     } catch (error) {

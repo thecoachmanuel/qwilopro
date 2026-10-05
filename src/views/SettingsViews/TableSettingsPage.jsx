@@ -45,7 +45,8 @@ export default function TableSettingsPage() {
     return <Page className="px-8 py-6">{t('table_settings.please_wait')}</Page>;
   }
 
-  const { uniqueQRCode, isQRMenuEnabled } = storeSettings || {};
+  const { uniqueQRCode, isQRMenuEnabled, slug, storeName } = storeSettings || {};
+  const storeSlug = slug || (storeName ? storeName.toLowerCase().trim().replace(/\s+/g, '-').replace(/[^\w\-]+/g, '') : null);
 
   const btnDelete = async (id) => {
     const isConfirm = window.confirm(t('table_settings.are_you_sure'));
@@ -179,20 +180,24 @@ export default function TableSettingsPage() {
         return;
       }
 
-      const QR_MENU_LINK = getTableQRMenuLink(uniqueQRCode, tableId)
-      const qrDataURL = await QRCode.toDataURL(QR_MENU_LINK, {width: 1080});
+      const activeIdentifier = storeSlug || uniqueQRCode;
+      const QR_MENU_LINK = getTableQRMenuLink(uniqueQRCode, tableId, activeIdentifier);
+      const qrDataURL = await QRCode.toDataURL(QR_MENU_LINK, { width: 1080 });
       const link = document.createElement("a");
 
-      const fileName = title.replace(/[^a-z0-9]/gi, '_').toLowerCase()
+      const storePrefix = (storeSlug || storeName || '').replace(/[^a-z0-9]/gi, '_').toLowerCase();
+      const fileName = title.replace(/[^a-z0-9]/gi, '_').toLowerCase();
 
-      link.download=`${fileName}-qr.png`;
-      link.href=qrDataURL;
+      link.download = `${storePrefix ? storePrefix + '_' : ''}${fileName}-qr.png`;
+      link.href = qrDataURL;
       link.click();
       link.remove();
+      toast.success("Table QR code downloaded!");
     } catch (error) {
       console.error(error);
+      toast.error("Failed to generate table QR code");
     }
-  }
+  };
 
   return (
     <Page className="px-8 py-6">

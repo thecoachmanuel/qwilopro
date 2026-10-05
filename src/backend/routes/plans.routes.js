@@ -17,6 +17,7 @@ const {
     getUserCountry,
     createPaystackPlan,
     createPaystackPaymentLink,
+    verifyPaystackPayment,
     updatePaystackPlan,
     deletePaystackPlan,
     generatePaystackManageSubscriptionLink,
@@ -71,6 +72,18 @@ router.post(
     isLoggedIn,
     isAuthenticated,
     createPaystackPaymentLink
+);
+router.get(
+    "/paystack/verify",
+    isLoggedIn,
+    isAuthenticated,
+    verifyPaystackPayment
+);
+router.post(
+    "/paystack/verify",
+    isLoggedIn,
+    isAuthenticated,
+    verifyPaystackPayment
 );
 router.get(
     "/paystack/manage-subscription",

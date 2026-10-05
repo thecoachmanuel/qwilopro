@@ -676,23 +676,71 @@ exports.stripeProductSubscriptionLookup = async (req, res) => {
       userDeviceId = await getUserDeviceId(user.username);
     }
 
+    const { Plan, PlanPrice } = require("../models");
+    let planPrice = await PlanPrice.findOne({ payment_gateway_price_id: productId }).lean();
+    let plan = null;
+    if (planPrice) {
+      plan = await Plan.findOne({ id: planPrice.plan_id }).lean();
+    }
+
+    let lineItem = null;
+    let isYearly = planPrice?.frequency === "yearly";
+
+    if (productId.startsWith("price_") && !planPrice) {
+      lineItem = { price: productId, quantity: 1 };
+    } else {
+      // Find configured USD price or convert Naira to Dollar
+      let usdAmount = 5;
+
+      if (plan) {
+        const usdPrice = await PlanPrice.findOne({
+          plan_id: plan.id,
+          currency: "USD",
+          frequency: planPrice?.frequency || "monthly",
+        }).lean();
+
+        if (usdPrice && usdPrice.payment_gateway_price_id?.startsWith("price_")) {
+          lineItem = { price: usdPrice.payment_gateway_price_id, quantity: 1 };
+        } else if (usdPrice && usdPrice.amount) {
+          usdAmount = usdPrice.amount;
+        } else if (planPrice?.amount) {
+          // Convert Naira to USD (e.g. 5,000 NGN -> $5)
+          usdAmount = Math.max(1, Math.round(planPrice.amount / 1000));
+        }
+      }
+
+      if (!lineItem) {
+        lineItem = {
+          price_data: {
+            currency: "usd",
+            product_data: {
+              name: `${plan?.title || "QwiloPro"} Subscription`,
+              description: `${plan?.title || "Starter"} Plan (${isYearly ? "Annual" : "Monthly"})`,
+            },
+            unit_amount: Math.round(usdAmount * 100),
+            recurring: {
+              interval: isYearly ? "year" : "month",
+              ...(is_trial && trial_days > 0 ? { trial_period_days: Number(trial_days) } : {}),
+            },
+          },
+          quantity: 1,
+        };
+      }
+    }
+
     const session = await stripe.checkout.sessions.create({
       billing_address_collection: "auto",
       customer_email: user.username,
       metadata: {
-        tenant_id: user.tenant_id,
+        tenant_id: String(user.tenant_id),
         device_id: userDeviceId || "",
+        price_id: productId,
+        plan_id: plan?.id ? String(plan.id) : "1",
       },
-      line_items: [
-        {
-          price: productId,
-          // price: prices.data[0].id,
-          quantity: 1,
-        },
-      ],
+      line_items: [lineItem],
       mode: "subscription",
 
-      ...(is_trial && {
+      ...(is_trial && lineItem.price && {
         subscription_data: {
           trial_period_days: trial_days || 7,
         },
@@ -1163,6 +1211,35 @@ exports.paystackWebhook = async (req, res) => {
     const tenantId = await getTenantIdFromCustomerEmail(customerEmail);
 
     switch (eventType) {
+      case "charge.success": {
+        const isYearly = data?.metadata?.frequency === "yearly";
+        const startDate = new Date();
+        const endDate = new Date();
+        endDate.setDate(endDate.getDate() + (isYearly ? 365 : 30));
+
+        const startDateStr = toDateString(startDate);
+        const endDateStr = toDateString(endDate);
+
+        await updateTenantSubscriptionAccess(
+          customerEmail,
+          1,
+          subscriptionCode || data?.reference,
+          customerCode,
+          startDateStr,
+          endDateStr
+        );
+
+        if (tenantId) {
+          await updateSubscriptionHistory(
+            tenantId,
+            startDateStr,
+            endDateStr,
+            "created"
+          );
+        }
+        break;
+      }
+
       case "subscription.create": {
         const startRaw =
           data?.start ||

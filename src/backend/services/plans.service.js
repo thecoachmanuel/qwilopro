@@ -815,7 +815,7 @@ exports.createPaystackPaymentLink = async ({ priceId, email, tenantId, deviceId 
 
     const plan = await Plan.findOne({
       id: price.plan_id,
-      payment_gateway: "paystack",
+      is_deleted: false,
     }).lean();
 
     if (!plan) {
@@ -835,24 +835,150 @@ exports.createPaystackPaymentLink = async ({ priceId, email, tenantId, deviceId 
 
     const payload = {
       email,
-      amount: price.amount * 100,
-      currency: price.currency,
-      plan: price.payment_gateway_price_id,
+      amount: Math.round(price.amount * 100),
+      currency: price.currency || "NGN",
       callback_url: `${CONFIG.FRONTEND_DOMAIN}/success`,
       metadata: {
         tenant_id: tenantId,
         device_id: deviceId || "",
         price_id: priceId,
+        plan_id: plan.id,
+        frequency: price.frequency || "monthly",
         product_id: plan.payment_gateway_product_id || null,
         success_url: `${CONFIG.FRONTEND_DOMAIN}/success`,
         cancel_url: `${CONFIG.FRONTEND_DOMAIN}/cancelled-payment`,
       },
     };
 
-    const paymentLink = await paystack.transaction.initialize(payload);
+    let paymentLink;
+    try {
+      // First attempt with plan code if it is a real Paystack plan
+      if (price.payment_gateway_price_id && price.payment_gateway_price_id.startsWith("PLN_") && !price.payment_gateway_price_id.includes("_ngn")) {
+        paymentLink = await paystack.transaction.initialize({
+          ...payload,
+          plan: price.payment_gateway_price_id,
+        });
+      } else {
+        paymentLink = await paystack.transaction.initialize(payload);
+      }
+    } catch (err) {
+      // If plan code failed or doesn't exist on Paystack, fallback to direct amount charge
+      console.warn("Paystack initialize with plan failed, retrying direct amount:", err.message);
+      paymentLink = await paystack.transaction.initialize(payload);
+    }
+
     return paymentLink.data;
   } catch (error) {
     console.error("Create Paystack Payment Link Error:", error);
+    throw error;
+  }
+};
+
+exports.verifyPaystackPaymentDB = async (reference, tenantId) => {
+  try {
+    if (!reference) {
+      throw new Error("TRANSACTION_REFERENCE_REQUIRED");
+    }
+
+    let key = await getGatewayDB("paystack");
+    if (!key?.credentials) {
+      key = await activatePaymentGatewayDB();
+    }
+    const creds = key?.credentials ? decryptCredentials(key.credentials) : null;
+    const secretKey = creds?.secret_key || process.env.PAYSTACK_SECRET_KEY;
+    if (!secretKey) {
+      throw new Error("Paystack secret key is not configured.");
+    }
+    const paystack = new Paystack(secretKey);
+    const verification = await paystack.transaction.verify(reference);
+
+    if (!verification?.status || verification.data?.status !== "success") {
+      throw new Error(verification?.message || "Payment verification failed");
+    }
+
+    const data = verification.data;
+    const meta = data.metadata || {};
+    const effectiveTenantId = Number(meta.tenant_id || tenantId);
+
+    if (!effectiveTenantId) {
+      throw new Error("Tenant ID not found in transaction metadata");
+    }
+
+    const priceId = meta.price_id;
+    let price = null;
+    let plan = null;
+
+    if (priceId) {
+      price = await PlanPrice.findOne({ payment_gateway_price_id: priceId }).lean();
+      if (price) {
+        plan = await Plan.findOne({ id: price.plan_id }).lean();
+      }
+    }
+
+    if (!plan && meta.plan_id) {
+      plan = await Plan.findOne({ id: meta.plan_id }).lean();
+    }
+
+    if (!plan) {
+      plan = await Plan.findOne({ is_deleted: false, id: 1 }).lean();
+    }
+
+    const isYearly = price?.frequency === "yearly" || meta.frequency === "yearly";
+    const durationDays = isYearly ? 365 : 30;
+
+    const startDate = new Date();
+    const endDate = new Date();
+    endDate.setDate(endDate.getDate() + durationDays);
+
+    const startDateStr = startDate.toISOString().split("T")[0];
+    const endDateStr = endDate.toISOString().split("T")[0];
+
+    const planFeatures = plan?.features || JSON.stringify([
+      "DASHBOARD", "POS", "ORDERS", "KITCHEN", "INVOICES", "SETTINGS", "REPORTS", "USER", "QRMENU"
+    ]);
+
+    // Update Tenant
+    await Tenant.updateOne(
+      { id: effectiveTenantId },
+      {
+        $set: {
+          is_active: 1,
+          subscription_is_active: 1,
+          subscription_start: startDateStr,
+          subscription_end: endDateStr,
+          plan_id: plan?.id || 1,
+          plan_title: plan?.title || "Starter",
+          payment_gateway_product_id: plan?.payment_gateway_product_id || null,
+          payment_gateway: "paystack",
+          hasTrial: 1,
+        },
+      }
+    );
+
+    // Record subscription history
+    await SubscriptionHistory.create({
+      tenant_id: effectiveTenantId,
+      subscription_start: startDateStr,
+      subscription_end: endDateStr,
+      status: "active",
+      plan_title: plan?.title || "Starter",
+      payment_gateway: "paystack",
+      reference: reference,
+      amount: (data.amount || 0) / 100,
+    });
+
+    const updatedTenant = await Tenant.findOne({ id: effectiveTenantId }).lean();
+
+    return {
+      success: true,
+      message: "Subscription verified and activated successfully!",
+      tenant: updatedTenant,
+      planTitle: plan?.title || "Starter",
+      features: planFeatures,
+      subscriptionEnd: endDateStr,
+    };
+  } catch (error) {
+    console.error("verifyPaystackPaymentDB Error:", error);
     throw error;
   }
 };

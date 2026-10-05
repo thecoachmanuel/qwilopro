@@ -68,6 +68,7 @@ const storeDetailsSchema = new mongoose.Schema({
   store_image: { type: String, default: null },
   is_qr_menu_enabled: { type: Number, default: 0 },
   unique_qr_code: { type: String, default: null, index: true },
+  slug: { type: String, default: null, index: true },
   is_qr_order_enabled: { type: Number, default: 0 },
   is_feedback_enabled: { type: Number, default: 0 },
   unique_id: { type: String, default: null },

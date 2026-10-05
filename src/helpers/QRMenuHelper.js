@@ -1,9 +1,11 @@
 import { FRONTEND_DOMAIN } from "../config/config";
 
-export const getQRMenuLink = (code) => {
-    return `${FRONTEND_DOMAIN}/m/${code}`;
+export const getQRMenuLink = (code, slug) => {
+    const identifier = slug || code;
+    return `${FRONTEND_DOMAIN}/${identifier}`;
 }
 
-export const getTableQRMenuLink = (code, tableId) => {
-    return `${FRONTEND_DOMAIN}/m/${code}?table=${tableId}`;
+export const getTableQRMenuLink = (code, tableId, slug) => {
+    const identifier = slug || code;
+    return `${FRONTEND_DOMAIN}/${identifier}?table=${tableId}`;
 }

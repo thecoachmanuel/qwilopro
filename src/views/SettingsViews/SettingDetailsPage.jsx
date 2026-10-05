@@ -45,7 +45,7 @@ export default function SettingDetailsPage() {
     ? rawFeatures.map(f => String(f).toUpperCase())
     : (typeof rawFeatures === 'string' ? rawFeatures.split(",").map(f => f.trim().toUpperCase()) : []);
 
-  const isQrMenuAccess = userPlanFeatures.includes(PLAN_FEATURES?.QRMENU || 'QRMENU');
+  const isQrMenuAccess = user?.role === "admin" || userPlanFeatures.includes(PLAN_FEATURES?.QRMENU || 'QRMENU');
 
   const { APIURL, data, error, isLoading } = useStoreSettings();
 
@@ -69,12 +69,14 @@ export default function SettingDetailsPage() {
     currency,
     isQRMenuEnabled,
     uniqueQRCode,
+    slug,
     isQROrderEnabled,
     isFeedbackEnabled,
     uniqueId,
   } = data || {};
 
-  const QR_MENU_LINK = getQRMenuLink(uniqueQRCode);
+  const storeSlug = slug || (storeName ? storeName.toLowerCase().trim().replace(/\s+/g, '-').replace(/[^\w\-]+/g, '') : null);
+  const QR_MENU_LINK = getQRMenuLink(uniqueQRCode, storeSlug);
 
   const btnSave = async () => {
     const storeName = storeNameRef.current.value;

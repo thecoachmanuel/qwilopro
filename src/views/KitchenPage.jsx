@@ -92,19 +92,19 @@ export default function KitchenPage() {
       if (res.status == 200) {
         const orders = res?.data || [];
 
-        setState({
-          ...state,
+        setState((prev) => ({
+          ...prev,
           kitchenOrders: [...offlineOrders, ...orders],
           isLoading: false,
-        });
+        }));
       }
     } catch (error) {
       console.warn("Online kitchen orders fetch failed, showing offline orders:", error);
-      setState({
-        ...state,
+      setState((prev) => ({
+        ...prev,
         kitchenOrders: offlineOrders,
         isLoading: false,
-      });
+      }));
     }
   };
 

@@ -19,7 +19,7 @@ const CartPage = () => {
   const [showPhoneFields, setShowPhoneFields] = useState(false);
   const [selectedCustomerType, setSelectedCustomerType] = useState(null);
   const params = useParams();
-  const qrcode = params.qrcode;
+  const qrcode = params.slug || params.qrcode;
   const navigate = useNavigate();
 
   const location = useLocation();

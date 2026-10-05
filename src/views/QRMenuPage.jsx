@@ -24,7 +24,7 @@ export default function QRMenuPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const params = useParams();
-  const qrcode = params.qrcode;
+  const qrcode = params.slug || params.qrcode;
   const {theme} = useTheme();
 
   const [searchParams] = useSearchParams();
@@ -130,7 +130,7 @@ export default function QRMenuPage() {
     );
   }
 
-  const QR_MENU_LINK = getQRMenuLink(qrcode);
+  const QR_MENU_LINK = getQRMenuLink(qrcode, storeSettings?.slug);
 
   const btnShare = async () => {
     const shareData = {
@@ -554,7 +554,8 @@ export default function QRMenuPage() {
           >
             <button
               onClick={() => {
-                navigate(`/m/${qrcode}/cart`, {
+                const targetPath = window.location.pathname.startsWith('/m/') ? `/m/${qrcode}/cart` : `/${qrcode}/cart`;
+                navigate(targetPath, {
                   state: { storeTable: state.storeTable, currency: currency, serviceCharge: serviceCharge },
                 });
               }}

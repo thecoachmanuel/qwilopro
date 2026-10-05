@@ -32,20 +32,22 @@ const seedPlans = async () => {
         "DASHBOARD",
         "POS",
         "ORDERS",
+        "KITCHEN",
         "INVOICES",
         "SETTINGS",
         "REPORTS",
-        "USER"
+        "USER",
+        "QRMENU"
       ]),
       discount: 0,
-      yearly_discount: 15,
+      yearly_discount: 17,
       prices: [
         {
           country: "Nigeria",
           currency: "NGN",
           symbol: "₦",
           frequency: "monthly",
-          amount: 15000,
+          amount: 5000,
           is_default: true,
           is_active: true,
           payment_gateway_price_id: "PLN_starter_m_ngn"
@@ -55,7 +57,7 @@ const seedPlans = async () => {
           currency: "NGN",
           symbol: "₦",
           frequency: "yearly",
-          amount: 153000,
+          amount: 50000,
           is_default: true,
           is_active: true,
           payment_gateway_price_id: "PLN_starter_y_ngn"
@@ -65,7 +67,7 @@ const seedPlans = async () => {
           currency: "USD",
           symbol: "$",
           frequency: "monthly",
-          amount: 15,
+          amount: 5,
           is_default: false,
           is_active: true,
           payment_gateway_price_id: "price_starter_m_usd"
@@ -75,7 +77,7 @@ const seedPlans = async () => {
           currency: "USD",
           symbol: "$",
           frequency: "yearly",
-          amount: 153,
+          amount: 50,
           is_default: false,
           is_active: true,
           payment_gateway_price_id: "price_starter_y_usd"
@@ -125,7 +127,7 @@ const seedPlans = async () => {
           currency: "NGN",
           symbol: "₦",
           frequency: "monthly",
-          amount: 35000,
+          amount: 12000,
           is_default: true,
           is_active: true,
           payment_gateway_price_id: "PLN_pro_m_ngn"
@@ -135,7 +137,7 @@ const seedPlans = async () => {
           currency: "NGN",
           symbol: "₦",
           frequency: "yearly",
-          amount: 336000,
+          amount: 115000,
           is_default: true,
           is_active: true,
           payment_gateway_price_id: "PLN_pro_y_ngn"
@@ -145,7 +147,7 @@ const seedPlans = async () => {
           currency: "USD",
           symbol: "$",
           frequency: "monthly",
-          amount: 35,
+          amount: 12,
           is_default: false,
           is_active: true,
           payment_gateway_price_id: "price_pro_m_usd"
@@ -155,7 +157,7 @@ const seedPlans = async () => {
           currency: "USD",
           symbol: "$",
           frequency: "yearly",
-          amount: 336,
+          amount: 115,
           is_default: false,
           is_active: true,
           payment_gateway_price_id: "price_pro_y_usd"
@@ -202,7 +204,7 @@ const seedPlans = async () => {
           currency: "NGN",
           symbol: "₦",
           frequency: "monthly",
-          amount: 75000,
+          amount: 25000,
           is_default: true,
           is_active: true,
           payment_gateway_price_id: "PLN_ent_m_ngn"
@@ -212,7 +214,7 @@ const seedPlans = async () => {
           currency: "NGN",
           symbol: "₦",
           frequency: "yearly",
-          amount: 675000,
+          amount: 225000,
           is_default: true,
           is_active: true,
           payment_gateway_price_id: "PLN_ent_y_ngn"
@@ -222,7 +224,7 @@ const seedPlans = async () => {
           currency: "USD",
           symbol: "$",
           frequency: "monthly",
-          amount: 75,
+          amount: 25,
           is_default: false,
           is_active: true,
           payment_gateway_price_id: "price_ent_m_usd"
@@ -232,7 +234,7 @@ const seedPlans = async () => {
           currency: "USD",
           symbol: "$",
           frequency: "yearly",
-          amount: 675,
+          amount: 225,
           is_default: false,
           is_active: true,
           payment_gateway_price_id: "price_ent_y_usd"

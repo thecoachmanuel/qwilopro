@@ -325,6 +325,13 @@ export default function App() {
           </Route>
           {/* admin / superadmin routes */}
 
+          {/* storefront slug routes (e.g. /the-restaurant-slug) */}
+          <Route path="/order-success" element={<OrderSuccessPage />} />
+          <Route path="/order-failed" element={<OrderFailedPage />} />
+          <Route path="/:slug" element={<QRMenuPage />} />
+          <Route path="/:slug/cart" element={<CartPage />} />
+          <Route path="/:slug/feedback" element={<FeedbackCollectPage />} />
+          <Route path="/:slug/feedback/success" element={<FeedbackCollectSuccessPage />} />
 
         </Routes>
         {/* <Toaster  /> */}

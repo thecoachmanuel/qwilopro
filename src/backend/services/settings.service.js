@@ -43,7 +43,26 @@ const decryptTableId = (encryptedId) => {
 
 exports.getTenantIdFromQRCode = async (qrcode) => {
   try {
-    const store = await StoreDetails.findOne({ unique_qr_code: qrcode }).select("tenant_id").lean();
+    if (!qrcode) return null;
+    const cleanCode = String(qrcode).trim().toLowerCase();
+    let store = await StoreDetails.findOne({
+      $or: [
+        { unique_qr_code: qrcode },
+        { slug: cleanCode },
+        { slug: qrcode },
+      ],
+    }).select("tenant_id slug unique_qr_code").lean();
+
+    if (!store) {
+      const slugified = cleanCode.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+      store = await StoreDetails.findOne({
+        $or: [
+          { slug: slugified },
+          { store_name: new RegExp(`^${qrcode}$`, "i") },
+        ],
+      }).select("tenant_id slug unique_qr_code").lean();
+    }
+
     return store?.tenant_id || null;
   } catch (error) {
     console.error("getTenantIdFromQRCode Error:", error);
@@ -80,24 +99,27 @@ exports.setStoreSettingDB = async (
   isQROrderEnabled,
   uniqueQRCode,
   isFeedbackEnabled,
-  tenantId
+  tenantId,
+  slug = null
 ) => {
   try {
+    const updateDoc = {
+      store_name: storeName,
+      address,
+      phone,
+      email,
+      currency,
+      is_qr_menu_enabled: isQRMenuEnabled ? 1 : 0,
+      is_qr_order_enabled: isQROrderEnabled ? 1 : 0,
+      unique_qr_code: uniqueQRCode,
+      is_feedback_enabled: isFeedbackEnabled ? 1 : 0,
+    };
+    if (slug) {
+      updateDoc.slug = slug;
+    }
     await StoreDetails.findOneAndUpdate(
       { tenant_id: tenantId },
-      {
-        $set: {
-          store_name: storeName,
-          address,
-          phone,
-          email,
-          currency,
-          is_qr_menu_enabled: isQRMenuEnabled ? 1 : 0,
-          is_qr_order_enabled: isQROrderEnabled ? 1 : 0,
-          unique_qr_code: uniqueQRCode,
-          is_feedback_enabled: isFeedbackEnabled ? 1 : 0,
-        },
-      },
+      { $set: updateDoc },
       { upsert: true, new: true }
     );
   } catch (error) {
