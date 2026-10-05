@@ -72,6 +72,12 @@ export default function QRMenuPage() {
           cartItems: [...storedCart],
           currency: currency?.symbol || "",
         });
+
+        // Normalize legacy /m/... route to clean storefront slug URL seamlessly
+        if (typeof window !== "undefined" && window.location.pathname.startsWith("/m/")) {
+          const targetSlug = data?.storeSettings?.slug || qrcode;
+          navigate(`/${targetSlug}${window.location.search}`, { replace: true });
+        }
       }
     } catch (error) {
       console.log(error);
@@ -556,9 +562,15 @@ export default function QRMenuPage() {
           >
             <button
               onClick={() => {
-                const targetPath = window.location.pathname.startsWith('/m/') ? `/m/${qrcode}/cart` : `/${qrcode}/cart`;
+                const targetSlug = storeSettings?.slug || qrcode;
+                const targetPath = `/${targetSlug}/cart`;
                 navigate(targetPath, {
-                  state: { storeTable: state.storeTable, currency: currency, serviceCharge: serviceCharge },
+                  state: {
+                    storeTable: state.storeTable,
+                    currency: currency,
+                    serviceCharge: serviceCharge,
+                    storeSettings: storeSettings,
+                  },
                 });
               }}
               className="bg-restro-green text-white py-4 px-6 flex justify-between items-center rounded-xl w-full"

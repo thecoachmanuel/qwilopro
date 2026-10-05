@@ -512,7 +512,7 @@ export default function OrdersPage() {
 
 
         // Feedback
-        const link = getQRMenuLink(storeSettings?.unique_qr_code) + `/feedback?_ref=${invoiceId}${customerId?`&_cref=${customerId}`:''}`
+        const link = getQRMenuLink(storeSettings?.unique_qr_code, storeSettings?.slug) + `/feedback?_ref=${invoiceId}${customerId?`&_cref=${customerId}`:''}`;
 
         const qrDataURL = await QRCode.toDataURL(link, {width: 1080});
 
@@ -631,7 +631,7 @@ export default function OrdersPage() {
           return;
         }
 
-        const link = getQRMenuLink(storeSettings?.unique_qr_code) + `/feedback?_ref=${invoiceId}${customerId?`&_cref=${customerId}`:''}`
+        const link = getQRMenuLink(storeSettings?.unique_qr_code, storeSettings?.slug) + `/feedback?_ref=${invoiceId}${customerId?`&_cref=${customerId}`:''}`;
 
         const qrDataURL = await QRCode.toDataURL(link, {width: 1080});
 
@@ -656,7 +656,7 @@ export default function OrdersPage() {
 
   const btnOpenFeedbackLink = () => {
     const a = document.createElement("a");
-    a.href = getQRMenuLink(storeSettings?.unique_qr_code) + `/feedback?_ref=${state.feedbackInvoiceId}${state.feedbackCustomerId?`&_cref=${state.feedbackCustomerId}`:''}`;
+    a.href = getQRMenuLink(storeSettings?.unique_qr_code, storeSettings?.slug) + `/feedback?_ref=${state.feedbackInvoiceId}${state.feedbackCustomerId?`&_cref=${state.feedbackCustomerId}`:''}`;
     a.target = '_blank';
     a.click();
     a.remove();

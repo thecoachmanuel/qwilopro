@@ -7,6 +7,8 @@ import {
   IconTrash,
   IconArmchair2,
   IconQrcode,
+  IconCopy,
+  IconExternalLink,
 } from "@tabler/icons-react";
 import { iconStroke } from "../../config/config";
 import { addNewStoreTable, deleteTable, updateStoreTable, useStoreSettings, useStoreTables } from "../../controllers/settings.controller";
@@ -250,9 +252,45 @@ export default function TableSettingsPage() {
                 </div>
               </div>
 
-              <button onClick={()=>{
-                btnDownloadTableMenuQR(encrypted_id, table_title);
-              }} className='btn btn-xs transition active:scale-95 hover:shadow-lg rounded-lg border border-restro-border-green bg-restro-bg-gray hover:bg-restro-button-hover'><IconQrcode size={18} stroke={iconStroke} /> {t('table_settings.download_table_qr')}</button>
+              <div className="flex items-center gap-2 pt-1 border-t border-restro-border-green/40">
+                <button
+                  type="button"
+                  onClick={() => {
+                    btnDownloadTableMenuQR(encrypted_id, table_title);
+                  }}
+                  className='btn btn-xs flex-1 transition active:scale-95 hover:shadow-lg rounded-lg border border-restro-border-green bg-restro-bg-gray hover:bg-restro-button-hover flex items-center justify-center gap-1.5'
+                  title={t('table_settings.download_table_qr')}
+                >
+                  <IconQrcode size={16} stroke={iconStroke} />
+                  <span>{t('table_settings.download_table_qr')}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const activeIdentifier = storeSlug || uniqueQRCode;
+                    const link = getTableQRMenuLink(uniqueQRCode, encrypted_id, activeIdentifier);
+                    try {
+                      await navigator.clipboard.writeText(link);
+                      toast.success(`Table "${table_title}" link copied!`);
+                    } catch (e) {
+                      toast.error("Failed to copy link");
+                    }
+                  }}
+                  className='btn btn-xs px-2.5 transition active:scale-95 rounded-lg border border-restro-border-green bg-restro-bg-gray hover:bg-restro-button-hover text-restro-green'
+                  title="Copy Table QR Link"
+                >
+                  <IconCopy size={15} stroke={iconStroke} />
+                </button>
+                <a
+                  href={getTableQRMenuLink(uniqueQRCode, encrypted_id, storeSlug || uniqueQRCode)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className='btn btn-xs px-2.5 transition active:scale-95 rounded-lg border border-restro-border-green bg-restro-bg-gray hover:bg-restro-button-hover'
+                  title="Open Table Digital Menu"
+                >
+                  <IconExternalLink size={15} stroke={iconStroke} />
+                </a>
+              </div>
             </div>
           );
         })}

@@ -58,6 +58,11 @@ const CartPage = () => {
     } else if (isDeliveryEnabled) {
       setDeliveryType('pickup');
     }
+
+    if (typeof window !== "undefined" && window.location.pathname.startsWith("/m/")) {
+      const targetSlug = storeSettings?.slug || qrcode;
+      navigate(`/${targetSlug}/cart${window.location.search}`, { replace: true, state: location.state });
+    }
   }, []);
 
   const { cartItems, itemsTotal, taxTotal, serviceChargeTotal, deliveryFeeTotal, payableTotal } = state;
@@ -209,11 +214,11 @@ const CartPage = () => {
         sendNewOrderEvent();
 
         // Navigate to success page with invoice ref if available
-        navigate('/m/order-success', {
+        navigate('/order-success', {
           state: {
             orderId: data.orderId,
             invoiceId: data.invoiceId,
-            qrcode,
+            qrcode: storeSettings?.slug || qrcode,
             hasFeedback: storeSettings?.is_feedback_enabled == 1,
             deliveryType,
             deliveryFee: appliedDeliveryFee,
@@ -229,7 +234,7 @@ const CartPage = () => {
       console.error(error);
       toast.dismiss();
       toast.error(message);
-      navigate('/m/order-failed');
+      navigate('/order-failed');
     }
   };
 

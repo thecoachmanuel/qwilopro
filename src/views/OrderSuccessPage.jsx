@@ -34,10 +34,10 @@ export default function OrderSuccessPage() {
   } = location.state || {};
 
   const feedbackUrl = qrcode
-    ? `/m/${qrcode}/feedback${invoiceId ? `?_ref=${invoiceId}` : ''}`
+    ? `/${qrcode}/feedback${invoiceId ? `?_ref=${invoiceId}` : ''}`
     : null;
 
-  const menuUrl = qrcode ? `/m/${qrcode}` : "/";
+  const menuUrl = qrcode ? `/${qrcode}` : "/";
 
   return (
     <div className="w-full min-h-screen flex items-center justify-center bg-gray-50 dark:bg-black px-4 py-8">
