@@ -45,8 +45,12 @@ exports.getTenantIdFromQRCode = async (qrcode) => {
   try {
     if (!qrcode) return null;
     const cleanCode = String(qrcode).trim().toLowerCase();
+    const isNum = !isNaN(cleanCode) && cleanCode !== "";
+    const numericId = isNum ? parseInt(cleanCode, 10) : -999999;
+
     let store = await StoreDetails.findOne({
       $or: [
+        ...(isNum ? [{ tenant_id: numericId }] : []),
         { unique_qr_code: qrcode },
         { slug: cleanCode },
         { slug: qrcode },

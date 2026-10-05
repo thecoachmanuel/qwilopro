@@ -283,7 +283,7 @@ export default function QRMenuPage() {
     <div className="w-full">
       <div className="container mx-auto">
         {/* appbar */}
-        <div className="px-4 py-4 w-full max-w-5xl mx-auto flex gap-2 sticky z-50 top-0 shadow-sm rounded-b-3xl">
+        <div className="px-4 py-4 w-full max-w-5xl mx-auto flex gap-2 sticky z-50 top-0 bg-white dark:bg-[#121212] border-b border-gray-100 dark:border-neutral-800 shadow-sm">
           <input
             type="search"
             name="search"
@@ -360,7 +360,7 @@ export default function QRMenuPage() {
         {/* store details: name, phone, address, email, share menu link */}
 
         {/* categories */}
-        <div className="p-2 w-full max-w-5xl overflow-x-auto mx-auto mt-4 flex gap-2 sticky top-20 z-40 bg-white/80 dark:bg-black backdrop-blur">
+        <div className="p-2 w-full max-w-5xl overflow-x-auto mx-auto flex gap-2 sticky top-[65px] z-40 bg-white dark:bg-[#121212] border-b border-gray-100 dark:border-neutral-800 shadow-sm">
           <label>
             <input
               onChange={(e) => {
@@ -418,13 +418,12 @@ export default function QRMenuPage() {
           .filter((menuItem) => menuItem.is_enabled)
             .filter((item) => {
               const { category_id } = item;
-              if (currentCategory == "all") {
-                return !category_id || categories.find(category => category.id === category_id && category.is_enabled);
+              if (currentCategory === "all") {
+                // Show item if it has no category, or its category is enabled
+                if (!category_id && category_id !== 0) return true;
+                return categories.some(cat => String(cat.id) === String(category_id) && cat.is_enabled);
               }
-              if (currentCategory == category_id) {
-                return true;
-              }
-              return false;
+              return String(category_id) === String(currentCategory);
             })
             .filter((menuItem) => {
               if (!searchQuery) {

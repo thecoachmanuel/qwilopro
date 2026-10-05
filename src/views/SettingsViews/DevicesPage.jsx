@@ -7,6 +7,7 @@ import { mutate } from 'swr';
 import toast from 'react-hot-toast';
 import { useTranslation } from "react-i18next";
 import { useTheme } from '../../contexts/ThemeContext';
+import { getUserDetailsInLocalStorage } from '../../helpers/UserDetails';
 
 export default function DevicesPage() {
   const { t } = useTranslation();
@@ -74,7 +75,11 @@ export default function DevicesPage() {
             </div>
             <div className="mt-4 pt-3 border-t border-gray-100 dark:border-restro-gray flex justify-end">
               <button
-                onClick={() => window.open('/display/token', '_blank')}
+                onClick={() => {
+                  const user = getUserDetailsInLocalStorage();
+                  const tid = user?.tenant_id;
+                  window.open(tid ? `/display/token?tenant_id=${tid}` : '/display/token', '_blank');
+                }}
                 className="btn btn-sm bg-restro-green hover:bg-restro-green-dark text-white rounded-xl flex items-center gap-1.5 transition active:scale-95"
               >
                 Launch Display <IconExternalLink size={16} stroke={iconStroke} />
@@ -96,7 +101,11 @@ export default function DevicesPage() {
             </div>
             <div className="mt-4 pt-3 border-t border-gray-100 dark:border-restro-gray flex justify-end">
               <button
-                onClick={() => window.open('/display/customer', '_blank')}
+                onClick={() => {
+                  const user = getUserDetailsInLocalStorage();
+                  const tid = user?.tenant_id;
+                  window.open(tid ? `/display/customer?tenant_id=${tid}` : '/display/customer', '_blank');
+                }}
                 className="btn btn-sm bg-restro-green hover:bg-restro-green-dark text-white rounded-xl flex items-center gap-1.5 transition active:scale-95"
               >
                 Launch Display <IconExternalLink size={16} stroke={iconStroke} />

@@ -192,7 +192,7 @@ export default function POSPage() {
     } catch (e) {
       console.warn("Failed to persist cart:", e);
     }
-  }, [state.cartItems, state.itemsTotal, state.payableTotal, user?.tenant_id]);
+  }, [state.cartItems, state.itemsTotal, state.payableTotal, state.customer, state.customerType, state.currency, user?.tenant_id]);
 
   const { categories, menuItems, paymentTypes, printSettings, storeSettings, storeTables, currency, cartItems, searchQuery, selectedCategory, selectedItemId, drafts, customer, customerType, isLoading } = state;
 
@@ -1381,7 +1381,10 @@ export default function POSPage() {
 
           {/* Token Display Screen */}
           <button
-            onClick={() => window.open('/display/token', '_blank')}
+            onClick={() => {
+              const tid = user?.tenant_id;
+              window.open(tid ? `/display/token?tenant_id=${tid}` : '/display/token', '_blank');
+            }}
             title="Launch Token Announcer Screen"
             className="relative text-sm rounded-lg border transition active:scale-95 hover:shadow-lg text-gray-500 px-2 py-1 flex items-center gap-1 text-restro-text bg-restro-gray border-restro-border-green hover:bg-restro-button-hover"
           >
@@ -1391,7 +1394,10 @@ export default function POSPage() {
 
           {/* Customer Facing Display Screen */}
           <button
-            onClick={() => window.open('/display/customer', '_blank')}
+            onClick={() => {
+              const tid = user?.tenant_id;
+              window.open(tid ? `/display/customer?tenant_id=${tid}` : '/display/customer', '_blank');
+            }}
             title="Launch Customer Display Screen"
             className="relative text-sm rounded-lg border transition active:scale-95 hover:shadow-lg text-gray-500 px-2 py-1 flex items-center gap-1 text-restro-text bg-restro-gray border-restro-border-green hover:bg-restro-button-hover"
           >
