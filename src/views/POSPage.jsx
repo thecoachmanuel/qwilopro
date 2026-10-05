@@ -1,7 +1,7 @@
 import React, { useContext, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next';
 import Page from "../components/Page";
-import { IconPlus, IconNotes, IconArmchair, IconScreenShare, IconSearch, IconDeviceFloppy, IconChefHat, IconCash, IconMinus, IconNote, IconTrash, IconFilter, IconPhoto, IconFilterFilled, IconClipboardList, IconX, IconClearAll, IconPencil, IconCheck, IconCarrot, IconRotate, IconQrcode, IconArmchair2, IconUser, IconCategory, IconGridDots, IconLayoutGrid, IconListDetails, IconListTree, IconMenu4, IconLayoutGridFilled, IconMenu2, IconLayoutList, IconLayout2, IconLayout2Filled, IconAlertTriangleFilled, IconWifiOff } from "@tabler/icons-react";
+import { IconPlus, IconNotes, IconArmchair, IconScreenShare, IconSearch, IconDeviceFloppy, IconChefHat, IconCash, IconMinus, IconNote, IconTrash, IconFilter, IconPhoto, IconFilterFilled, IconClipboardList, IconX, IconClearAll, IconPencil, IconCheck, IconCarrot, IconRotate, IconQrcode, IconArmchair2, IconUser, IconCategory, IconGridDots, IconLayoutGrid, IconListDetails, IconListTree, IconMenu4, IconLayoutGridFilled, IconMenu2, IconLayoutList, IconLayout2, IconLayout2Filled, IconAlertTriangleFilled, IconWifiOff, IconVolume, IconVolumeOff, IconDevices, IconDeviceTv, IconTruckDelivery } from "@tabler/icons-react";
 import { VITE_BACKEND_SOCKET_IO, iconStroke } from "../config/config";
 import { cancelAllQROrders, cancelQROrder, createOrder, createOrderAndInvoice, getDrafts, getQROrders, getQROrdersCount, initPOS, setDrafts } from "../controllers/pos.controller";
 import { CURRENCIES } from '../config/currencies.config';
@@ -91,7 +91,23 @@ export default function POSPage() {
     selectedQrOrderItem: null,
 
     selectedPaymentType: null,
+    deliveryType: "dinein",
+    deliveryAddress: "",
+    deliveryFeeTotal: 0,
   });
+
+  const [isSoundMuted, setIsSoundMuted] = useState(() => {
+    return typeof localStorage !== 'undefined' && localStorage.getItem('pos_sound_muted') === 'true';
+  });
+
+  const toggleSound = () => {
+    const nextVal = !isSoundMuted;
+    setIsSoundMuted(nextVal);
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('pos_sound_muted', nextVal ? 'true' : 'false');
+    }
+    toast.success(nextVal ? "POS Sound Muted" : "POS Sound Enabled");
+  };
 
   const [isOnline, setIsOnline] = useState(
     typeof navigator !== 'undefined' ? navigator.onLine : true
@@ -187,6 +203,7 @@ export default function POSPage() {
   }
 
   const playTapSound = () => {
+    if (isSoundMuted) return;
     try {
       const sound = new Audio("/tap.mp3");
       sound.play().catch(() => {});
@@ -572,13 +589,18 @@ export default function POSPage() {
   };
 
   const btnInitNewOrder = () => {
+    if (diningOptionRef.current) diningOptionRef.current.value = "dinein";
+    if (tableRef.current) tableRef.current.value = "";
     setState({
       ...state,
       cartItems: [],
       customer: null,
       customerType: "WALKIN",
       selectedQrOrderItem: null,
-    })
+      deliveryType: "dinein",
+      deliveryAddress: "",
+      deliveryFeeTotal: 0,
+    });
     playTapSound();
   }
 
@@ -800,6 +822,7 @@ export default function POSPage() {
     let taxTotal = 0;
     let serviceChargeTotal = 0;
     let payableTotal = 0;
+    let deliveryFeeTotal = 0;
 
     cartItems.forEach((item)=>{
       const taxId = item.tax_id;
@@ -836,8 +859,15 @@ export default function POSPage() {
       payableTotal += serviceCharge;
     }
 
+    // Calculate delivery fee
+    const currentDeliveryType = state.deliveryType || diningOptionRef.current?.value || "dinein";
+    if (currentDeliveryType === "delivery" && storeSettings?.delivery_fee) {
+      deliveryFeeTotal = Number(storeSettings.delivery_fee) || 0;
+      payableTotal += deliveryFeeTotal;
+    }
+
     return {
-      itemsTotal, taxTotal, serviceChargeTotal, payableTotal
+      itemsTotal, taxTotal, serviceChargeTotal, deliveryFeeTotal, payableTotal
     }
   };
   const btnShowPayAndSendToKitchenModal = () => {
@@ -848,13 +878,14 @@ export default function POSPage() {
       return;
     }
 
-    const { itemsTotal, taxTotal, serviceChargeTotal, payableTotal } = calculateOrderSummary();
+    const { itemsTotal, taxTotal, serviceChargeTotal, deliveryFeeTotal, payableTotal } = calculateOrderSummary();
 
     setState({
       ...state,
       itemsTotal,
       taxTotal,
       serviceChargeTotal,
+      deliveryFeeTotal,
       payableTotal
     });
     document.getElementById('modal-pay-and-send-kitchen-summary').showModal();
@@ -864,10 +895,12 @@ export default function POSPage() {
       return toast.error(t('orders.select_payment_method'));
     }
 
-    const deliveryType = diningOptionRef.current?.value || state.deliveryType || "dinein";
-    const tableId = tableRef.current?.value || null;
+    const deliveryType = state.deliveryType || diningOptionRef.current?.value || "dinein";
+    const tableId = (deliveryType === "delivery" || deliveryType === "takeaway") ? null : (tableRef.current?.value || null);
     const customerType = state.customerType;
     const customer = state.customer;
+    const deliveryFee = state.deliveryFeeTotal || 0;
+    const deliveryAddress = state.deliveryAddress || "";
 
     const page_format = printSettings?.page_format || null;
     const is_enable_print = printSettings?.is_enable_print || 0;
@@ -881,6 +914,8 @@ export default function POSPage() {
         type: "order_and_invoice",
         cart: cartItems,
         deliveryType,
+        deliveryFee,
+        deliveryAddress,
         customerType,
         customerId: customer,
         tableId,
@@ -900,7 +935,7 @@ export default function POSPage() {
       document.getElementById("modal-pay-and-send-kitchen-summary").close();
 
       setDetailsForReceiptPrint({
-        cartItems, deliveryType, customerType, customer, tableId, currency, storeSettings, printSettings,
+        cartItems, deliveryType, deliveryFee, deliveryAddress, customerType, customer, tableId, currency, storeSettings, printSettings,
         itemsTotal: state.itemsTotal,
         taxTotal: state.taxTotal,
         serviceChargeTotal: state.serviceChargeTotal,
@@ -939,7 +974,7 @@ export default function POSPage() {
 
     try {
       toast.loading(t('pos.please_wait'));
-      const res = await createOrderAndInvoice(cartItems, deliveryType, customerType, customer, tableId, state.itemsTotal, state.taxTotal, state.serviceChargeTotal , state.payableTotal, state.selectedQrOrderItem, state.selectedPaymentType);
+      const res = await createOrderAndInvoice(cartItems, deliveryType, customerType, customer, tableId, state.itemsTotal, state.taxTotal, state.serviceChargeTotal , state.payableTotal, state.selectedQrOrderItem, state.selectedPaymentType, deliveryFee, deliveryAddress);
       toast.dismiss();
       if(res.status == 200) {
         const data = res.data;
@@ -947,7 +982,7 @@ export default function POSPage() {
         document.getElementById("modal-pay-and-send-kitchen-summary").close();
 
         setDetailsForReceiptPrint({
-          cartItems, deliveryType, customerType, customer, tableId, currency, storeSettings, printSettings,
+          cartItems, deliveryType, deliveryFee, deliveryAddress, customerType, customer, tableId, currency, storeSettings, printSettings,
           itemsTotal: state.itemsTotal,
           taxTotal: state.taxTotal,
           serviceChargeTotal:state.serviceChargeTotal,
@@ -1072,23 +1107,26 @@ export default function POSPage() {
       return;
     }
 
-    const { itemsTotal, taxTotal, serviceChargeTotal, payableTotal } = calculateOrderSummary();
+    const { itemsTotal, taxTotal, serviceChargeTotal, deliveryFeeTotal, payableTotal } = calculateOrderSummary();
 
     setState({
       ...state,
       itemsTotal,
       taxTotal,
       serviceChargeTotal,
+      deliveryFeeTotal,
       payableTotal
     });
     document.getElementById('modal-send-kitchen-summary').showModal();
   }
 
   const btnSendToKitchen = async () => {
-    const deliveryType = diningOptionRef.current?.value || state.deliveryType || "dinein";
-    const tableId = tableRef.current?.value || null;
+    const deliveryType = state.deliveryType || diningOptionRef.current?.value || "dinein";
+    const tableId = (deliveryType === "delivery" || deliveryType === "takeaway") ? null : (tableRef.current?.value || null);
     const customerType = state.customerType;
     const customer = state.customer;
+    const deliveryFee = state.deliveryFeeTotal || 0;
+    const deliveryAddress = state.deliveryAddress || "";
 
     const page_format = printSettings?.page_format || null;
     const is_enable_print = printSettings?.is_enable_print || 0;
@@ -1099,6 +1137,8 @@ export default function POSPage() {
         type: "order_only",
         cart: cartItems,
         deliveryType,
+        deliveryFee,
+        deliveryAddress,
         customerType,
         customerId: customer,
         tableId,
@@ -1116,7 +1156,7 @@ export default function POSPage() {
       document.getElementById("modal-send-kitchen-summary").close();
 
       setDetailsForReceiptPrint({
-        cartItems, deliveryType, customerType, customer, tableId, currency, storeSettings, printSettings,
+        cartItems, deliveryType, deliveryFee, deliveryAddress, customerType, customer, tableId, currency, storeSettings, printSettings,
         itemsTotal: state.itemsTotal,
         taxTotal: state.taxTotal,
         serviceChargeTotal: state.serviceChargeTotal,
@@ -1153,7 +1193,7 @@ export default function POSPage() {
 
     try {
       toast.loading(t('pos.please_wait'));
-      const res = await createOrder(cartItems, deliveryType, customerType, customer, tableId, state.selectedQrOrderItem);
+      const res = await createOrder(cartItems, deliveryType, customerType, customer, tableId, state.selectedQrOrderItem, deliveryFee, deliveryAddress);
       toast.dismiss();
       if(res.status == 200) {
         const data = res.data;
@@ -1161,7 +1201,7 @@ export default function POSPage() {
         document.getElementById("modal-send-kitchen-summary").close();
 
         setDetailsForReceiptPrint({
-          cartItems, deliveryType, customerType, customer, tableId, currency, storeSettings, printSettings,
+          cartItems, deliveryType, deliveryFee, deliveryAddress, customerType, customer, tableId, currency, storeSettings, printSettings,
           itemsTotal: state.itemsTotal,
           taxTotal: state.taxTotal,
           serviceChargeTotal:state.serviceChargeTotal,
@@ -1339,6 +1379,41 @@ export default function POSPage() {
             <IconArmchair size={18} stroke={iconStroke} /> {t('pos.table_orders')}
           </Link>
 
+          {/* Token Display Screen */}
+          <button
+            onClick={() => window.open('/display/token', '_blank')}
+            title="Launch Token Announcer Screen"
+            className="relative text-sm rounded-lg border transition active:scale-95 hover:shadow-lg text-gray-500 px-2 py-1 flex items-center gap-1 text-restro-text bg-restro-gray border-restro-border-green hover:bg-restro-button-hover"
+          >
+            <IconDeviceTv size={18} stroke={iconStroke} />
+            <span className="hidden xl:inline">Token Display</span>
+          </button>
+
+          {/* Customer Facing Display Screen */}
+          <button
+            onClick={() => window.open('/display/customer', '_blank')}
+            title="Launch Customer Display Screen"
+            className="relative text-sm rounded-lg border transition active:scale-95 hover:shadow-lg text-gray-500 px-2 py-1 flex items-center gap-1 text-restro-text bg-restro-gray border-restro-border-green hover:bg-restro-button-hover"
+          >
+            <IconDevices size={18} stroke={iconStroke} />
+            <span className="hidden xl:inline">Customer Screen</span>
+          </button>
+
+          {/* Sound Toggle */}
+          <button
+            onClick={toggleSound}
+            title={isSoundMuted ? "Unmute POS Sound" : "Mute POS Sound"}
+            className={clsx(
+              "text-sm rounded-lg border transition active:scale-95 hover:shadow-lg px-2.5 py-1 flex items-center gap-1.5",
+              isSoundMuted
+                ? "text-red-500 bg-red-500/10 border-red-400/30 hover:bg-red-500/20 font-medium"
+                : "text-restro-text bg-restro-gray border-restro-border-green hover:bg-restro-button-hover"
+            )}
+          >
+            {isSoundMuted ? <IconVolumeOff size={18} stroke={iconStroke} /> : <IconVolume size={18} stroke={iconStroke} />}
+            <span className="hidden sm:inline">{isSoundMuted ? "Muted" : "Sound"}</span>
+          </button>
+
           {!isOnline && (
             <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-700 dark:text-amber-300 text-xs font-bold whitespace-nowrap">
               <IconWifiOff size={16} className="animate-pulse" />
@@ -1449,25 +1524,69 @@ export default function POSPage() {
             </div>
             {/* search customer */}
 
-            {/* delivery type */}
-            <select ref={diningOptionRef} className="mt-3 text-sm w-full border rounded-lg px-4 py-2 justify-center bg-restro-gray border-restro-border-green hover:bg-restro-button-hover focus:outline-restro-border-green">
-              <option value="">{t('pos.select_dining_option')}</option>
-              <option value="dinein">{t('pos.dinein')}</option>
-              <option value="delivery">{t('pos.delivery')}</option>
-              <option value="takeaway">{t('pos.takeaway')}</option>
-            </select>
-            {/* delivery type */}
+            {/* dining option */}
+            <div className="mt-3 flex flex-col gap-2">
+              <select
+                ref={diningOptionRef}
+                value={state.deliveryType || "dinein"}
+                onChange={(e) => {
+                  const newType = e.target.value;
+                  setState((prev) => ({
+                    ...prev,
+                    deliveryType: newType,
+                  }));
+                }}
+                className="text-sm w-full border rounded-lg px-4 py-2 justify-center bg-restro-gray border-restro-border-green hover:bg-restro-button-hover focus:outline-restro-border-green font-medium cursor-pointer"
+              >
+                <option value="dinein">🍽️ {t('pos.dinein') || 'Dine In'}</option>
+                <option value="delivery">🚚 {t('pos.delivery') || 'Delivery'}</option>
+                <option value="takeaway">🛍️ {t('pos.takeaway') || 'Takeaway'}</option>
+              </select>
 
-            {/* table selection */}
-            <select ref={tableRef} className="mt-3 text-sm w-full border rounded-lg px-4 py-2 justify-center bg-restro-gray border-restro-border-green hover:bg-restro-button-hover focus:outline-restro-border-green">
-              <option value="">{t('pos.select_table')}</option>
-              {
-                (storeTables || []).map((table, index)=>{
-                  return <option value={table.id} key={index}>{table.table_title} ({table.seating_capacity} {t('pos.person')}) - {table.floor}</option>
-                })
-              }
-            </select>
-            {/* table selection */}
+              {/* Conditional Table or Delivery info */}
+              {(state.deliveryType || "dinein") === "delivery" ? (
+                <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-2.5 flex flex-col gap-1.5 transition-all">
+                  <div className="flex items-center justify-between text-xs font-bold text-emerald-700 dark:text-emerald-300">
+                    <span className="flex items-center gap-1">
+                      🚚 Off-Premise Delivery
+                    </span>
+                    {Number(storeSettings?.delivery_fee || 0) > 0 && (
+                      <span className="bg-emerald-600 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">
+                        Fee: {currency}{Number(storeSettings?.delivery_fee).toFixed(2)}
+                      </span>
+                    )}
+                  </div>
+                  <input
+                    type="text"
+                    value={state.deliveryAddress || ""}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setState((prev) => ({ ...prev, deliveryAddress: val }));
+                    }}
+                    placeholder="Enter delivery address & instructions..."
+                    className="text-xs w-full px-3 py-2 border rounded-lg bg-white dark:bg-black border-restro-border-green focus:outline-restro-border-green placeholder:text-gray-400"
+                  />
+                </div>
+              ) : (state.deliveryType || "dinein") === "takeaway" ? (
+                <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-2.5 flex items-center justify-between text-xs font-semibold text-amber-700 dark:text-amber-300">
+                  <span>🛍️ Takeaway / Pickup Order</span>
+                  <span className="text-[10px] bg-amber-500/20 px-2 py-0.5 rounded-full">No table needed</span>
+                </div>
+              ) : (
+                <select
+                  ref={tableRef}
+                  className="text-sm w-full border rounded-lg px-4 py-2 justify-center bg-restro-gray border-restro-border-green hover:bg-restro-button-hover focus:outline-restro-border-green font-medium cursor-pointer"
+                >
+                  <option value="">{t('pos.select_table')}</option>
+                  {(storeTables || []).map((table, index) => (
+                    <option value={table.id} key={index}>
+                      {table.table_title} ({table.seating_capacity} {t('pos.person')}) - {table.floor}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+            {/* dining option & table selection */}
           </div>
 
 
@@ -1874,14 +1993,22 @@ export default function POSPage() {
               { label: t('pos.items_net_total'), value: state.itemsTotal },
               { label: t('pos.tax_total'), value: state.taxTotal, prefix: "+" },
               { label: t('pos.service_charge_total'), value: state.serviceChargeTotal, prefix: "+" },
+              ...(state.deliveryFeeTotal > 0 ? [{ label: "🚚 Delivery Fee", value: state.deliveryFeeTotal, prefix: "+" }] : []),
             ].map(({ label, value, prefix = "" }, index) => (
               <div key={index} className='flex items-center justify-between text-restro-text'>
                 <p>{label}</p>
-                <p className="text-lg">
+                <p className="text-lg font-medium">
                   {prefix}{currency}{value.toFixed(2)}
                 </p>
               </div>
             ))}
+
+            {state.deliveryAddress && (
+              <div className="text-xs px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-800 dark:text-emerald-200">
+                <span className="font-bold">📍 Destination: </span>
+                {state.deliveryAddress}
+              </div>
+            )}
 
             <div className="flex items-center justify-between border-t border-gray-300 dark:border-restro-bg-gray pt-2 mt-2">
               <p className="text-xl font-medium">{t('pos.payable_total')}</p>
@@ -1917,14 +2044,22 @@ export default function POSPage() {
               { label: t('pos.items_net_total'), value: state.itemsTotal },
               { label: t('pos.tax_total'), value: state.taxTotal, prefix: "+" },
               { label: t('pos.service_charge_total'), value: state.serviceChargeTotal, prefix: "+" },
+              ...(state.deliveryFeeTotal > 0 ? [{ label: "🚚 Delivery Fee", value: state.deliveryFeeTotal, prefix: "+" }] : []),
             ].map(({ label, value, prefix = "" }, index) => (
               <div key={index} className='flex items-center justify-between text-restro-text'>
                 <p>{label}</p>
-                <p className="text-lg">
+                <p className="text-lg font-medium">
                   {prefix}{currency}{value.toFixed(2)}
                 </p>
               </div>
             ))}
+
+            {state.deliveryAddress && (
+              <div className="text-xs px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-800 dark:text-emerald-200">
+                <span className="font-bold">📍 Destination: </span>
+                {state.deliveryAddress}
+              </div>
+            )}
 
             <div className="flex items-center justify-between border-t border-gray-300 dark:border-restro-bg-gray pt-2 mt-2">
               <p className="text-xl font-medium">{t('pos.payable_total')}</p>

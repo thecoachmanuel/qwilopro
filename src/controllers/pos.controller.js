@@ -11,10 +11,10 @@ export async function initPOS() {
     }
 }
 
-export async function createOrder(cart, deliveryType, customerType, customerId, tableId, selectedQrOrderItem) {
+export async function createOrder(cart, deliveryType, customerType, customerId, tableId, selectedQrOrderItem, deliveryFee = 0, deliveryAddress = "") {
   try {
     const response = await ApiClient.post("/pos/create-order", {
-      cart, deliveryType, customerType, customerId, tableId, selectedQrOrderItem
+      cart, deliveryType, customerType, customerId, tableId, selectedQrOrderItem, deliveryFee, deliveryAddress
     });
     return response;
   } catch (error) {
@@ -22,11 +22,11 @@ export async function createOrder(cart, deliveryType, customerType, customerId, 
   }
 }
 
-export async function createOrderAndInvoice(cart, deliveryType, customerType, customerId, tableId, netTotal, taxTotal, serviceChargeTotal, total, selectedQrOrderItem, selectedPaymentType) {
+export async function createOrderAndInvoice(cart, deliveryType, customerType, customerId, tableId, netTotal, taxTotal, serviceChargeTotal, total, selectedQrOrderItem, selectedPaymentType, deliveryFee = 0, deliveryAddress = "") {
   try {
     const response = await ApiClient.post("/pos/create-order-and-invoice", {
       cart, deliveryType, customerType, customerId, tableId,
-      netTotal, taxTotal, serviceChargeTotal, total, selectedQrOrderItem, selectedPaymentType
+      netTotal, taxTotal, serviceChargeTotal, total, selectedQrOrderItem, selectedPaymentType, deliveryFee, deliveryAddress
     });
     return response;
   } catch (error) {

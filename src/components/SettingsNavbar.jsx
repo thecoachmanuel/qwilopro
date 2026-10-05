@@ -53,7 +53,7 @@ export default function SettingsNavbar() {
     },
     {
       icon: <IconLifebuoy stroke={iconStroke} />,
-      text: t("contact_support") || "Contact Support",
+      text: t("contact_support.title") || "Contact Support",
       path: "/dashboard/contact-support",
     },
     {

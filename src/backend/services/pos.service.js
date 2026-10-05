@@ -24,13 +24,17 @@ exports.createOrderDB = async (
   tableId,
   paymentStatus = "pending",
   invoiceId = null,
-  username = null
+  username = null,
+  deliveryFee = 0,
+  deliveryAddress = null
 ) => {
   try {
     const tokenNo = await getNextDailyTokenValue(tenantId);
 
     const order = await Order.create({
       delivery_type: deliveryType,
+      delivery_fee: Number(deliveryFee) || 0,
+      delivery_address: deliveryAddress || null,
       customer_type: customerType,
       customer_id: customerId,
       table_id: tableId,

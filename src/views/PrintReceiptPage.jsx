@@ -11,11 +11,13 @@ export default function PrintReceiptPage() {
     itemsTotal,
     taxTotal,
     serviceChargeTotal,
+    deliveryFee,
+    deliveryAddress,
     payableTotal,
     tokenNo,
     orderId,
     paymentMethod
-  } = receiptDetails;
+  } = receiptDetails || {};
 
   const {
     store_name,
@@ -64,6 +66,7 @@ export default function PrintReceiptPage() {
           <div className="border-b border-dashed"></div>
           <p className='text-center'>{customerType}{customer&&<span>, {customer?.name}</span>}</p>
           <p className='mt-1'>{t("print_receipt.order_type")}: {deliveryType}</p>
+          {deliveryAddress && <p className='mt-0.5 text-xs'>Destination: {deliveryAddress}</p>}
         </>:<></>
       }
 
@@ -79,7 +82,7 @@ export default function PrintReceiptPage() {
       <p>{new Date().toLocaleString()}</p>
 
       <div className="border-b border-dashed mt-2"></div>
-      {cartItems.map((cartItem, index)=>{
+      {cartItems?.map((cartItem, index)=>{
 
         const {title, quantity, notes, price, tax_rate, tax_type, tax_title, addons, addons_ids, variant } = cartItem;
 
@@ -87,8 +90,8 @@ export default function PrintReceiptPage() {
           <p>{title} {variant && <span>- {variant.title}</span>}</p>
           {addons_ids?.length > 0 && <p className='text-xs'>{t("print_receipt.addons")}:
           {addons_ids.map((addonId, index)=>{
-            const addon = addons.find((a)=>a.id==addonId);
-            return addon.title;
+            const addon = addons?.find((a)=>a.id==addonId);
+            return addon?.title;
           })?.join(", ")}
           </p>}
           {(show_notes == 1 && notes) ? <p className='mb-2 text-xs'>{t("print_receipt.notes")}: {notes}</p>:<></>}
@@ -112,6 +115,12 @@ export default function PrintReceiptPage() {
         <p>{t("print_receipt.service_charge")}: </p>
         <p>{currency}{Number(serviceChargeTotal).toFixed(2)}</p>
       </div>
+      {Number(deliveryFee || 0) > 0 && (
+        <div className="flex justify-between">
+          <p>Delivery Fee: </p>
+          <p>{currency}{Number(deliveryFee).toFixed(2)}</p>
+        </div>
+      )}
       <div className="flex justify-between text-xl font-bold">
         <p>{t("print_receipt.total")}: </p>
         <p>{currency}{Number(payableTotal).toFixed(2)}</p>

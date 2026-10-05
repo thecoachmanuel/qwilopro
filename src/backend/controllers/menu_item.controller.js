@@ -65,53 +65,79 @@ exports.uploadMenuItemPhoto = async (req, res) => {
         const tenantId = req.user.tenant_id;
         const id = req.params.id;
 
-        if (!req.files || !req.files.image) {
+        if (!req.files || (!req.files.image && !req.files.photo && !req.files.file)) {
             return res.status(400).json({
                 success: false,
                 message: "No image file provided"
             });
         }
 
-        const file = req.files.image;
+        const file = req.files.image || req.files.photo || req.files.file;
 
-        const tenantPublicDir = path.resolve(process.cwd(), "public", String(tenantId));
-        if(!fs.existsSync(tenantPublicDir)) {
-            fs.mkdirSync(tenantPublicDir, { recursive: true });
+        let buffer = null;
+        if (file.tempFilePath && fs.existsSync(file.tempFilePath)) {
+            buffer = fs.readFileSync(file.tempFilePath);
+        } else if (file.data) {
+            buffer = file.data;
         }
 
-        const ext = path.extname(file.name || "") || ".png";
-        const filename = `${id}${ext}`;
-        const imagePath = path.join(tenantPublicDir, filename);
+        const mime = file.mimetype || "image/png";
+        let imageURL = null;
 
-        // Remove any previous file variants
-        const possibleOldFiles = [
-            path.join(tenantPublicDir, String(id)),
-            path.join(tenantPublicDir, `${id}.png`),
-            path.join(tenantPublicDir, `${id}.jpg`),
-            path.join(tenantPublicDir, `${id}.jpeg`),
-            path.join(tenantPublicDir, `${id}.webp`),
-        ];
-        for (const oldFile of possibleOldFiles) {
-            if (oldFile !== imagePath && fs.existsSync(oldFile)) {
-                try { fs.unlinkSync(oldFile); } catch(e) {}
+        const isVercel = Boolean(process.env.VERCEL);
+        if (!isVercel) {
+            try {
+                const tenantPublicDir = path.resolve(process.cwd(), "public", String(tenantId));
+                if (!fs.existsSync(tenantPublicDir)) {
+                    fs.mkdirSync(tenantPublicDir, { recursive: true });
+                }
+
+                const ext = path.extname(file.name || "") || ".png";
+                const filename = `${id}${ext}`;
+                const imagePath = path.join(tenantPublicDir, filename);
+
+                // Remove any previous file variants
+                const possibleOldFiles = [
+                    path.join(tenantPublicDir, String(id)),
+                    path.join(tenantPublicDir, `${id}.png`),
+                    path.join(tenantPublicDir, `${id}.jpg`),
+                    path.join(tenantPublicDir, `${id}.jpeg`),
+                    path.join(tenantPublicDir, `${id}.webp`),
+                ];
+                for (const oldFile of possibleOldFiles) {
+                    if (oldFile !== imagePath && fs.existsSync(oldFile)) {
+                        try { fs.unlinkSync(oldFile); } catch(e) {}
+                    }
+                }
+
+                await file.mv(imagePath);
+                imageURL = `/public/${tenantId}/${filename}`;
+            } catch (err) {
+                console.warn("Local disk write failed, falling back to Data URL:", err.message);
             }
         }
 
-        const imageURL = `/public/${tenantId}/${filename}`;
+        // On Vercel or if local write failed, save as persistent Data URL in database
+        if (!imageURL && buffer) {
+            imageURL = `data:${mime};base64,${buffer.toString("base64")}`;
+        }
 
-        await file.mv(imagePath);
+        if (!imageURL) {
+            throw new Error("Failed to process image buffer");
+        }
+
         await updateMenuItemImageDB(id, imageURL, tenantId);
 
         return res.status(200).json({
             success: true,
-            message: req.__("menu_item_image_uploaded"), // Translate message
+            message: req.__("menu_item_image_uploaded"),
             imageURL: imageURL
         });
     } catch (error) {
-        console.error(error);
+        console.error("uploadMenuItemPhoto error:", error);
         return res.status(500).json({
             success: false,
-            message: req.__("something_went_wrong_try_later") // Translate message
+            message: req.__("something_went_wrong_try_later")
         });
     }
 };

@@ -247,14 +247,45 @@ exports.uploadProfilePhoto = async (req, res) => {
 
         const file = req.files.photo;
         const uniqueId = `avatar_${nanoid()}`;
-        const tenantPublicDir = path.resolve(process.cwd(), "public", String(tenantId));
-        if (!fs.existsSync(tenantPublicDir)) {
-            fs.mkdirSync(tenantPublicDir, { recursive: true });
-        }
-        const filePath = path.join(tenantPublicDir, uniqueId);
-        await file.mv(filePath);
 
-        const imageURL = `/public/${tenantId}/${uniqueId}`;
+        let fileBuffer = null;
+        if (file.data && Buffer.isBuffer(file.data) && file.data.length > 0) {
+            fileBuffer = file.data;
+        } else if (file.tempFilePath && fs.existsSync(file.tempFilePath)) {
+            try {
+                fileBuffer = fs.readFileSync(file.tempFilePath);
+            } catch (err) {
+                console.error("Error reading tempFilePath:", err);
+            }
+        }
+
+        let imageURL = null;
+        const isServerless = process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || !process.env.NODE_ENV || process.env.NODE_ENV === "production";
+
+        if (!isServerless && fileBuffer) {
+            try {
+                const tenantPublicDir = path.resolve(process.cwd(), "public", String(tenantId));
+                if (!fs.existsSync(tenantPublicDir)) {
+                    fs.mkdirSync(tenantPublicDir, { recursive: true });
+                }
+                const ext = path.extname(file.name || "") || ".jpg";
+                const filename = `${uniqueId}${ext}`;
+                const filePath = path.join(tenantPublicDir, filename);
+                fs.writeFileSync(filePath, fileBuffer);
+                imageURL = `/public/${tenantId}/${filename}`;
+            } catch (err) {
+                console.warn("Local disk write failed, falling back to base64 Data URL:", err.message);
+            }
+        }
+
+        if (!imageURL) {
+            const mimeType = file.mimetype || "image/jpeg";
+            if (fileBuffer) {
+                imageURL = `data:${mimeType};base64,${fileBuffer.toString("base64")}`;
+            } else {
+                throw new Error("Unable to read uploaded photo file data");
+            }
+        }
 
         const { User } = require("../models");
         await User.updateOne({ username, tenant_id: tenantId }, { $set: { photo: imageURL } });

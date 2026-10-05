@@ -123,29 +123,63 @@ exports.uploadStoreImage = async (req, res) => {
     try {
         const tenantId = req.user.tenant_id;
 
-        const file = req.files.store_image;
-
-        const uniqueId = nanoid();
-
-        const tenantPublicDir = getTenantPublicDir(tenantId);
-        const imagePath = path.join(tenantPublicDir, uniqueId);
-
-        if(!fs.existsSync(tenantPublicDir)) {
-            fs.mkdirSync(tenantPublicDir, { recursive: true });
+        if (!req.files || (!req.files.store_image && !req.files.image && !req.files.file)) {
+            return res.status(400).json({
+                success: false,
+                message: "No image file provided"
+            });
         }
 
-        const imageURL = `/public/${tenantId}/${uniqueId}`;
+        const file = req.files.store_image || req.files.image || req.files.file;
+        const uniqueId = nanoid();
 
-        await file.mv(imagePath);
+        let buffer = null;
+        if (file.tempFilePath && fs.existsSync(file.tempFilePath)) {
+            buffer = fs.readFileSync(file.tempFilePath);
+        } else if (file.data) {
+            buffer = file.data;
+        }
+
+        const mime = file.mimetype || "image/png";
+        let imageURL = null;
+
+        const isVercel = Boolean(process.env.VERCEL);
+        if (!isVercel) {
+            try {
+                const tenantPublicDir = getTenantPublicDir(tenantId);
+                const ext = path.extname(file.name || "") || ".png";
+                const filename = `${uniqueId}${ext}`;
+                const imagePath = path.join(tenantPublicDir, filename);
+
+                if (!fs.existsSync(tenantPublicDir)) {
+                    fs.mkdirSync(tenantPublicDir, { recursive: true });
+                }
+
+                await file.mv(imagePath);
+                imageURL = `/public/${tenantId}/${filename}`;
+            } catch (err) {
+                console.warn("Local disk write failed, falling back to Data URL:", err.message);
+            }
+        }
+
+        // On Vercel or if filesystem is read-only, use persistent Data URL in database
+        if (!imageURL && buffer) {
+            imageURL = `data:${mime};base64,${buffer.toString("base64")}`;
+        }
+
+        if (!imageURL) {
+            throw new Error("Failed to process image buffer");
+        }
+
         await uploadStoreImageDB(imageURL, uniqueId, tenantId);
 
         return res.status(200).json({
             success: true,
             message: req.__("store_image_uploaded"),
             imageURL: imageURL
-        })
+        });
     } catch (error) {
-        console.error(error);
+        console.error("uploadStoreImage error:", error);
         return res.status(500).json({
             success: false,
             message: req.__("something_went_wrong_try_later")

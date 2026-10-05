@@ -181,6 +181,8 @@ const orderSchema = new mongoose.Schema({
   id: { type: Number, index: true },
   date: { type: Date, default: Date.now, index: true },
   delivery_type: { type: String, default: null },
+  delivery_fee: { type: Number, default: 0 },
+  delivery_address: { type: String, default: null },
   customer_type: { type: String, enum: ["WALKIN", "CUSTOMER"], default: "WALKIN" },
   customer_id: { type: String, default: null },
   table_id: { type: Number, default: null },
