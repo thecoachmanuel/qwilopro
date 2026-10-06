@@ -12,6 +12,7 @@ const {
   Customer,
   Feedback,
 } = require("../models");
+const { getNextDailyTokenValue } = require("../db/counter");
 
 const encryptTableId = (id) => {
   try {
@@ -555,17 +556,20 @@ exports.placeOrderViaQrMenuDB = async (
   try {
     const validTableId = (tableId && !isNaN(Number(tableId))) ? Number(tableId) : null;
 
+    // Generate a daily token for the QR order — same counter as POS
+    const tokenNo = await getNextDailyTokenValue(tenantId);
+
     const order = await QROrder.create({
       delivery_type: deliveryType,
       customer_type: customerType,
       customer_id: customerId,
       customer_name: customerName || null,
       table_id: validTableId,
+      token_no: tokenNo,
       delivery_fee: Number(deliveryFee) || 0,
       payment_status: paymentStatus || "pending",
       tenant_id: tenantId,
     });
-
 
     const orderId = order.id;
 
@@ -602,7 +606,7 @@ exports.placeOrderViaQrMenuDB = async (
       encryptedInvoiceId = String(orderId);
     }
 
-    return { orderId, invoiceId: encryptedInvoiceId };
+    return { orderId, invoiceId: encryptedInvoiceId, tokenNo };
   } catch (error) {
     console.error("placeOrderViaQrMenuDB Error:", error);
     throw error;

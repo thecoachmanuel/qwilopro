@@ -47,16 +47,17 @@ const CartPage = () => {
     currency: initialState.currency || "₦",
     serviceCharge: initialState.serviceCharge || null,
     storeSettings: initialState.storeSettings || null,
+    storeTables: initialState.storeTables || [],
   });
+  const [selectedTable, setSelectedTable] = useState(null);
 
-  const { storeTable, currency, serviceCharge, storeSettings } = meta;
+  const { storeTable, currency, serviceCharge, storeSettings, storeTables } = meta;
   const isDeliveryEnabled = storeSettings?.is_delivery_enabled == 1;
   const deliveryFeeAmount = Number(storeSettings?.delivery_fee || 0);
 
   const nameRef = useRef(null);
   const phoneRef = useRef(null);
   const addressRef = useRef(null);
-  const tableNoRef = useRef(null);
   const dialogNotesIndexRef = useRef();
   const dialogNotesTextRef = useRef();
 
@@ -89,6 +90,7 @@ const CartPage = () => {
               currency: cur?.symbol || "₦",
               serviceCharge: data?.serviceCharge || null,
               storeSettings: data?.storeSettings || null,
+              storeTables: data?.storeTables || [],
             };
             setMeta(newMeta);
             const storedCart = getCart(qrcode) || [];
@@ -223,11 +225,11 @@ const CartPage = () => {
     }
 
     try {
-      const tableId = storeTable?.id || null;
+      // Prefer: scanned QR table → picker selection → null
+      const tableId = storeTable?.id || selectedTable?.id || null;
       const isCustomerInfo = isDelivery || showPhoneFields;
       const customerType = isCustomerInfo ? "CUSTOMER" : "WALKIN";
       const deliveryAddress = isDelivery ? (addressRef.current?.value || "").trim() : "";
-      const customTableNo = tableNoRef.current?.value?.trim() || "";
 
       const customer = isCustomerInfo
         ? {
@@ -237,12 +239,8 @@ const CartPage = () => {
           }
         : { name: "Guest", phone: "" };
 
-      // Attach table note or delivery address note to the first item for kitchen visibility
-      if (customTableNo && activeDeliveryType === 'dinein' && cartItems.length > 0) {
-        cartItems[0].notes = cartItems[0].notes
-          ? `${cartItems[0].notes} | Table: ${customTableNo}`
-          : `Table: ${customTableNo}`;
-      } else if (deliveryAddress && cartItems.length > 0) {
+      // Attach delivery address note to the first item for kitchen visibility
+      if (deliveryAddress && cartItems.length > 0) {
         cartItems[0].notes = cartItems[0].notes
           ? `${cartItems[0].notes} | Delivery to: ${deliveryAddress}`
           : `Delivery to: ${deliveryAddress}`;
@@ -272,6 +270,7 @@ const CartPage = () => {
           state: {
             orderId: data.orderId,
             invoiceId: data.invoiceId,
+            tokenNo: data.tokenNo || null,
             qrcode: storeSettings?.slug || qrcode,
             hasFeedback: storeSettings?.is_feedback_enabled == 1,
             deliveryType,
@@ -493,18 +492,31 @@ const CartPage = () => {
               </div>
             )}
 
-            {/* Optional Table Number for Dine In without a scanned table */}
+            {/* Table selector for Dine In (only when no QR table is pre-set) */}
             {deliveryType === 'dinein' && !storeTable && (
               <div className="mt-3">
                 <label className="block text-xs font-semibold mb-1 text-gray-700 dark:text-gray-300">
-                  Table Number / Name <span className="text-gray-400 font-normal">(optional)</span>
+                  Select Table <span className="text-gray-400 font-normal">(optional)</span>
                 </label>
-                <input
-                  type="text"
-                  ref={tableNoRef}
-                  className="text-sm w-full rounded-xl px-4 py-2.5 border border-restro-border-green dark:bg-black focus:outline-restro-green"
-                  placeholder="e.g. Table 5, Booth 2"
-                />
+                {storeTables && storeTables.length > 0 ? (
+                  <select
+                    className="text-sm w-full rounded-xl px-4 py-2.5 border border-restro-border-green dark:bg-black focus:outline-restro-green"
+                    value={selectedTable?.id || ""}
+                    onChange={(e) => {
+                      const found = storeTables.find((t) => String(t.id) === e.target.value);
+                      setSelectedTable(found || null);
+                    }}
+                  >
+                    <option value="">— No table (Pickup / Walk-in) —</option>
+                    {storeTables.map((tbl) => (
+                      <option key={tbl.id} value={tbl.id}>
+                        {tbl.table_title}{tbl.floor ? ` (${tbl.floor})` : ""}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <p className="text-xs text-gray-400 mt-1">No tables configured for this store.</p>
+                )}
               </div>
             )}
 

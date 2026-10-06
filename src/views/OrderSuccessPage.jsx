@@ -23,6 +23,7 @@ export default function OrderSuccessPage() {
   const {
     orderId,
     invoiceId,
+    tokenNo,
     qrcode,
     hasFeedback = true,
     deliveryType,
@@ -60,6 +61,18 @@ export default function OrderSuccessPage() {
 
         {/* Order Reference Card */}
         <div className="w-full bg-gray-50 dark:bg-[#1a1a1a] rounded-2xl p-4 border border-gray-100 dark:border-white/5 mb-6 text-left space-y-2.5">
+          {/* Token Number — prominent, matches printed receipt */}
+          {tokenNo && (
+            <div className="flex items-center justify-between text-xs mb-2 pb-2 border-b border-gray-200/60 dark:border-white/5">
+              <span className="text-gray-500 dark:text-gray-400 flex items-center gap-1.5 font-medium">
+                🎟️ Your Token No.
+              </span>
+              <span className="font-extrabold text-2xl text-emerald-600 dark:text-emerald-400 tracking-widest">
+                #{tokenNo}
+              </span>
+            </div>
+          )}
+
           {orderId && (
             <div className="flex items-center justify-between text-xs">
               <span className="text-gray-500 dark:text-gray-400 flex items-center gap-1.5 font-medium">

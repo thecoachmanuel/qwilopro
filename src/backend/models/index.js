@@ -441,6 +441,7 @@ const qrOrderSchema = new mongoose.Schema({
   customer_id: { type: String, default: null },
   customer_name: { type: String, default: null },
   table_id: { type: Number, default: null },
+  token_no: { type: Number, default: 0 },
   delivery_fee: { type: Number, default: 0 },
   status: { type: String, enum: ["created", "completed", "cancelled"], default: "created" },
   payment_status: { type: String, enum: ["pending", "paid"], default: "pending" },

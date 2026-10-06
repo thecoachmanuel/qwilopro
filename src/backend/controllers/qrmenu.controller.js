@@ -1,6 +1,6 @@
 const { getAllMenuItemsDB, getAllAddonsDB, getAllVariantsDB, getAllRecipeItemsDB } = require("../services/menu_item.service");
 const { checkInvoiceIdDB } = require("../services/orders.service");
-const { getStoreSettingDB, getCategoriesDB, getTenantIdFromQRCode, getStoreTableByEncryptedIdDB , placeOrderViaQrMenuDB, saveFeedbackDB, getServiceChargeDB} = require("../services/settings.service");
+const { getStoreSettingDB, getCategoriesDB, getTenantIdFromQRCode, getStoreTableByEncryptedIdDB, getStoreTablesDB, placeOrderViaQrMenuDB, saveFeedbackDB, getServiceChargeDB} = require("../services/settings.service");
 
 exports.getQRMenuInit = async (req, res) => {
     try {
@@ -16,11 +16,12 @@ exports.getQRMenuInit = async (req, res) => {
             });
         }
 
-        const [categories, storeSettings, storeTable, serviceCharge] = await Promise.all([
+        const [categories, storeSettings, storeTable, serviceCharge, storeTables] = await Promise.all([
             getCategoriesDB(tenantId),
             getStoreSettingDB(tenantId),
             getStoreTableByEncryptedIdDB(tenantId, tableId),
             getServiceChargeDB(tenantId),
+            getStoreTablesDB(tenantId),
         ]);
 
         const [menuItems, addons, variants, recipeItems] = await Promise.all([
@@ -52,7 +53,8 @@ exports.getQRMenuInit = async (req, res) => {
             storeSettings: storeSettings,
             menuItems: formattedMenuItems,
             storeTable: storeTable,
-            serviceCharge:serviceCharge,
+            storeTables: storeTables || [],
+            serviceCharge: serviceCharge,
         });
     } catch (error) {
         console.error(error);
@@ -128,6 +130,7 @@ exports.placeOrderViaQrMenu = async (req, res) => {
         message: req.__("order_placed_successfully"),
         orderId: result.orderId,
         invoiceId: result.invoiceId || null,
+        tokenNo: result.tokenNo || null,
       });
 
     } catch (error) {
