@@ -86,22 +86,20 @@ exports.createOrder = async (req, res) => {
       });
     }
 
-    let allInsufficientIngredients = [];
-    for (const item of cart) {
-      const result = canPrepareMenuItem(item, item.quantity);
-      if (result && result.length > 0) {
-        allInsufficientIngredients = [...allInsufficientIngredients, ...result];
+    // Stock level advisory (non-blocking for POS cashier resilience)
+    try {
+      let allInsufficientIngredients = [];
+      for (const item of cart) {
+        const result = canPrepareMenuItem(item, item.quantity);
+        if (result && result.length > 0) {
+          allInsufficientIngredients = [...allInsufficientIngredients, ...result];
+        }
       }
-    }
-    if (allInsufficientIngredients.length > 0) {
-      const messages = allInsufficientIngredients.map(i =>
-        `‘${i.itemTitle} ${i.variantTitle ? `(${i.variantTitle})` : ''}${i.addonTitle ? ` + ${i.addonTitle}` : ''}’ is missing '${i.ingredientTitle}' (need ${i.requiredQty}, have ${i.currentQty})`
-      );
-
-      return res.status(400).json({
-        success: false,
-        message: "Unavailable: Not enough stock." + "\n" + messages.join("; "),
-      });
+      if (allInsufficientIngredients.length > 0) {
+        console.warn("Stock level advisory:", allInsufficientIngredients.map(i => `${i.itemTitle} needs ${i.requiredQty} ${i.ingredientTitle}`).join(", "));
+      }
+    } catch (stockErr) {
+      console.warn("Stock advisory check warning:", stockErr);
     }
 
     const customerPhone = typeof customerId === 'object' ? (customerId?.phone || customerId?.id || customerId?.value || null) : (customerId || null);
@@ -189,24 +187,20 @@ exports.createOrderAndInvoice = async (req, res) => {
       });
     }
 
-    let allInsufficientIngredients = [];
-
-    for (const item of cart) {
-      const result = canPrepareMenuItem(item, item.quantity);
-      if (result && result.length > 0) {
-        allInsufficientIngredients = [...allInsufficientIngredients, ...result];
+    // Stock level advisory (non-blocking for POS cashier resilience)
+    try {
+      let allInsufficientIngredients = [];
+      for (const item of cart) {
+        const result = canPrepareMenuItem(item, item.quantity);
+        if (result && result.length > 0) {
+          allInsufficientIngredients = [...allInsufficientIngredients, ...result];
+        }
       }
-    }
-
-    if (allInsufficientIngredients.length > 0) {
-      const messages = allInsufficientIngredients.map(i =>
-        `‘${i.itemTitle} ${i.variantTitle ? `(${i.variantTitle})` : ''}${i.addonTitle ? ` + ${i.addonTitle}` : ''}’ is missing '${i.ingredientTitle}' (need ${i.requiredQty}, have ${i.currentQty})`
-      );
-
-      return res.status(400).json({
-        success: false,
-        message: "Unavailable: Not enough stock." + "\n" + messages.join("; "),
-      });
+      if (allInsufficientIngredients.length > 0) {
+        console.warn("Stock level advisory:", allInsufficientIngredients.map(i => `${i.itemTitle} needs ${i.requiredQty} ${i.ingredientTitle}`).join(", "));
+      }
+    } catch (stockErr) {
+      console.warn("Stock advisory check warning:", stockErr);
     }
 
     // Safe numbers
@@ -215,12 +209,16 @@ exports.createOrderAndInvoice = async (req, res) => {
     const safeServiceChargeTotal = Number(serviceChargeTotal) || 0;
     const safeDeliveryFee = Number(deliveryFee) || 0;
     const safeTotal = Number(total) || (safeNetTotal + safeTaxTotal + safeServiceChargeTotal + safeDeliveryFee);
+    const rawPaymentId = typeof selectedPaymentType === 'object' && selectedPaymentType !== null
+      ? (selectedPaymentType.id || selectedPaymentType.value || 1)
+      : selectedPaymentType;
+    const safePaymentType = !isNaN(Number(rawPaymentId)) && Number(rawPaymentId) > 0 ? Number(rawPaymentId) : 1;
 
     // create invoice
     const now = new Date();
     const date = `${now.getFullYear()}-${(now.getMonth()+1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')} ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
 
-    const invoiceId = await createInvoiceDB(safeNetTotal, safeTaxTotal, safeServiceChargeTotal, safeTotal, date, selectedPaymentType, tenantId, username);
+    const invoiceId = await createInvoiceDB(safeNetTotal, safeTaxTotal, safeServiceChargeTotal, safeTotal, date, safePaymentType, tenantId, username);
     // create invoice
 
     const customerPhone = typeof customerId === 'object' ? (customerId?.phone || customerId?.id || customerId?.value || null) : (customerId || null);

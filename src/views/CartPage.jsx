@@ -112,11 +112,15 @@ const CartPage = () => {
   const { cartItems, itemsTotal, taxTotal, serviceChargeTotal, deliveryFeeTotal, payableTotal } = state;
 
   const sendNewOrderEvent = () => {
-    if (isSocketConnected) {
-      socket.emit('new_qrorder_backend', {}, qrcode);
-    } else {
-      initSocket();
-      socket?.emit?.('new_qrorder_backend', {}, qrcode);
+    try {
+      if (isSocketConnected && socket) {
+        socket.emit('new_qrorder_backend', {}, qrcode);
+      } else {
+        const s = initSocket();
+        s?.emit?.('new_qrorder_backend', {}, qrcode);
+      }
+    } catch (e) {
+      console.warn("sendNewOrderEvent warning:", e);
     }
   };
 

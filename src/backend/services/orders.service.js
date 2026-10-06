@@ -392,6 +392,11 @@ exports.createInvoiceDB = async (
       exists = await Invoice.findOne({ id: invoiceId, tenant_id: tenantId });
     }
 
+    const rawPaymentTypeId = typeof selectedPaymentType === 'object' && selectedPaymentType !== null
+      ? (selectedPaymentType.id || selectedPaymentType.value || 1)
+      : selectedPaymentType;
+    const safePaymentTypeId = !isNaN(Number(rawPaymentTypeId)) && Number(rawPaymentTypeId) > 0 ? Number(rawPaymentTypeId) : 1;
+
     await Invoice.create({
       id: invoiceId,
       sub_total: Number(subtotal) || 0,
@@ -399,7 +404,7 @@ exports.createInvoiceDB = async (
       service_charge_total: Number(serviceChargeTotal) || 0,
       total: Number(total) || 0,
       created_at: date ? new Date(date) : new Date(),
-      payment_type_id: selectedPaymentType ? Number(selectedPaymentType) : 1,
+      payment_type_id: safePaymentTypeId,
       tenant_id: tenantId,
       created_by: username,
     });

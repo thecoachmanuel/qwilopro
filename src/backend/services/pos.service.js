@@ -64,65 +64,69 @@ exports.createOrderDB = async (
       await OrderItem.insertMany(orderItemsData);
     }
 
-    // Recipe & Inventory usage deduction
-    const inventoryUsage = {};
+    // Recipe & Inventory usage deduction (safe background processing)
+    try {
+      const inventoryUsage = {};
 
-    cartItems.forEach((item) => {
-      (item.recipeItems || []).forEach((recipe) => {
-        const { inventory_item_id, recipe_quantity, ingredient_title, unit, variant_id, addon_id } = recipe;
+      cartItems.forEach((item) => {
+        (item.recipeItems || []).forEach((recipe) => {
+          const { inventory_item_id, recipe_quantity, ingredient_title, unit, variant_id, addon_id } = recipe;
 
-        if (variant_id && variant_id != item.variant_id) return;
-        if (addon_id && !item.addons_ids?.map(String).includes(String(addon_id))) return;
+          if (variant_id && variant_id != item.variant_id) return;
+          if (addon_id && !item.addons_ids?.map(String).includes(String(addon_id))) return;
 
-        const invId = inventory_item_id;
-        const qtyNeeded = parseFloat(recipe_quantity) * item.quantity;
+          const invId = inventory_item_id;
+          const qtyNeeded = parseFloat(recipe_quantity) * (Number(item.quantity) || 1);
 
-        if (!inventoryUsage[invId]) {
-          inventoryUsage[invId] = {
-            ingredient_title,
-            unit,
-            total_quantity: 0,
-          };
+          if (!inventoryUsage[invId]) {
+            inventoryUsage[invId] = {
+              ingredient_title,
+              unit,
+              total_quantity: 0,
+            };
+          }
+
+          inventoryUsage[invId].total_quantity += qtyNeeded;
+        });
+      });
+
+      for (const [inventoryItemId, usage] of Object.entries(inventoryUsage)) {
+        const invId = parseInt(inventoryItemId);
+        const qtyUsed = parseFloat(usage.total_quantity);
+
+        const currentItem = await InventoryItem.findOne({ id: invId, tenant_id: tenantId });
+        if (!currentItem) continue;
+
+        const previousQty = parseFloat(currentItem.quantity || 0);
+        const newQty = previousQty - qtyUsed;
+        const minQuantityThreshold = parseFloat(currentItem.min_quantity_threshold || 0);
+
+        await InventoryLog.create({
+          tenant_id: tenantId,
+          inventory_item_id: invId,
+          type: "OUT",
+          quantity_change: qtyUsed,
+          previous_quantity: previousQty,
+          new_quantity: newQty,
+          note: invoiceId
+            ? `Auto deduction for recipe usage in invoice #${invoiceId}`
+            : "Auto deduction for recipe usage in order",
+          created_by: username,
+        });
+
+        let status = "out";
+        if (newQty > 0 && newQty <= minQuantityThreshold) {
+          status = "low";
+        } else if (newQty > minQuantityThreshold) {
+          status = "in";
         }
 
-        inventoryUsage[invId].total_quantity += qtyNeeded;
-      });
-    });
-
-    for (const [inventoryItemId, usage] of Object.entries(inventoryUsage)) {
-      const invId = parseInt(inventoryItemId);
-      const qtyUsed = parseFloat(usage.total_quantity);
-
-      const currentItem = await InventoryItem.findOne({ id: invId, tenant_id: tenantId });
-      if (!currentItem) continue;
-
-      const previousQty = parseFloat(currentItem.quantity || 0);
-      const newQty = previousQty - qtyUsed;
-      const minQuantityThreshold = parseFloat(currentItem.min_quantity_threshold || 0);
-
-      await InventoryLog.create({
-        tenant_id: tenantId,
-        inventory_item_id: invId,
-        type: "OUT",
-        quantity_change: qtyUsed,
-        previous_quantity: previousQty,
-        new_quantity: newQty,
-        note: invoiceId
-          ? `Auto deduction for recipe usage in invoice #${invoiceId}`
-          : "Auto deduction for recipe usage in order",
-        created_by: username,
-      });
-
-      let status = "out";
-      if (newQty > 0 && newQty <= minQuantityThreshold) {
-        status = "low";
-      } else if (newQty > minQuantityThreshold) {
-        status = "in";
+        currentItem.quantity = newQty;
+        currentItem.status = status;
+        await currentItem.save();
       }
-
-      currentItem.quantity = newQty;
-      currentItem.status = status;
-      await currentItem.save();
+    } catch (invErr) {
+      console.warn("Inventory deduction warning in createOrderDB:", invErr);
     }
 
     return {

@@ -255,10 +255,14 @@ export default function POSPage() {
   const { categories, menuItems, paymentTypes, printSettings, storeSettings, storeTables, currency, cartItems, searchQuery, selectedCategory, selectedItemId, drafts, customer, customerType, isLoading } = state;
 
   const sendNewOrderEvent = (tokenNo, orderId) => {
-    const tenantId = user?.tenant_id;
-    if (!tenantId) return;
-    socket?.emit?.('new_order_backend', {tokenNo, orderId}, tenantId);
-  }
+    try {
+      const tenantId = user?.tenant_id;
+      if (!tenantId) return;
+      socket?.emit?.('new_order_backend', {tokenNo, orderId}, tenantId);
+    } catch (e) {
+      console.warn("sendNewOrderEvent warning:", e);
+    }
+  };
 
   const playTapSound = () => {
     if (isSoundMuted) return;
