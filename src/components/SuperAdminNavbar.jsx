@@ -17,6 +17,7 @@ import {
   IconToolsKitchen3,
   IconUsersGroup,
   IconCreditCard,
+  IconBrandWhatsapp,
 } from "@tabler/icons-react";
 import { clsx } from "clsx";
 import Logo from "../assets/logo.svg";
@@ -34,6 +35,12 @@ export const getSuperAdminNavbarItems = (t) => [
     text: t('superadmin_navbar.dashboard'),
     icon: <IconLayoutDashboard stroke={iconStroke} />,
     path: "/admin/dashboard/home",
+  },
+  {
+    type: "link",
+    text: "WhatsApp Marketing",
+    icon: <IconBrandWhatsapp stroke={iconStroke} />,
+    path: "/admin/dashboard/whatsapp",
   },
   {
     type: "link",
@@ -60,6 +67,7 @@ export const getSuperAdminNavbarItems = (t) => [
     path: "/admin/dashboard/reports",
   },
 ];
+
 
 export default function SuperAdminNavbar() {
   const { t } = useTranslation();

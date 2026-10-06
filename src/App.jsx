@@ -65,6 +65,8 @@ const SuperAdminTenantSubscriptionHistoryPage = lazy(() => import("./views/Super
 const SuperAdminPlansPage = lazy(() => import("./views/SuperAdmin/SuperAdminPlansPage"));
 const SuperAdminPlanDetails = lazy(() => import("./views/SuperAdmin/SuperAdminPlanDetails"));
 const SuperAdminPaymentGatewaysPage = lazy(() => import("./views/SuperAdmin/SuperAdminPaymentGatewaysPage"));
+const SuperAdminWhatsAppPage = lazy(() => import("./views/SuperAdmin/SuperAdminWhatsAppPage"));
+
 
 import { NavbarContext } from "./contexts/NavbarContext";
 import { getIsNavbarCollapsed } from "./helpers/NavbarSettings";
@@ -312,6 +314,7 @@ export default function App() {
           <Route path="/admin/dashboard" element={<PrivateRoute><SuperAdminDashboadLayout/></PrivateRoute>}>
             <Route path="" element={<SuperAdminProtectedRoute><SuperAdminDashboardPage /></SuperAdminProtectedRoute>} />
             <Route path="home" element={<SuperAdminProtectedRoute><SuperAdminDashboardPage /></SuperAdminProtectedRoute>} />
+            <Route path="whatsapp" element={<SuperAdminProtectedRoute><SuperAdminWhatsAppPage /></SuperAdminProtectedRoute>} />
             <Route path="plans" element={<SuperAdminProtectedRoute><SuperAdminPlansPage /></SuperAdminProtectedRoute>} />
             <Route path="payment-gateways" element={<SuperAdminProtectedRoute><SuperAdminPaymentGatewaysPage /></SuperAdminProtectedRoute>} />
             <Route path="tenants" element={<SuperAdminProtectedRoute><SuperAdminTenantsPage /></SuperAdminProtectedRoute>} />
@@ -328,6 +331,7 @@ export default function App() {
           <Route path="/superadmin/dashboard" element={<PrivateRoute><SuperAdminDashboadLayout/></PrivateRoute>}>
             <Route path="" element={<SuperAdminProtectedRoute><SuperAdminDashboardPage /></SuperAdminProtectedRoute>} />
             <Route path="home" element={<SuperAdminProtectedRoute><SuperAdminDashboardPage /></SuperAdminProtectedRoute>} />
+            <Route path="whatsapp" element={<SuperAdminProtectedRoute><SuperAdminWhatsAppPage /></SuperAdminProtectedRoute>} />
             <Route path="plans" element={<SuperAdminProtectedRoute><SuperAdminPlansPage /></SuperAdminProtectedRoute>} />
             <Route path="payment-gateways" element={<SuperAdminProtectedRoute><SuperAdminPaymentGatewaysPage /></SuperAdminProtectedRoute>} />
             <Route path="tenants" element={<SuperAdminProtectedRoute><SuperAdminTenantsPage /></SuperAdminProtectedRoute>} />
@@ -337,6 +341,7 @@ export default function App() {
             <Route path="contact-support" element={<SuperAdminProtectedRoute><SuperAdminContactSupportPage /></SuperAdminProtectedRoute>} />
             <Route path="language" element={<LanguagePage />} />
           </Route>
+
           {/* admin / superadmin routes */}
 
           {/* storefront slug routes (e.g. /the-restaurant-slug) */}

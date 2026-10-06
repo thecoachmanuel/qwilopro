@@ -30,6 +30,7 @@ const feedbackRoutes = require("./routes/feedback.routes")
 const superAdminRoutes = require("./routes/superadmin.routes")
 const inventoryRoutes = require("./routes/inventory.routes");
 const planRoutes = require("./routes/plans.routes");
+const whatsappRoutes = require("./routes/whatsapp.routes");
 // routes import
 
 
@@ -129,6 +130,7 @@ app.use("/api/v1/superadmin", superAdminRoutes);
 app.use("/api/v1/admin", superAdminRoutes);
 app.use("/api/v1/inventory", inventoryRoutes);
 app.use("/api/v1/plans", planRoutes);
+app.use("/api/v1/whatsapp", whatsappRoutes);
 // routes
 
 app.get("/api/v1/health", (req, res) => {
