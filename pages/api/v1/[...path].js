@@ -76,8 +76,4 @@ export const config = {
 
 export default apiRoute;
 
-// CommonJS compatibility
-module.exports = apiRoute;
-module.exports.default = apiRoute;
-module.exports.config = config;
 
