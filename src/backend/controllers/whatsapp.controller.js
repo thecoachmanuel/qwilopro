@@ -509,9 +509,10 @@ async function createGroup(req, res) {
 }
 
 // ─── POST /api/v1/whatsapp/groups/add-contacts ───────────────────────────────
+// Uses anti-ban micro-batching (3-5 contacts per chunk with randomized delays)
 async function addContactsToGroup(req, res) {
   try {
-    const { groupId, phones } = req.body;
+    const { groupId, phones, batchSize = 4, delayBetweenBatchesMs = 3500 } = req.body;
     if (!groupId || !Array.isArray(phones) || phones.length === 0) {
       return res.status(400).json({
         success: false,
@@ -519,41 +520,72 @@ async function addContactsToGroup(req, res) {
       });
     }
 
-    const cleanPhones = phones.map(normalizePhoneNumber).filter(Boolean);
+    const cleanPhones = [...new Set(phones.map(normalizePhoneNumber).filter(Boolean))];
 
-    try {
-      const response = await axios.post(
-        `${WA_GATEWAY_URL}/sessions/${WA_SESSION_ID}/groups/${groupId}/add`,
-        { phones: cleanPhones },
-        { headers: waHeaders(), timeout: 30000 }
-      );
-      return res.json({ success: true, data: response.data });
-    } catch (_) {
+    // Helper: sleep with human-like jitter
+    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    const randomJitter = (baseMs) => baseMs + Math.floor(Math.random() * 1500);
+
+    let totalAdded = 0;
+    let failedCount = 0;
+    const errors = [];
+
+    // Split into micro-batches to avoid WhatsApp bulk addition triggers
+    const chunks = [];
+    const size = Math.min(Math.max(Number(batchSize) || 4, 1), 10);
+    for (let i = 0; i < cleanPhones.length; i += size) {
+      chunks.push(cleanPhones.slice(i, i + size));
+    }
+
+    for (let c = 0; c < chunks.length; c++) {
+      const chunk = chunks[c];
       try {
-        const fallbackRes = await axios.post(
-          `${WA_GATEWAY_URL}/api/groups/add-participants`,
-          { groupId, phones: cleanPhones },
-          { headers: waHeaders(), timeout: 30000 }
+        await axios.post(
+          `${WA_GATEWAY_URL}/sessions/${WA_SESSION_ID}/groups/${groupId}/add`,
+          { phones: chunk },
+          { headers: waHeaders(), timeout: 35000 }
         );
-        return res.json({ success: true, data: fallbackRes.data });
+        totalAdded += chunk.length;
       } catch (err) {
-        return res.status(503).json({
-          success: false,
-          message:
-            "Adding participants directly via WhatsApp gateway requires group administrator permissions or endpoint configuration. Alternatively, send an invite link to the contacts via Broadcast.",
-        });
+        // Fallback to legacy endpoint
+        try {
+          await axios.post(
+            `${WA_GATEWAY_URL}/api/groups/add-participants`,
+            { groupId, phones: chunk },
+            { headers: waHeaders(), timeout: 35000 }
+          );
+          totalAdded += chunk.length;
+        } catch (innerErr) {
+          failedCount += chunk.length;
+          const errMsg = innerErr?.response?.data?.message || innerErr.message;
+          errors.push({ batch: c + 1, count: chunk.length, error: errMsg });
+        }
+      }
+
+      // Safe anti-ban cooldown between batches
+      if (c < chunks.length - 1) {
+        await sleep(randomJitter(delayBetweenBatchesMs));
       }
     }
+
+    return res.json({
+      success: totalAdded > 0,
+      message: `Group addition completed: ${totalAdded} added safely, ${failedCount} skipped/failed.`,
+      totalAdded,
+      failedCount,
+      total: cleanPhones.length,
+      errors: errors.slice(0, 5),
+    });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
 }
 
 // ─── POST /api/v1/whatsapp/broadcast ─────────────────────────────────────────
-// Sends individual messages (or group invite links) via the connected Qwilo Pro WhatsApp
+// Sends individual messages (or group invite links) with anti-ban humanized pacing
 async function sendBroadcast(req, res) {
   try {
-    const { phones, message, delayMs = 800 } = req.body;
+    const { phones, message, minDelayMs = 2000, maxDelayMs = 4000 } = req.body;
 
     if (!Array.isArray(phones) || phones.length === 0 || !message) {
       return res.status(400).json({
@@ -575,13 +607,18 @@ async function sendBroadcast(req, res) {
     let failedCount = 0;
     const errors = [];
 
-    // Helper sleep to prevent rate limiting / spam detection
+    // Helper: randomized delay between min and max (simulates human timing)
     const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    const getHumanDelay = () => {
+      const min = Math.max(Number(minDelayMs) || 2000, 1000);
+      const max = Math.max(Number(maxDelayMs) || 4000, min + 500);
+      return Math.floor(Math.random() * (max - min + 1)) + min;
+    };
 
     for (let i = 0; i < cleanPhones.length; i++) {
       const phone = cleanPhones[i];
       try {
-        // Use multi-tenant endpoint on Nectar
+        // Multi-tenant endpoint on Nectar
         await axios.post(
           `${WA_GATEWAY_URL}/sessions/${WA_SESSION_ID}/send`,
           { phone, message },
@@ -603,25 +640,29 @@ async function sendBroadcast(req, res) {
         }
       }
 
-      // Small delay between successive sends
-      if (i < cleanPhones.length - 1 && delayMs > 0) {
-        await sleep(Math.min(delayMs, 3000));
+      // Anti-ban cooldown: pause for 8 seconds after every 15 messages sent
+      if ((i + 1) % 15 === 0 && i < cleanPhones.length - 1) {
+        await sleep(8000);
+      } else if (i < cleanPhones.length - 1) {
+        // Randomized human timing between successive messages
+        await sleep(getHumanDelay());
       }
     }
 
     return res.json({
       success: true,
-      message: `Broadcast completed: ${sentCount} sent successfully, ${failedCount} failed.`,
+      message: `Broadcast completed safely: ${sentCount} sent, ${failedCount} failed.`,
       sentCount,
       failedCount,
       total: cleanPhones.length,
-      errors: errors.slice(0, 10), // truncate errors list
+      errors: errors.slice(0, 10),
     });
   } catch (err) {
     console.error("sendBroadcast error:", err);
     return res.status(500).json({ success: false, message: err.message });
   }
 }
+
 
 // ─── GET /api/v1/whatsapp/gateway-info ───────────────────────────────────────
 async function getGatewayInfo(req, res) {

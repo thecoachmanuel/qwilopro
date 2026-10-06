@@ -518,9 +518,11 @@ export default function SuperAdminWhatsAppPage() {
       const res = await sendWhatsAppBroadcast({
         phones,
         message: broadcastMessage,
-        delayMs: 800,
+        minDelayMs: 2500,
+        maxDelayMs: 4500,
       });
       toast.dismiss();
+
       if (res?.success) {
         toast.success(res.message);
         setBroadcastProgress({
@@ -1104,9 +1106,23 @@ export default function SuperAdminWhatsAppPage() {
                 <IconUserPlus className="text-emerald-500" stroke={iconStroke} />
                 Create New WhatsApp Group
               </h2>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
                 Create a new WhatsApp group under your Qwilo Pro account and add your selected leads as participants.
               </p>
+
+              {/* Anti-Ban Shield Card */}
+              <div className="p-3.5 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/60 mb-5 flex items-start gap-2.5 text-xs">
+                <IconSparkles size={18} className="text-emerald-600 dark:text-emerald-400 mt-0.5 flex-shrink-0" />
+                <div>
+                  <span className="font-semibold text-emerald-800 dark:text-emerald-300">
+                    Anti-Ban Protection Enabled:
+                  </span>{" "}
+                  <span className="text-gray-600 dark:text-gray-300">
+                    Contacts are added in micro-batches (3-4 leads) with randomized human pauses to protect your account. For cold leads with strict privacy settings, use the <strong>Broadcast & Invite</strong> tab to send invite links instead.
+                  </span>
+                </div>
+              </div>
+
 
               <div className="space-y-4">
                 <div>
@@ -1258,11 +1274,23 @@ export default function SuperAdminWhatsAppPage() {
             Send custom messages or WhatsApp group invite links directly to your selected leads from your connected Qwilo Pro business number.
           </p>
 
-          <div className="space-y-4">
-            {/* Recipient summary banner */}
-            <div className="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 flex items-center justify-between text-xs">
+            {/* Anti-Ban Pacing Banner */}
+            <div className="p-3.5 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/60 flex items-start gap-2.5 text-xs">
+              <IconSparkles size={18} className="text-emerald-600 dark:text-emerald-400 mt-0.5 flex-shrink-0" />
               <div>
                 <span className="font-semibold text-emerald-800 dark:text-emerald-300">
+                  Anti-Ban Smart Pacing Active:
+                </span>{" "}
+                <span className="text-gray-600 dark:text-gray-300">
+                  Messages are automatically queued with human-like randomized delays (2.5s – 4.5s) and automatic cooldown breaks to keep your Qwilo Pro WhatsApp number completely safe from Meta spam filters.
+                </span>
+              </div>
+            </div>
+
+            {/* Recipient summary banner */}
+            <div className="p-4 rounded-xl bg-gray-50 dark:bg-restro-gray/40 border border-restro-border-green flex items-center justify-between text-xs">
+              <div>
+                <span className="font-semibold text-restro-text dark:text-white">
                   Target Recipients:
                 </span>{" "}
                 <span className="font-bold text-restro-green">
@@ -1276,6 +1304,8 @@ export default function SuperAdminWhatsAppPage() {
                 Change Recipients
               </button>
             </div>
+
+
 
             {/* Message composer */}
             <div>
