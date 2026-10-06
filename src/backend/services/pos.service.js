@@ -73,7 +73,8 @@ exports.createOrderDB = async (
           const { inventory_item_id, recipe_quantity, ingredient_title, unit, variant_id, addon_id } = recipe;
 
           if (variant_id && variant_id != item.variant_id) return;
-          if (addon_id && !item.addons_ids?.map(String).includes(String(addon_id))) return;
+          const safeAddonIds = item.addons_ids ? item.addons_ids.map(String) : [];
+          if (addon_id && !safeAddonIds.includes(String(addon_id))) return;
 
           const invId = inventory_item_id;
           const qtyNeeded = parseFloat(recipe_quantity) * (Number(item.quantity) || 1);
