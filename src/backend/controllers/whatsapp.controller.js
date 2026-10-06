@@ -1,5 +1,6 @@
 const axios = require("axios");
 const { SystemSetting } = require("../models");
+const waJobs = require("../services/whatsapp.jobs");
 
 // ─── Config ─────────────────────────────────────────────────────────────────
 const WA_GATEWAY_URL =
@@ -509,7 +510,8 @@ async function createGroup(req, res) {
 }
 
 // ─── POST /api/v1/whatsapp/groups/add-contacts ───────────────────────────────
-// Uses anti-ban micro-batching (3-5 contacts per chunk with randomized delays)
+// Fire-and-forget: returns jobId immediately, runs in server background.
+// Browser can be closed — the server keeps adding contacts safely.
 async function addContactsToGroup(req, res) {
   try {
     const { groupId, phones, batchSize = 4, delayBetweenBatchesMs = 3500 } = req.body;
@@ -520,61 +522,14 @@ async function addContactsToGroup(req, res) {
       });
     }
 
-    const cleanPhones = [...new Set(phones.map(normalizePhoneNumber).filter(Boolean))];
-
-    // Helper: sleep with human-like jitter
-    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-    const randomJitter = (baseMs) => baseMs + Math.floor(Math.random() * 1500);
-
-    let totalAdded = 0;
-    let failedCount = 0;
-    const errors = [];
-
-    // Split into micro-batches to avoid WhatsApp bulk addition triggers
-    const chunks = [];
-    const size = Math.min(Math.max(Number(batchSize) || 4, 1), 10);
-    for (let i = 0; i < cleanPhones.length; i += size) {
-      chunks.push(cleanPhones.slice(i, i + size));
-    }
-
-    for (let c = 0; c < chunks.length; c++) {
-      const chunk = chunks[c];
-      try {
-        await axios.post(
-          `${WA_GATEWAY_URL}/sessions/${WA_SESSION_ID}/groups/${groupId}/add`,
-          { phones: chunk },
-          { headers: waHeaders(), timeout: 35000 }
-        );
-        totalAdded += chunk.length;
-      } catch (err) {
-        // Fallback to legacy endpoint
-        try {
-          await axios.post(
-            `${WA_GATEWAY_URL}/api/groups/add-participants`,
-            { groupId, phones: chunk },
-            { headers: waHeaders(), timeout: 35000 }
-          );
-          totalAdded += chunk.length;
-        } catch (innerErr) {
-          failedCount += chunk.length;
-          const errMsg = innerErr?.response?.data?.message || innerErr.message;
-          errors.push({ batch: c + 1, count: chunk.length, error: errMsg });
-        }
-      }
-
-      // Safe anti-ban cooldown between batches
-      if (c < chunks.length - 1) {
-        await sleep(randomJitter(delayBetweenBatchesMs));
-      }
-    }
+    const job = waJobs.startAddContactsJob(groupId, phones, batchSize, delayBetweenBatchesMs);
 
     return res.json({
-      success: totalAdded > 0,
-      message: `Group addition completed: ${totalAdded} added safely, ${failedCount} skipped/failed.`,
-      totalAdded,
-      failedCount,
-      total: cleanPhones.length,
-      errors: errors.slice(0, 5),
+      success: true,
+      backgroundJob: true,
+      jobId: job.id,
+      message: `✅ Add-contacts job started for ${job.total} contacts. You can safely close this tab — the server will keep running. Check progress at GET /api/v1/whatsapp/jobs/${job.id}`,
+      total: job.total,
     });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
@@ -582,7 +537,8 @@ async function addContactsToGroup(req, res) {
 }
 
 // ─── POST /api/v1/whatsapp/broadcast ─────────────────────────────────────────
-// Sends individual messages (or group invite links) with anti-ban humanized pacing
+// Fire-and-forget background job: returns jobId instantly.
+// Closing the browser/tab has ZERO effect — the server keeps sending.
 async function sendBroadcast(req, res) {
   try {
     const { phones, message, minDelayMs = 2000, maxDelayMs = 4000 } = req.body;
@@ -594,71 +550,53 @@ async function sendBroadcast(req, res) {
       });
     }
 
-    const cleanPhones = [...new Set(phones.map(normalizePhoneNumber).filter(Boolean))];
-
-    if (cleanPhones.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "No valid phone numbers found for broadcast.",
-      });
-    }
-
-    let sentCount = 0;
-    let failedCount = 0;
-    const errors = [];
-
-    // Helper: randomized delay between min and max (simulates human timing)
-    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-    const getHumanDelay = () => {
-      const min = Math.max(Number(minDelayMs) || 2000, 1000);
-      const max = Math.max(Number(maxDelayMs) || 4000, min + 500);
-      return Math.floor(Math.random() * (max - min + 1)) + min;
-    };
-
-    for (let i = 0; i < cleanPhones.length; i++) {
-      const phone = cleanPhones[i];
-      try {
-        // Multi-tenant endpoint on Nectar
-        await axios.post(
-          `${WA_GATEWAY_URL}/sessions/${WA_SESSION_ID}/send`,
-          { phone, message },
-          { headers: waHeaders(), timeout: 15000 }
-        );
-        sentCount++;
-      } catch (err) {
-        // Fallback to global /send
-        try {
-          await axios.post(
-            `${WA_GATEWAY_URL}/send`,
-            { phone, message },
-            { headers: waHeaders(), timeout: 15000 }
-          );
-          sentCount++;
-        } catch (innerErr) {
-          failedCount++;
-          errors.push({ phone, error: innerErr?.response?.data?.message || innerErr.message });
-        }
-      }
-
-      // Anti-ban cooldown: pause for 8 seconds after every 15 messages sent
-      if ((i + 1) % 15 === 0 && i < cleanPhones.length - 1) {
-        await sleep(8000);
-      } else if (i < cleanPhones.length - 1) {
-        // Randomized human timing between successive messages
-        await sleep(getHumanDelay());
-      }
-    }
+    const job = waJobs.startBroadcastJob(phones, message, minDelayMs, maxDelayMs);
 
     return res.json({
       success: true,
-      message: `Broadcast completed safely: ${sentCount} sent, ${failedCount} failed.`,
-      sentCount,
-      failedCount,
-      total: cleanPhones.length,
-      errors: errors.slice(0, 10),
+      backgroundJob: true,
+      jobId: job.id,
+      message: `✅ Broadcast started for ${job.total} contacts. You can safely close this tab — the server will keep sending. Check progress at GET /api/v1/whatsapp/jobs/${job.id}`,
+      total: job.total,
     });
   } catch (err) {
     console.error("sendBroadcast error:", err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+}
+
+// ─── GET /api/v1/whatsapp/jobs ────────────────────────────────────────────────
+async function listJobs(req, res) {
+  try {
+    const jobs = await waJobs.listJobs();
+    return res.json({ success: true, jobs });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+}
+
+// ─── GET /api/v1/whatsapp/jobs/:jobId ────────────────────────────────────────
+async function getJobStatus(req, res) {
+  try {
+    const job = await waJobs.getJob(req.params.jobId);
+    if (!job) {
+      return res.status(404).json({ success: false, message: "Job not found." });
+    }
+    return res.json({ success: true, job });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+}
+
+// ─── POST /api/v1/whatsapp/jobs/:jobId/cancel ────────────────────────────────
+async function cancelJob(req, res) {
+  try {
+    const cancelled = await waJobs.cancelJob(req.params.jobId);
+    if (!cancelled) {
+      return res.status(404).json({ success: false, message: "Job not found or already finished." });
+    }
+    return res.json({ success: true, message: "Cancellation requested. Job will stop after the current message." });
+  } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
 }
@@ -688,4 +626,7 @@ module.exports = {
   addContactsToGroup,
   sendBroadcast,
   getGatewayInfo,
+  listJobs,
+  getJobStatus,
+  cancelJob,
 };

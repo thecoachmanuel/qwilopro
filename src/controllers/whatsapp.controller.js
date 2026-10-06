@@ -161,3 +161,42 @@ export async function sendWhatsAppBroadcast(payload) {
     throw error;
   }
 }
+
+/**
+ * Poll the status of a background WhatsApp job (broadcast or add-contacts)
+ * @param {string} jobId
+ */
+export async function getWhatsAppJob(jobId) {
+  try {
+    const response = await apiClient.get(`/whatsapp/jobs/${jobId}`);
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+}
+
+/**
+ * Get all recent background WhatsApp jobs
+ */
+export async function listWhatsAppJobs() {
+  try {
+    const response = await apiClient.get("/whatsapp/jobs");
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+}
+
+/**
+ * Request graceful cancellation of a running background job
+ * @param {string} jobId
+ */
+export async function cancelWhatsAppJob(jobId) {
+  try {
+    const response = await apiClient.post(`/whatsapp/jobs/${jobId}/cancel`);
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+}
+

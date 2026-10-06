@@ -14,6 +14,9 @@ const {
   addContactsToGroup,
   sendBroadcast,
   getGatewayInfo,
+  listJobs,
+  getJobStatus,
+  cancelJob,
 } = require("../controllers/whatsapp.controller");
 
 const router = Router();
@@ -42,4 +45,13 @@ router.post("/groups/add-contacts", superAdminAuth, addContactsToGroup);
 // ─── Broadcast / Messaging ───────────────────────────────────────────────────
 router.post("/broadcast", superAdminAuth, sendBroadcast);
 
+// ─── Background Job Management ────────────────────────────────────────────────
+// Returns all recent broadcast / add-contacts jobs
+router.get("/jobs", superAdminAuth, listJobs);
+// Poll progress for a specific job (safe to poll every 3-5s from the UI)
+router.get("/jobs/:jobId", superAdminAuth, getJobStatus);
+// Request graceful cancellation of a running job
+router.post("/jobs/:jobId/cancel", superAdminAuth, cancelJob);
+
 module.exports = router;
+

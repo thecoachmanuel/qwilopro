@@ -47,6 +47,8 @@ import {
   addContactsToWhatsAppGroup,
   sendWhatsAppBroadcast,
   getGatewayInfo,
+  getWhatsAppJob,
+  cancelWhatsAppJob,
 } from "../../controllers/whatsapp.controller";
 
 const NECTAR_GROUP_CODE = [
@@ -115,12 +117,14 @@ export default function SuperAdminWhatsAppPage() {
   const [isAddingContacts, setIsAddingContacts] = useState(false);
   const [isBroadcasting, setIsBroadcasting] = useState(false);
   const [broadcastProgress, setBroadcastProgress] = useState(null);
+  const [activeJob, setActiveJob] = useState(null); // background job tracking
   const [activeTab, setActiveTab] = useState("connect"); // connect, leads, groups, broadcast, guide
   const [createdGroups, setCreatedGroups] = useState([]);
   const [isGuideOpen, setIsGuideOpen] = useState(false);
 
-  // Polling ref for QR and connection status
+  // Polling refs for QR, connection status, and background jobs
   const pollTimerRef = useRef(null);
+  const jobPollRef = useRef(null);
 
   // ─── Initial Load ───────────────────────────────────────────────────────────
   useEffect(() => {
@@ -131,6 +135,7 @@ export default function SuperAdminWhatsAppPage() {
 
     return () => {
       if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+      if (jobPollRef.current) clearInterval(jobPollRef.current);
     };
   }, []);
 
@@ -500,21 +505,68 @@ export default function SuperAdminWhatsAppPage() {
     }
 
     setIsAddingContacts(true);
-    toast.loading(`Adding ${phones.length} contacts to group...`);
     try {
       const res = await addContactsToWhatsAppGroup({
         groupId: existingGroupId,
         phones,
       });
-      toast.dismiss();
-      if (res?.success) {
+      if (res?.backgroundJob && res?.jobId) {
+        toast.success(`✅ Running in background! ${phones.length} contacts being added. You can close this tab safely.`);
+        startJobPolling(res.jobId, "addContacts");
+      } else if (res?.success) {
         toast.success("Contacts added to group successfully!");
+        setIsAddingContacts(false);
       }
     } catch (err) {
-      toast.dismiss();
       toast.error(err?.response?.data?.message || "Failed to add contacts to group");
-    } finally {
       setIsAddingContacts(false);
+    }
+  };
+
+  // ─── Background Job Polling ──────────────────────────────────────────────────
+  const startJobPolling = (jobId, type) => {
+    if (jobPollRef.current) clearInterval(jobPollRef.current);
+    setActiveJob({ id: jobId, type, status: "running", processed: 0, total: 0, sentCount: 0, failedCount: 0 });
+
+    jobPollRef.current = setInterval(async () => {
+      try {
+        const res = await getWhatsAppJob(jobId);
+        if (res?.success && res?.job) {
+          const job = res.job;
+          setActiveJob(job);
+          setBroadcastProgress({
+            sent: job.sentCount,
+            total: job.total,
+            processed: job.processed,
+            status: job.status,
+            failedCount: job.failedCount,
+          });
+
+          // Job finished
+          if (["completed", "failed", "cancelled"].includes(job.status)) {
+            clearInterval(jobPollRef.current);
+            setIsBroadcasting(false);
+            setIsAddingContacts(false);
+            if (job.status === "completed") {
+              toast.success(`✅ Done! ${job.sentCount} sent, ${job.failedCount} failed.`);
+            } else if (job.status === "cancelled") {
+              toast("⏹ Job cancelled. " + job.sentCount + " messages were sent before stopping.");
+            } else {
+              toast.error(`Job failed. Only ${job.sentCount} sent.`);
+            }
+          }
+        }
+      } catch (_) {}
+    }, 4000);
+  };
+
+  const handleCancelJob = async () => {
+    if (!activeJob?.id) return;
+    try {
+      await cancelWhatsAppJob(activeJob.id);
+      toast("⏹ Cancellation requested. Will stop after the current message.");
+    } catch (_) {
+      toast.error("Failed to request cancellation");
     }
   };
 
@@ -536,13 +588,12 @@ export default function SuperAdminWhatsAppPage() {
       return;
     }
 
-    if (!window.confirm(`Are you sure you want to send this WhatsApp message to ${phones.length} contact(s)?`)) {
+    if (!window.confirm(`Send this WhatsApp message to ${phones.length} contact(s)?\n\nThe job will run on the server — you can safely close this tab and it will keep sending.`)) {
       return;
     }
 
     setIsBroadcasting(true);
-    setBroadcastProgress({ sent: 0, total: phones.length, status: "Sending..." });
-    toast.loading(`Dispatching WhatsApp broadcast to ${phones.length} contacts...`);
+    setBroadcastProgress({ sent: 0, total: phones.length, processed: 0, status: "running", failedCount: 0 });
 
     try {
       const res = await sendWhatsAppBroadcast({
@@ -551,20 +602,24 @@ export default function SuperAdminWhatsAppPage() {
         minDelayMs: 2500,
         maxDelayMs: 4500,
       });
-      toast.dismiss();
 
-      if (res?.success) {
+      if (res?.backgroundJob && res?.jobId) {
+        toast.success(`✅ Broadcast launched! Running in background for ${phones.length} contacts. Safe to close this tab.`);
+        startJobPolling(res.jobId, "broadcast");
+      } else if (res?.success) {
+        // Legacy sync response fallback
         toast.success(res.message);
         setBroadcastProgress({
           sent: res.sentCount,
           total: res.total,
-          status: `Completed: ${res.sentCount} sent, ${res.failedCount} failed`,
+          processed: res.total,
+          status: "completed",
+          failedCount: res.failedCount,
         });
+        setIsBroadcasting(false);
       }
     } catch (err) {
-      toast.dismiss();
       toast.error(err?.response?.data?.message || "Failed to send broadcast");
-    } finally {
       setIsBroadcasting(false);
     }
   };
@@ -1360,25 +1415,61 @@ export default function SuperAdminWhatsAppPage() {
             {/* Progress Display */}
             {broadcastProgress && (
               <div className="p-4 rounded-xl bg-gray-50 dark:bg-restro-gray/40 border border-restro-border-green text-xs space-y-2">
-                <div className="flex justify-between font-semibold">
-                  <span>Broadcast Status:</span>
+                <div className="flex justify-between items-center font-semibold">
+                  <span className="flex items-center gap-1.5">
+                    {broadcastProgress.status === "running" || broadcastProgress.status === "pending" ? (
+                      <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    ) : broadcastProgress.status === "completed" ? (
+                      <IconCircleCheck size={14} className="text-emerald-500" />
+                    ) : broadcastProgress.status === "cancelled" ? (
+                      <IconX size={14} className="text-amber-500" />
+                    ) : (
+                      <IconAlertCircle size={14} className="text-red-500" />
+                    )}
+                    Broadcast Status:
+                  </span>
                   <span className="text-emerald-600 dark:text-emerald-400 font-mono">
                     {broadcastProgress.sent} / {broadcastProgress.total} sent
+                    {broadcastProgress.failedCount > 0 && (
+                      <span className="text-red-400 ml-2">({broadcastProgress.failedCount} failed)</span>
+                    )}
                   </span>
                 </div>
                 <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
                   <div
-                    className="bg-restro-green h-2 rounded-full transition-all duration-300"
+                    className={clsx(
+                      "h-2 rounded-full transition-all duration-500",
+                      broadcastProgress.status === "completed" ? "bg-emerald-500" :
+                      broadcastProgress.status === "cancelled" ? "bg-amber-400" :
+                      broadcastProgress.status === "failed" ? "bg-red-400" :
+                      "bg-restro-green"
+                    )}
                     style={{
                       width: `${
                         broadcastProgress.total > 0
-                          ? (broadcastProgress.sent / broadcastProgress.total) * 100
+                          ? ((broadcastProgress.processed ?? broadcastProgress.sent) / broadcastProgress.total) * 100
                           : 0
                       }%`,
                     }}
                   />
                 </div>
-                <p className="text-gray-500 dark:text-gray-400">{broadcastProgress.status}</p>
+                <div className="flex justify-between items-center">
+                  <p className="text-gray-500 dark:text-gray-400 capitalize">
+                    {broadcastProgress.status === "running" ? "⏳ Running on server (safe to close this tab)" :
+                     broadcastProgress.status === "completed" ? "✅ Completed" :
+                     broadcastProgress.status === "cancelled" ? "⏹ Cancelled" :
+                     broadcastProgress.status === "failed" ? "❌ Failed" :
+                     broadcastProgress.status}
+                  </p>
+                  {(broadcastProgress.status === "running" || broadcastProgress.status === "pending") && (
+                    <button
+                      onClick={handleCancelJob}
+                      className="text-red-500 hover:text-red-600 font-semibold flex items-center gap-1 text-xs"
+                    >
+                      <IconX size={12} /> Stop
+                    </button>
+                  )}
+                </div>
               </div>
             )}
 
