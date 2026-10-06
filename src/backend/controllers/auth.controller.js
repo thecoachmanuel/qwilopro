@@ -51,8 +51,9 @@ const { decryptCredentials } = require("../utils/encryptCredentials");
 
 exports.signIn = async (req, res) => {
   try {
-    const username = req.body.username;
-    const password = req.body.password;
+    const username = req.body?.username;
+    const password = req.body?.password;
+
 
     if (!(username && password)) {
       return res.status(400).json({

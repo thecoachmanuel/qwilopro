@@ -79,8 +79,8 @@ exports.placeOrderViaQrMenu = async (req, res) => {
         });
       }
 
-      const {cartItems, customerType, customer, tableId, deliveryFee} = req.body;
-      let { deliveryType } = req.body;
+      const {cartItems, customerType, customer, tableId, deliveryFee} = req.body || {};
+      let deliveryType = (req.body || {}).deliveryType;
 
       // Normalize delivery type: 'pickup' → 'takeaway'
       if (!deliveryType || deliveryType === 'pickup') deliveryType = 'takeaway';

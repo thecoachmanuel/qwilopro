@@ -77,7 +77,7 @@ exports.createOrder = async (req, res) => {
   try {
     const tenantId = req.user.tenant_id;
     const username = req.user.username;
-    const {cart, deliveryType, customerType, customerId, tableId, selectedQrOrderItem, deliveryFee, deliveryAddress} = req.body;
+    const {cart, deliveryType, customerType, customerId, tableId, selectedQrOrderItem, deliveryFee, deliveryAddress} = req.body || {};
 
     if(!cart || cart.length === 0) {
       return res.status(400).json({
@@ -178,7 +178,7 @@ exports.createOrderAndInvoice = async (req, res) => {
   try {
     const tenantId = req.user.tenant_id;
     const username = req.user.username;
-    const {cart, deliveryType, customerType, customerId, tableId, netTotal, taxTotal, serviceChargeTotal, total, selectedQrOrderItem, selectedPaymentType, deliveryFee, deliveryAddress} = req.body;
+    const {cart, deliveryType, customerType, customerId, tableId, netTotal, taxTotal, serviceChargeTotal, total, selectedQrOrderItem, selectedPaymentType, deliveryFee, deliveryAddress} = req.body || {};
 
     if(!cart || cart.length === 0) {
       return res.status(400).json({

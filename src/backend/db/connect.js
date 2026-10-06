@@ -3,11 +3,13 @@ const { CONFIG } = require("../config");
 
 const dns = require("dns");
 
-// Proactively set reliable DNS servers to ensure MongoDB Atlas SRV records resolve immediately without Windows ISP DNS stalls
-try {
-  dns.setServers(["8.8.8.8", "1.1.1.1"]);
-} catch (e) {
-  // Ignore if restricted
+// Proactively set reliable DNS servers ONLY on local Windows machines to ensure MongoDB Atlas SRV records resolve without Windows ISP DNS stalls. NEVER override on Linux / Vercel cloud environments!
+if (process.platform === "win32" && !process.env.VERCEL) {
+  try {
+    dns.setServers(["8.8.8.8", "1.1.1.1"]);
+  } catch (e) {
+    // Ignore if restricted
+  }
 }
 
 let isConnected = false;
@@ -40,12 +42,13 @@ const connectDB = async () => {
       return conn.connection;
     } catch (error) {
       console.error("❌ MongoDB Connection Error:", error.message);
-      // If SRV lookup failed, try DNS fallback
+      // If SRV lookup failed, try DNS fallback (on Windows)
       if (
-        error.message.includes("ENOTFOUND") ||
+        (process.platform === "win32" && !process.env.VERCEL) &&
+        (error.message.includes("ENOTFOUND") ||
         error.message.includes("ETIMEDOUT") ||
         error.message.includes("ECONNREFUSED") ||
-        error.message.includes("querySrv")
+        error.message.includes("querySrv"))
       ) {
         try {
           dns.setServers(["8.8.8.8", "1.1.1.1", "208.67.222.222"]);
@@ -68,6 +71,7 @@ const connectDB = async () => {
       connectionPromise = null;
     }
   })();
+
 
   return connectionPromise;
 };

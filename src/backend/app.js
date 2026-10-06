@@ -79,6 +79,13 @@ app.use(cors(corsOptions));
 app.use(cookieParser());
 app.use(i18n.init);
 app.use(userAgent.express());
+app.use((req, res, next) => {
+  // If request body was already parsed upstream (e.g. Next.js serverless wrapper), mark it so express.json() doesn't re-read the consumed stream
+  if (req.body && typeof req.body === 'object') {
+    req._body = true;
+  }
+  next();
+});
 app.use('/api/v1/auth/stripe-webhook', express.raw({ type: 'application/json' }));
 app.use(express.json());
 // app.use(morgan("combined", {stream: accessLogStream}));
@@ -137,6 +144,17 @@ app.get("/", (req, res)=>{
   res.send("⚡️");
 });
 
+// Express error handler - ensure JSON is always returned, never unhandled rejection or raw HTML
+app.use((err, req, res, next) => {
+  console.error("Unhandled Express Error:", err);
+  if (!res.headersSent) {
+    res.status(err?.status || 500).json({
+      success: false,
+      message: err?.message || "An unexpected error occurred.",
+    });
+  }
+});
 
 module.exports = app;
+
 
