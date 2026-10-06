@@ -576,7 +576,7 @@ exports.placeOrderViaQrMenuDB = async (
     if (cartItems && cartItems.length > 0) {
       const itemsToInsert = cartItems.map((item) => ({
         order_id: orderId,
-        item_id: Number(item.id || item.item_id),
+        item_id: Number(item.id || item.item_id) || 1,
         variant_id: item.variant_id ? Number(item.variant_id) : null,
         price: Number(item.price) || 0,
         quantity: Number(item.quantity) || 1,
@@ -588,13 +588,17 @@ exports.placeOrderViaQrMenuDB = async (
     }
 
     if (customerId) {
-      const existing = await Customer.findOne({ phone: customerId, tenant_id: tenantId });
-      if (!existing) {
-        await Customer.create({
-          phone: customerId,
-          name: customerName || "Guest",
-          tenant_id: tenantId,
-        });
+      try {
+        const existing = await Customer.findOne({ phone: String(customerId), tenant_id: tenantId });
+        if (!existing) {
+          await Customer.create({
+            phone: String(customerId),
+            name: customerName || "Guest",
+            tenant_id: tenantId,
+          });
+        }
+      } catch (custErr) {
+        console.warn("Customer creation warning:", custErr?.message);
       }
     }
 

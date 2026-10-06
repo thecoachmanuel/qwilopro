@@ -43,6 +43,7 @@ export default function QRMenuPage() {
     cartItems: [],
     currentItemId: null,
     currency: "",
+    storeTables: [],
   });
 
   useEffect(() => {
@@ -68,6 +69,7 @@ export default function QRMenuPage() {
           categories: data?.categories,
           menuItems: data?.menuItems,
           storeTable: data?.storeTable || null,
+          storeTables: data?.storeTables || [],
           serviceCharge: data?.serviceCharge || null,
           cartItems: [...storedCart],
           currency: currency?.symbol || "",
@@ -577,6 +579,7 @@ export default function QRMenuPage() {
                 navigate(targetPath, {
                   state: {
                     storeTable: state.storeTable,
+                    storeTables: state.storeTables || [],
                     currency: currency,
                     serviceCharge: serviceCharge,
                     storeSettings: storeSettings,

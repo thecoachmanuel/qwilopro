@@ -79,23 +79,23 @@ const CartPage = () => {
 
   useEffect(() => {
     async function loadMeta() {
-      if (!meta.storeSettings && qrcode) {
+      if ((!meta.storeSettings || !meta.storeTables || meta.storeTables.length === 0) && qrcode) {
         try {
           const res = await getQRMenuInit(qrcode);
           if (res.status === 200) {
             const data = res.data;
             const cur = CURRENCIES.find((c) => c.cc === data?.storeSettings?.currency);
             const newMeta = {
-              storeTable: data?.storeTable || null,
-              currency: cur?.symbol || "₦",
-              serviceCharge: data?.serviceCharge || null,
-              storeSettings: data?.storeSettings || null,
-              storeTables: data?.storeTables || [],
+              storeTable: meta.storeTable || data?.storeTable || null,
+              currency: cur?.symbol || meta.currency || "₦",
+              serviceCharge: meta.serviceCharge !== null ? meta.serviceCharge : (data?.serviceCharge || null),
+              storeSettings: meta.storeSettings || data?.storeSettings || null,
+              storeTables: (data?.storeTables && data.storeTables.length > 0) ? data.storeTables : (meta.storeTables || []),
             };
             setMeta(newMeta);
             const storedCart = getCart(qrcode) || [];
             updateCart(storedCart, undefined, newMeta);
-            if (data?.storeTable) {
+            if ((data?.storeTable || meta.storeTable)) {
               setDeliveryType('dinein');
             } else {
               setDeliveryType((prev) => prev || 'dinein');

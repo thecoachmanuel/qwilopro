@@ -6,7 +6,8 @@ const DEFAULT_CART_KEY = 'RESTROPROSAAS__CART';
 export async function getQRMenuInit(qrcode, tableId) {
     axios.defaults.withCredentials = true;
     try {
-        const response = await axios.get(`${API}/qrmenu/${qrcode}?tableId=${tableId}`);
+        const query = (tableId && tableId !== "null" && tableId !== "undefined") ? `?tableId=${encodeURIComponent(tableId)}` : "";
+        const response = await axios.get(`${API}/qrmenu/${qrcode}${query}`);
         return response;
     } catch (error) {
         throw error;
