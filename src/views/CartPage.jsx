@@ -33,7 +33,7 @@ const CartPage = () => {
   });
   const [showPhoneFields, setShowPhoneFields] = useState(false);
   const [selectedCustomerType, setSelectedCustomerType] = useState(null);
-  const [deliveryType, setDeliveryType] = useState(null); // 'dinein' | 'pickup' | 'delivery'
+  const [deliveryType, setDeliveryType] = useState('dinein'); // 'dinein' | 'pickup' | 'delivery'
 
   const params = useParams();
   const qrcode = params.slug || params.qrcode;
@@ -56,6 +56,7 @@ const CartPage = () => {
   const nameRef = useRef(null);
   const phoneRef = useRef(null);
   const addressRef = useRef(null);
+  const tableNoRef = useRef(null);
   const dialogNotesIndexRef = useRef();
   const dialogNotesTextRef = useRef();
 
@@ -65,8 +66,8 @@ const CartPage = () => {
 
     if (storeTable) {
       setDeliveryType('dinein');
-    } else if (isDeliveryEnabled) {
-      setDeliveryType('pickup');
+    } else {
+      setDeliveryType((prev) => prev || 'dinein');
     }
 
     if (typeof window !== "undefined" && window.location.pathname.startsWith("/m/")) {
@@ -94,8 +95,8 @@ const CartPage = () => {
             updateCart(storedCart, undefined, newMeta);
             if (data?.storeTable) {
               setDeliveryType('dinein');
-            } else if (data?.storeSettings?.is_delivery_enabled == 1) {
-              setDeliveryType('pickup');
+            } else {
+              setDeliveryType((prev) => prev || 'dinein');
             }
           }
         } catch (e) {
@@ -198,7 +199,13 @@ const CartPage = () => {
   };
 
   const btnPlaceOrder = async () => {
-    const isDelivery = deliveryType === 'delivery';
+    if (!cartItems || cartItems.length === 0) {
+      toast.error(t('cart.empty_cart') || "Your cart is empty.");
+      return;
+    }
+
+    const activeDeliveryType = deliveryType || (storeTable ? 'dinein' : 'dinein');
+    const isDelivery = activeDeliveryType === 'delivery';
 
     if (isDelivery) {
       const phone = phoneRef.current?.value || "";
@@ -215,13 +222,13 @@ const CartPage = () => {
       if (!validatePhone(phone)) { toast.error(t('cart.valid_phone_error')); return; }
     }
 
-    if (!deliveryType) { toast.error("Please select a dining or delivery type."); return; }
-
     try {
       const tableId = storeTable?.id || null;
       const isCustomerInfo = isDelivery || showPhoneFields;
       const customerType = isCustomerInfo ? "CUSTOMER" : "WALKIN";
       const deliveryAddress = isDelivery ? (addressRef.current?.value || "").trim() : "";
+      const customTableNo = tableNoRef.current?.value?.trim() || "";
+
       const customer = isCustomerInfo
         ? {
             name: (nameRef.current?.value || "").trim() || "Guest",
@@ -230,8 +237,12 @@ const CartPage = () => {
           }
         : { name: "Guest", phone: "" };
 
-      // Attach delivery address note to the first item for kitchen/delivery visibility
-      if (deliveryAddress && cartItems.length > 0) {
+      // Attach table note or delivery address note to the first item for kitchen visibility
+      if (customTableNo && activeDeliveryType === 'dinein' && cartItems.length > 0) {
+        cartItems[0].notes = cartItems[0].notes
+          ? `${cartItems[0].notes} | Table: ${customTableNo}`
+          : `Table: ${customTableNo}`;
+      } else if (deliveryAddress && cartItems.length > 0) {
         cartItems[0].notes = cartItems[0].notes
           ? `${cartItems[0].notes} | Delivery to: ${deliveryAddress}`
           : `Delivery to: ${deliveryAddress}`;
@@ -240,7 +251,7 @@ const CartPage = () => {
       const appliedDeliveryFee = isDelivery ? deliveryFeeAmount : 0;
 
       toast.loading(t('cart.please_wait'));
-      const res = await createOrderFromQrMenu(deliveryType, cartItems, customerType, customer, tableId, qrcode, appliedDeliveryFee);
+      const res = await createOrderFromQrMenu(activeDeliveryType, cartItems, customerType, customer, tableId, qrcode, appliedDeliveryFee);
       toast.dismiss();
 
       if (res.status == 200) {
@@ -328,13 +339,11 @@ const CartPage = () => {
           )}
 
           {/* Delivery Type Selector */}
-          {(isDeliveryEnabled || !storeTable) && (
-            <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
-              {DELIVERY_TYPES.filter(dt => {
-                if (dt.key === 'dinein') return !!storeTable;
-                if (dt.key === 'delivery') return isDeliveryEnabled;
-                return true; // pickup always shown if no table
-              }).map(({ key, label, Icon }) => (
+          <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+            {DELIVERY_TYPES.filter(dt => {
+              if (dt.key === 'delivery') return isDeliveryEnabled;
+              return true; // dinein and pickup are always available
+            }).map(({ key, label, Icon }) => (
                 <button
                   key={key}
                   onClick={() => handleDeliveryTypeChange(key)}
@@ -348,7 +357,6 @@ const CartPage = () => {
                 </button>
               ))}
             </div>
-          )}
 
           {/* Cart Items */}
           <div className="mt-4 overflow-y-auto" style={{ maxHeight: 'calc(100vh - 340px)' }}>
@@ -482,6 +490,21 @@ const CartPage = () => {
                   {DELIVERY_TYPES.find(d => d.key === deliveryType)?.label || deliveryType}
                   {deliveryType === 'delivery' && deliveryFeeAmount > 0 && ` (+${currency}${deliveryFeeAmount.toFixed(2)} delivery fee)`}
                 </span>
+              </div>
+            )}
+
+            {/* Optional Table Number for Dine In without a scanned table */}
+            {deliveryType === 'dinein' && !storeTable && (
+              <div className="mt-3">
+                <label className="block text-xs font-semibold mb-1 text-gray-700 dark:text-gray-300">
+                  Table Number / Name <span className="text-gray-400 font-normal">(optional)</span>
+                </label>
+                <input
+                  type="text"
+                  ref={tableNoRef}
+                  className="text-sm w-full rounded-xl px-4 py-2.5 border border-restro-border-green dark:bg-black focus:outline-restro-green"
+                  placeholder="e.g. Table 5, Booth 2"
+                />
               </div>
             )}
 

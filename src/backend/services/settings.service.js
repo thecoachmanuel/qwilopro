@@ -572,7 +572,7 @@ exports.placeOrderViaQrMenuDB = async (
     if (cartItems && cartItems.length > 0) {
       const itemsToInsert = cartItems.map((item) => ({
         order_id: orderId,
-        item_id: item.id,
+        item_id: Number(item.id || item.item_id),
         variant_id: item.variant_id ? Number(item.variant_id) : null,
         price: Number(item.price) || 0,
         quantity: Number(item.quantity) || 1,

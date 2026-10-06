@@ -385,12 +385,14 @@ export default function OrdersPage() {
       if (res.status == 200) {
         const { subtotal, taxTotal, serviceChargeTotal, total, orders } = res.data;
 
-
         const tokenNoArray = orders.map(o=>o.token_no);
         const tokens = tokenNoArray.join(",");
 
+        const defaultPaymentType = state.selectedPaymentType || (paymentTypes?.length > 0 ? paymentTypes[0]?.id : 1);
+
         setState({
           ...state,
+          selectedPaymentType: defaultPaymentType,
           summaryNetTotal: subtotal,
           summaryTaxTotal: taxTotal,
           summaryServiceChargeTotal:serviceChargeTotal,
@@ -414,10 +416,8 @@ export default function OrdersPage() {
   };
   const btnPayAndComplete = async () => {
     const isPrintReceipt = printReceiptRef.current.checked || false;
+    const activePaymentId = state.selectedPaymentType || (paymentTypes?.length > 0 ? paymentTypes[0]?.id : 1);
 
-    if(!state.selectedPaymentType) {
-      return toast.error(t('orders.select_payment_method'));
-    }
     try {
       toast.loading(t('orders.loading_message'));
       const res = await payAndCompleteKitchenOrder(
@@ -426,7 +426,7 @@ export default function OrdersPage() {
         state.summaryTaxTotal,
         state.summaryServiceChargeTotal,
         state.summaryTotal,
-        state.selectedPaymentType,
+        activePaymentId,
       );
       toast.dismiss();
       if (res.status == 200) {
@@ -439,13 +439,13 @@ export default function OrdersPage() {
         document.getElementById("modal-order-summary-complete").close();
 
         if (isPrintReceipt) {
-          const { table_id, table_title, floor } = state.order;
+          const { table_id, table_title, floor } = state.order || {};
 
           const orders = [];
           const orderIds = state.completeOrderIds.join(", ");
 
-          for (const o of state.summaryOrders) {
-            const items = o.items;
+          for (const o of state.summaryOrders || []) {
+            const items = o.items || [];
             items.forEach((i) => {
               const variant = i.variant_id
                 ? {
@@ -473,11 +473,8 @@ export default function OrdersPage() {
             delivery_type,
           } = firstOrder;
 
-          const paymentType = paymentTypes.find((v)=>v.id == state.selectedPaymentType);
-          let paymentMethodText;
-          if(paymentType) {
-            paymentMethodText = paymentType.title;
-          }
+          const paymentType = (paymentTypes || []).find((v)=>v.id == activePaymentId);
+          let paymentMethodText = paymentType?.title || "Cash";
 
           setDetailsForReceiptPrint({
             cartItems: orders,
@@ -502,31 +499,33 @@ export default function OrdersPage() {
             "_blank",
             "toolbar=yes,scrollbars=yes,resizable=yes,top=500,left=500,width=400,height=400"
           );
-          receiptWindow.onload = (e) => {
-            setTimeout(() => {
-              receiptWindow.print();
-            }, 400);
-          };
+          if (receiptWindow) {
+            receiptWindow.onload = (e) => {
+              setTimeout(() => {
+                receiptWindow.print();
+              }, 400);
+            };
+          }
         }
 
-
-
         // Feedback
-        const link = getQRMenuLink(storeSettings?.unique_qr_code, storeSettings?.slug) + `/feedback?_ref=${invoiceId}${customerId?`&_cref=${customerId}`:''}`;
-
-        const qrDataURL = await QRCode.toDataURL(link, {width: 1080});
-
-        if(storeSettings?.is_feedback_enabled) {
-          document.getElementById("modal-collect-feedback").showModal();
+        if (storeSettings?.is_feedback_enabled && invoiceId) {
+          try {
+            const link = getQRMenuLink(storeSettings?.unique_qr_code, storeSettings?.slug) + `/feedback?_ref=${invoiceId}${customerId?`&_cref=${customerId}`:''}`;
+            const qrDataURL = await QRCode.toDataURL(link, {width: 1080});
+            setState((prev)=>({...prev,
+              selectedPaymentType: null,
+              feedbackInvoiceId: invoiceId,
+              feedbackCustomerId: customerId,
+              feedbackQRCode: qrDataURL
+            }));
+            document.getElementById("modal-collect-feedback").showModal();
+          } catch (qrErr) {
+            console.error("Feedback QR code generation error:", qrErr);
+          }
+        } else {
+          setState((prev)=>({...prev, selectedPaymentType: null }));
         }
-
-        setState((prev)=>({...prev,
-          selectedPaymentType: null,
-          feedbackInvoiceId: invoiceId,
-          feedbackCustomerId: customerId,
-          feedbackQRCode: qrDataURL
-        }));
-        // Feedback
       }
     } catch (error) {
       const message =

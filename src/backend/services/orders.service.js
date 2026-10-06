@@ -43,13 +43,12 @@ const decryptInvoiceId = (encryptedId) => {
 
 exports.getOrdersDB = async (tenantId) => {
   try {
-    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const oneDayLater = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
     const rawOrders = await Order.find({
       tenant_id: tenantId,
       status: { $nin: ["completed", "cancelled"] },
-      date: { $gte: oneDayAgo, $lte: oneDayLater },
+      date: { $gte: sevenDaysAgo },
     }).lean();
 
     const customerIds = rawOrders.map((o) => o.customer_id).filter(Boolean);
@@ -153,9 +152,15 @@ exports.updateOrderItemStatusDB = async (orderItemId, status, tenantId) => {
 
 exports.cancelOrderDB = async (orderIds, tenantId) => {
   try {
-    const ids = Array.isArray(orderIds) ? orderIds : [orderIds];
+    const rawIds = Array.isArray(orderIds) ? orderIds : [orderIds];
+    const numericIds = rawIds.map(Number).filter((n) => !isNaN(n));
+    const combinedIds = [...new Set([...rawIds, ...numericIds])];
     await Order.updateMany(
-      { id: { $in: ids }, tenant_id: tenantId },
+      { id: { $in: combinedIds }, tenant_id: tenantId },
+      { $set: { status: "cancelled" } }
+    );
+    await OrderItem.updateMany(
+      { order_id: { $in: combinedIds }, tenant_id: tenantId },
       { $set: { status: "cancelled" } }
     );
   } catch (error) {
@@ -166,9 +171,15 @@ exports.cancelOrderDB = async (orderIds, tenantId) => {
 
 exports.completeOrderDB = async (orderIds, tenantId) => {
   try {
-    const ids = Array.isArray(orderIds) ? orderIds : [orderIds];
+    const rawIds = Array.isArray(orderIds) ? orderIds : [orderIds];
+    const numericIds = rawIds.map(Number).filter((n) => !isNaN(n));
+    const combinedIds = [...new Set([...rawIds, ...numericIds])];
     await Order.updateMany(
-      { id: { $in: ids }, tenant_id: tenantId },
+      { id: { $in: combinedIds }, tenant_id: tenantId },
+      { $set: { status: "completed" } }
+    );
+    await OrderItem.updateMany(
+      { order_id: { $in: combinedIds }, tenant_id: tenantId },
       { $set: { status: "completed" } }
     );
   } catch (error) {
@@ -179,8 +190,10 @@ exports.completeOrderDB = async (orderIds, tenantId) => {
 
 exports.getInvoiceIdFromOrderIdsDB = async (orderIds, tenantId) => {
   try {
-    const ids = Array.isArray(orderIds) ? orderIds : [orderIds];
-    const order = await Order.findOne({ id: { $in: ids }, tenant_id: tenantId }).select("invoice_id customer_id").lean();
+    const rawIds = Array.isArray(orderIds) ? orderIds : [orderIds];
+    const numericIds = rawIds.map(Number).filter((n) => !isNaN(n));
+    const combinedIds = [...new Set([...rawIds, ...numericIds])];
+    const order = await Order.findOne({ id: { $in: combinedIds }, tenant_id: tenantId }).select("invoice_id customer_id").lean();
     if (!order) return null;
 
     return {
@@ -195,8 +208,14 @@ exports.getInvoiceIdFromOrderIdsDB = async (orderIds, tenantId) => {
 
 exports.getEncryptedInvoiceIdDB = async (invoiceId, tenantId) => {
   try {
-    const order = await Order.findOne({ invoice_id: invoiceId, tenant_id: tenantId }).select("invoice_id customer_id").lean();
-    if (!order) return null;
+    const validInvoiceId = Number(invoiceId) || invoiceId;
+    const order = await Order.findOne({ invoice_id: validInvoiceId, tenant_id: tenantId }).select("invoice_id customer_id").lean();
+    if (!order) {
+      return {
+        invoice_id: encryptInvoiceId(validInvoiceId),
+        customer_id: null,
+      };
+    }
 
     return {
       invoice_id: encryptInvoiceId(order.invoice_id),
@@ -233,18 +252,15 @@ exports.checkInvoiceIdDB = async (encryptedInvoiceId) => {
 
 exports.getOrdersPaymentSummaryDB = async (orderIdsToFindSummary, tenantId) => {
   try {
-    const ids = Array.isArray(orderIdsToFindSummary)
+    const rawIds = Array.isArray(orderIdsToFindSummary)
       ? orderIdsToFindSummary
-      : String(orderIdsToFindSummary).split(",").map(Number);
-
-    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const oneDayLater = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      : String(orderIdsToFindSummary).split(",").map((s) => s.trim());
+    const numericIds = rawIds.map(Number).filter((n) => !isNaN(n));
+    const combinedIds = [...new Set([...rawIds, ...numericIds])];
 
     const rawOrders = await Order.find({
-      id: { $in: ids },
+      id: { $in: combinedIds },
       tenant_id: tenantId,
-      status: { $nin: ["completed", "cancelled"] },
-      date: { $gte: oneDayAgo, $lte: oneDayLater },
     }).lean();
 
     const customerIds = rawOrders.map((o) => o.customer_id).filter(Boolean);
@@ -397,10 +413,17 @@ exports.createInvoiceDB = async (
 
 exports.completeOrdersAndSaveInvoiceIdDB = async (orderIds, invoiceId, tenantId) => {
   try {
-    const ids = Array.isArray(orderIds) ? orderIds : [orderIds];
+    const rawIds = Array.isArray(orderIds) ? orderIds : [orderIds];
+    const numericIds = rawIds.map(Number).filter((n) => !isNaN(n));
+    const combinedIds = [...new Set([...rawIds, ...numericIds])];
+    const validInvoiceId = Number(invoiceId) || invoiceId;
     await Order.updateMany(
-      { id: { $in: ids }, tenant_id: tenantId },
-      { $set: { status: "completed", payment_status: "paid", invoice_id: invoiceId } }
+      { id: { $in: combinedIds }, tenant_id: tenantId },
+      { $set: { status: "completed", payment_status: "paid", invoice_id: validInvoiceId } }
+    );
+    await OrderItem.updateMany(
+      { order_id: { $in: combinedIds }, tenant_id: tenantId },
+      { $set: { status: "completed" } }
     );
   } catch (error) {
     console.error("completeOrdersAndSaveInvoiceIdDB Error:", error);
