@@ -44,12 +44,16 @@ const decryptInvoiceId = (encryptedId) => {
 exports.getOrdersDB = async (tenantId) => {
   try {
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
 
     const rawOrders = await Order.find({
       tenant_id: tenantId,
-      status: { $nin: ["completed", "cancelled"] },
-      date: { $gte: sevenDaysAgo },
-    }).lean();
+      $or: [
+        { status: { $nin: ["completed", "cancelled"] }, date: { $gte: sevenDaysAgo } },
+        { status: "completed", date: { $gte: todayStart } },
+      ],
+    }).sort({ id: -1 }).lean();
 
     const customerIds = rawOrders.map((o) => o.customer_id).filter(Boolean);
     const tableIds = rawOrders.map((o) => o.table_id).filter(Boolean);

@@ -27,6 +27,8 @@ import {
   IconStars,
   IconX,
   IconTruck,
+  IconSearch,
+  IconFilter,
 } from "@tabler/icons-react";
 import { FRONTEND_DOMAIN, VITE_BACKEND_SOCKET_IO, iconStroke } from "../config/config";
 import { CURRENCIES } from "../config/currencies.config";
@@ -83,6 +85,10 @@ export default function OrdersPage() {
     feedbackQRCode: null,
   });
 
+  const [activeTab, setActiveTab] = useState("all"); // "all" | "new" | "ongoing" | "completed"
+  const [searchQuery, setSearchQuery] = useState("");
+  const [deliveryFilter, setDeliveryFilter] = useState("all"); // "all" | "dinein" | "takeaway" | "delivery"
+
   useEffect(() => {
     _init();
     _initSocket();
@@ -114,6 +120,92 @@ export default function OrdersPage() {
     isLoading,
     currency,
   } = state;
+
+  const classifyOrderGroup = (orderGroup) => {
+    const orders = orderGroup?.orders || [];
+    if (orders.length > 0 && orders.every((o) => o?.status === "completed")) {
+      return "completed";
+    }
+
+    const allItems = orders.flatMap((o) => o?.items || []);
+    if (allItems.length === 0) {
+      return "new";
+    }
+
+    const allFinished = allItems.every((i) =>
+      ["completed", "delivered", "cancelled"].includes(i?.status)
+    );
+    if (allFinished) {
+      return "completed";
+    }
+
+    const anyPreparing = allItems.some((i) => i?.status === "preparing");
+    const anyFinished = allItems.some((i) =>
+      ["completed", "delivered"].includes(i?.status)
+    );
+
+    if (anyPreparing || anyFinished) {
+      return "ongoing";
+    }
+
+    return "new";
+  };
+
+  const tabCounts = {
+    all: kitchenOrders?.length || 0,
+    new: (kitchenOrders || []).filter((og) => classifyOrderGroup(og) === "new").length,
+    ongoing: (kitchenOrders || []).filter((og) => classifyOrderGroup(og) === "ongoing").length,
+    completed: (kitchenOrders || []).filter((og) => classifyOrderGroup(og) === "completed").length,
+  };
+
+  const filteredOrders = (kitchenOrders || []).filter((orderGroup) => {
+    if (activeTab !== "all") {
+      if (classifyOrderGroup(orderGroup) !== activeTab) {
+        return false;
+      }
+    }
+
+    if (deliveryFilter !== "all") {
+      const deliveryType = orderGroup?.orders?.[0]?.delivery_type;
+      if (deliveryType !== deliveryFilter) {
+        return false;
+      }
+    }
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      const tokens = (orderGroup?.orders || [])
+        .map((o) => String(o?.token_no || ""))
+        .join(" ");
+      const customerName = (orderGroup?.orders || [])
+        .map((o) => o?.customer_name || "")
+        .join(" ")
+        .toLowerCase();
+      const customerPhone = (orderGroup?.orders || [])
+        .map((o) => String(o?.customer_id || ""))
+        .join(" ");
+      const tableTitle = (orderGroup?.table_title || "").toLowerCase();
+      const floor = (orderGroup?.floor || "").toLowerCase();
+      const itemTitles = (orderGroup?.orders || [])
+        .flatMap((o) => o?.items || [])
+        .map((i) => (i?.item_title || i?.title || "").toLowerCase())
+        .join(" ");
+
+      const matches =
+        tokens.includes(q) ||
+        customerName.includes(q) ||
+        customerPhone.includes(q) ||
+        tableTitle.includes(q) ||
+        floor.includes(q) ||
+        itemTitles.includes(q);
+
+      if (!matches) {
+        return false;
+      }
+    }
+
+    return true;
+  });
 
   const formatOfflineOrdersGroup = (offlineQueue) => {
     if (!offlineQueue || offlineQueue.length === 0) return [];
@@ -675,8 +767,119 @@ export default function OrdersPage() {
         </button>
       </div>
 
+      {/* Industry Standard Filter & Tabs Bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 mt-4 mb-2">
+        {/* Status Tabs */}
+        <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-restro-gray border border-restro-border-green overflow-x-auto max-w-full">
+          <button
+            onClick={() => setActiveTab("all")}
+            className={`px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition active:scale-95 flex items-center gap-1.5 whitespace-nowrap ${
+              activeTab === "all"
+                ? (theme === 'black' ? 'bg-restro-green-dark-mode text-white shadow-sm' : 'bg-restro-green text-white shadow-sm')
+                : 'text-restro-text hover:bg-restro-button-hover'
+            }`}
+          >
+            All
+            <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+              activeTab === "all"
+                ? 'bg-white/20 text-white'
+                : 'bg-gray-200 dark:bg-neutral-800 text-gray-700 dark:text-gray-300'
+            }`}>
+              {tabCounts.all}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("new")}
+            className={`px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition active:scale-95 flex items-center gap-1.5 whitespace-nowrap ${
+              activeTab === "new"
+                ? (theme === 'black' ? 'bg-restro-green-dark-mode text-white shadow-sm' : 'bg-restro-green text-white shadow-sm')
+                : 'text-restro-text hover:bg-restro-button-hover'
+            }`}
+          >
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            New
+            <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+              activeTab === "new"
+                ? 'bg-white/20 text-white'
+                : 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'
+            }`}>
+              {tabCounts.new}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("ongoing")}
+            className={`px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition active:scale-95 flex items-center gap-1.5 whitespace-nowrap ${
+              activeTab === "ongoing"
+                ? (theme === 'black' ? 'bg-amber-600 text-white shadow-sm' : 'bg-amber-500 text-white shadow-sm')
+                : 'text-restro-text hover:bg-restro-button-hover'
+            }`}
+          >
+            <span className="w-2 h-2 rounded-full bg-amber-500" />
+            Ongoing
+            <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+              activeTab === "ongoing"
+                ? 'bg-white/20 text-white'
+                : 'bg-amber-500/20 text-amber-600 dark:text-amber-400'
+            }`}>
+              {tabCounts.ongoing}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("completed")}
+            className={`px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-semibold transition active:scale-95 flex items-center gap-1.5 whitespace-nowrap ${
+              activeTab === "completed"
+                ? (theme === 'black' ? 'bg-neutral-700 text-white shadow-sm' : 'bg-slate-700 text-white shadow-sm')
+                : 'text-restro-text hover:bg-restro-button-hover'
+            }`}
+          >
+            <span className="w-2 h-2 rounded-full bg-blue-500" />
+            Completed
+            <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+              activeTab === "completed"
+                ? 'bg-white/20 text-white'
+                : 'bg-blue-500/20 text-blue-600 dark:text-blue-400'
+            }`}>
+              {tabCounts.completed}
+            </span>
+          </button>
+        </div>
+
+        {/* Search & Delivery Type Filter */}
+        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+          <div className="flex items-center px-3 py-1.5 rounded-xl bg-restro-gray border border-restro-border-green w-56 sm:w-64 gap-2">
+            <IconSearch size={18} stroke={iconStroke} className="text-gray-400 flex-shrink-0" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search token, table, customer..."
+              className="w-full bg-transparent outline-none text-sm placeholder:text-gray-400 text-restro-text"
+            />
+            {searchQuery && (
+              <button onClick={() => setSearchQuery("")} className="text-gray-400 hover:text-gray-600">
+                <IconX size={16} stroke={iconStroke} />
+              </button>
+            )}
+          </div>
+
+          <select
+            value={deliveryFilter}
+            onChange={(e) => setDeliveryFilter(e.target.value)}
+            className="px-3 py-1.5 rounded-xl text-sm bg-restro-gray border border-restro-border-green outline-none text-restro-text cursor-pointer"
+          >
+            <option value="all">All Types</option>
+            <option value="dinein">🍽️ Dine In</option>
+            <option value="takeaway">🛍️ Takeaway</option>
+            <option value="delivery">🚚 Delivery</option>
+          </select>
+        </div>
+      </div>
+
       {kitchenOrders?.length == 0 && (
-        <div className="w-full h-[calc(100vh-15vh)] flex gap-4 flex-col items-center justify-center">
+        <div className="w-full h-[calc(100vh-22vh)] flex gap-4 flex-col items-center justify-center">
           <img
             src="/assets/illustrations/orders-not-found.webp"
             alt={t('orders.no_orders_img_alt')}
@@ -686,9 +889,21 @@ export default function OrdersPage() {
         </div>
       )}
 
-      {kitchenOrders?.length > 0 && (
-        <div className={`mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4 `}>
-          {kitchenOrders.map((order, index) => {
+      {kitchenOrders?.length > 0 && filteredOrders?.length == 0 && (
+        <div className="w-full py-16 flex gap-3 flex-col items-center justify-center text-center">
+          <p className="text-gray-400 text-sm">No orders matching the selected filter</p>
+          <button
+            onClick={() => { setActiveTab("all"); setSearchQuery(""); setDeliveryFilter("all"); }}
+            className="text-xs px-3 py-1.5 rounded-xl bg-restro-green text-white font-semibold hover:bg-restro-green-button-hover transition active:scale-95"
+          >
+            Clear Filters
+          </button>
+        </div>
+      )}
+
+      {filteredOrders?.length > 0 && (
+        <div className={`mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4 `}>
+          {filteredOrders.map((order, index) => {
             const { table_id, table_title, floor, orders = [], order_ids = [] } = order || {};
 
             const tokenNoArray = (orders || []).map((o) => o?.token_no).filter(Boolean);

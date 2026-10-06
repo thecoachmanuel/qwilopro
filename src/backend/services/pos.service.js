@@ -26,10 +26,13 @@ exports.createOrderDB = async (
   invoiceId = null,
   username = null,
   deliveryFee = 0,
-  deliveryAddress = null
+  deliveryAddress = null,
+  customTokenNo = null
 ) => {
   try {
-    const tokenNo = await getNextDailyTokenValue(tenantId);
+    const tokenNo = (customTokenNo !== null && customTokenNo !== undefined && !isNaN(Number(customTokenNo)))
+      ? Number(customTokenNo)
+      : await getNextDailyTokenValue(tenantId);
     const validTableId = (tableId && !isNaN(Number(tableId))) ? Number(tableId) : null;
     const validCustomerType = String(customerType || "WALKIN").toUpperCase() === "CUSTOMER" ? "CUSTOMER" : "WALKIN";
 

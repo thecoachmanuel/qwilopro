@@ -47,6 +47,7 @@ exports.getOrders = async (req, res) => {
 
     for (const order of formattedOrders) {
         const tableId = order.table_id;
+        const isCompleted = order.status === "completed";
 
         if(!tableId) {
             ordersGroupedByTable.push({
@@ -59,7 +60,9 @@ exports.getOrders = async (req, res) => {
             continue;
         }
 
-        const orderIndex = ordersGroupedByTable.findIndex(o=>o.table_id==tableId);
+        const orderIndex = ordersGroupedByTable.findIndex(
+          (o) => o.table_id == tableId && (o.orders[0]?.status === "completed") === isCompleted
+        );
         if(orderIndex == -1) {
             ordersGroupedByTable.push({
                 table_id: tableId,

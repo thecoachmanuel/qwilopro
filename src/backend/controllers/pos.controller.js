@@ -15,6 +15,7 @@ const {
 const { createOrderDB, getPOSQROrdersCountDB, getPOSQROrdersDB, updateQROrderStatusDB, cancelAllQROrdersDB } = require("../services/pos.service");
 const { createInvoiceDB } = require("../services/orders.service");
 const { getPrinterConfigsDB, addPrinterConfigDB, updatePrinterConfigDB, deletePrinterConfigDB } = require("../services/printer.service");
+const { QROrder } = require("../models");
 
 exports.getPOSInitData = async (req, res) => {
   try {
@@ -107,10 +108,26 @@ exports.createOrder = async (req, res) => {
     const validCustomerType = String(customerType || "WALKIN").toUpperCase() === "CUSTOMER" ? "CUSTOMER" : "WALKIN";
     const safeDeliveryFee = Number(deliveryFee) || 0;
 
-    const result = await createOrderDB(tenantId, cart, deliveryType, validCustomerType, customerPhone, validTableId, 'pending', null, username, safeDeliveryFee, deliveryAddress);
+    let customTokenNo = null;
+    const qrOrderId = typeof selectedQrOrderItem === 'object' && selectedQrOrderItem !== null
+      ? (selectedQrOrderItem.id || selectedQrOrderItem.order_id)
+      : selectedQrOrderItem;
 
-    if(selectedQrOrderItem) {
-      await updateQROrderStatusDB(tenantId, selectedQrOrderItem, "completed");
+    if (qrOrderId) {
+      try {
+        const qrOrder = await QROrder.findOne({ id: Number(qrOrderId), tenant_id: tenantId }).lean();
+        if (qrOrder && qrOrder.token_no) {
+          customTokenNo = qrOrder.token_no;
+        }
+      } catch (qrErr) {
+        console.warn("Failed to lookup QR order token:", qrErr);
+      }
+    }
+
+    const result = await createOrderDB(tenantId, cart, deliveryType, validCustomerType, customerPhone, validTableId, 'pending', null, username, safeDeliveryFee, deliveryAddress, customTokenNo);
+
+    if(qrOrderId) {
+      await updateQROrderStatusDB(tenantId, qrOrderId, "completed");
     }
 
     if (global.io && tenantId) {
@@ -225,12 +242,28 @@ exports.createOrderAndInvoice = async (req, res) => {
     const validTableId = (tableId && !isNaN(Number(tableId))) ? Number(tableId) : null;
     const validCustomerType = String(customerType || "WALKIN").toUpperCase() === "CUSTOMER" ? "CUSTOMER" : "WALKIN";
 
-    const result = await createOrderDB(tenantId, cart, deliveryType, validCustomerType, customerPhone, validTableId, 'paid', invoiceId, username, safeDeliveryFee, deliveryAddress);
+    let customTokenNo = null;
+    const qrOrderId = typeof selectedQrOrderItem === 'object' && selectedQrOrderItem !== null
+      ? (selectedQrOrderItem.id || selectedQrOrderItem.order_id)
+      : selectedQrOrderItem;
+
+    if (qrOrderId) {
+      try {
+        const qrOrder = await QROrder.findOne({ id: Number(qrOrderId), tenant_id: tenantId }).lean();
+        if (qrOrder && qrOrder.token_no) {
+          customTokenNo = qrOrder.token_no;
+        }
+      } catch (qrErr) {
+        console.warn("Failed to lookup QR order token:", qrErr);
+      }
+    }
+
+    const result = await createOrderDB(tenantId, cart, deliveryType, validCustomerType, customerPhone, validTableId, 'paid', invoiceId, username, safeDeliveryFee, deliveryAddress, customTokenNo);
     const orderId = result.orderId;
     const tokenNo = result.tokenNo;
 
-    if(selectedQrOrderItem) {
-      await updateQROrderStatusDB(tenantId, selectedQrOrderItem, "completed");
+    if(qrOrderId) {
+      await updateQROrderStatusDB(tenantId, qrOrderId, "completed");
     }
 
     if (global.io && tenantId) {
