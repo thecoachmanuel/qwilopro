@@ -49,7 +49,37 @@ import {
   getGatewayInfo,
 } from "../../controllers/whatsapp.controller";
 
+const NECTAR_GROUP_CODE = [
+  "// POST /sessions/:sessionId/groups/create",
+  'app.post("/sessions/:sessionId/groups/create", auth, async (req, res) => {',
+  "  const { sessionId } = req.params;",
+  "  const { name, phones } = req.body;",
+  "  const session = tenantSessions.get(sessionId);",
+  '  if (!session || !session.sock || session.connectionStatus !== "open") {',
+  '    return res.status(400).json({ status: false, message: "WhatsApp not connected." });',
+  "  }",
+  "  try {",
+  '    const participants = (phones || []).map((p) => String(p).replace(/\\D/g, "") + "@s.whatsapp.net");',
+  "    const group = await session.sock.groupCreate(name, participants);",
+  "    let inviteCode = null;",
+  "    try { inviteCode = await session.sock.groupInviteCode(group.id); } catch (_) {}",
+  "    res.json({",
+  "      status: true,",
+  "      group: {",
+  "        id: group.id,",
+  "        subject: group.subject,",
+  "        inviteCode,",
+  '        inviteLink: inviteCode ? "https://chat.whatsapp.com/" + inviteCode : null,',
+  "      },",
+  "    });",
+  "  } catch (err) {",
+  "    res.status(500).json({ status: false, message: err.message });",
+  "  }",
+  "});",
+].join("\n");
+
 export default function SuperAdminWhatsAppPage() {
+
   const { theme } = useTheme();
 
   // ─── Connection States ──────────────────────────────────────────────────────
@@ -1274,8 +1304,10 @@ export default function SuperAdminWhatsAppPage() {
             Send custom messages or WhatsApp group invite links directly to your selected leads from your connected Qwilo Pro business number.
           </p>
 
+          <div className="space-y-4">
             {/* Anti-Ban Pacing Banner */}
             <div className="p-3.5 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/60 flex items-start gap-2.5 text-xs">
+
               <IconSparkles size={18} className="text-emerald-600 dark:text-emerald-400 mt-0.5 flex-shrink-0" />
               <div>
                 <span className="font-semibold text-emerald-800 dark:text-emerald-300">
@@ -1401,36 +1433,9 @@ export default function SuperAdminWhatsAppPage() {
               <code className="font-mono text-gray-700 dark:text-gray-200">whatsapp-service/index.js</code>:
             </p>
             <pre className="p-4 rounded-xl bg-black text-emerald-400 font-mono text-[11px] overflow-x-auto leading-relaxed">
-{`// POST /sessions/:sessionId/groups/create
-app.post("/sessions/:sessionId/groups/create", auth, async (req, res) => {
-  const { sessionId } = req.params;
-  const { name, phones } = req.body;
-  const session = tenantSessions.get(sessionId);
-  if (!session || !session.sock || session.connectionStatus !== "open") {
-    return res.status(400).json({ status: false, message: "WhatsApp not connected." });
-  }
-  try {
-    const participants = (phones || []).map(p => {
-      const clean = String(p).replace(/\\D/g, "");
-      return \`\${clean}@s.whatsapp.net\`;
-    });
-    const group = await session.sock.groupCreate(name, participants);
-    let inviteCode = null;
-    try { inviteCode = await session.sock.groupInviteCode(group.id); } catch (_) {}
-    res.json({
-      status: true,
-      group: {
-        id: group.id,
-        subject: group.subject,
-        inviteCode,
-        inviteLink: inviteCode ? \`https://chat.whatsapp.com/\${inviteCode}\` : null,
-      }
-    });
-  } catch (err) {
-    res.status(500).json({ status: false, message: err.message });
-  }
-});`}
+              {NECTAR_GROUP_CODE}
             </pre>
+
           </div>
         )}
       </div>
