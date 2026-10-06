@@ -75,7 +75,10 @@ app.prepare().then(async () => {
   server.use(i18n.init);
   server.use(userAgent.express());
   server.use("/api/v1/auth/stripe-webhook", express.raw({ type: "application/json" }));
-  server.use(express.json());
+  server.use(express.json({ limit: "50mb" }));
+  server.use(express.urlencoded({ limit: "50mb", extended: true }));
+
+
   server.use(
     fileUpload({
       preserveExtension: true,

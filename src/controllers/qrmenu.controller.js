@@ -36,16 +36,42 @@ export function setCart(cart, storeIdentifier) {
     localStorage.setItem(key, JSON.stringify(cart));
 }
 
+const STRIP_FIELDS = ['image', 'recipeItems', 'category', 'description', 'category_id'];
+
+function deepSanitizeCartItem(item) {
+    if (!item || typeof item !== 'object') return item;
+    const clean = { ...item };
+    STRIP_FIELDS.forEach((f) => delete clean[f]);
+    if (Array.isArray(clean.addons)) {
+        clean.addons = clean.addons.map((a) => {
+            if (!a || typeof a !== 'object') return a;
+            const { image, ...ca } = a; return ca;
+        });
+    }
+    if (Array.isArray(clean.variants)) {
+        clean.variants = clean.variants.map((v) => {
+            if (!v || typeof v !== 'object') return v;
+            const { image, ...cv } = v; return cv;
+        });
+    }
+    return clean;
+}
+
 export async function createOrderFromQrMenu(deliveryType, cartItems, customerType, customer, tableId, qrcode, deliveryFee = 0) {
     try {
+        const cleanCartItems = Array.isArray(cartItems)
+            ? cartItems.map(deepSanitizeCartItem)
+            : cartItems;
+
         const response = await axios.post(`${API}/qrmenu/${qrcode}/place-order`, {
-           deliveryType, cartItems, customerType, customer, tableId, deliveryFee
+           deliveryType, cartItems: cleanCartItems, customerType, customer, tableId, deliveryFee
         });
         return response;
     } catch (error) {
         throw error;
     }
 }
+
 
 export async function saveFeedback(qrcode, invoiceId, customerId, name, phone, email, birthdate, food_quality, service, ambiance, staff_behavior, recommend, remarks) {
     try {

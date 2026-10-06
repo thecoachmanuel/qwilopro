@@ -5,7 +5,9 @@ const { isLoggedIn, isAuthenticated, hasRefreshToken, authorize } = require("../
 const router = express.Router();
 
 router.post("/signin", signIn);
+router.post("/login", signIn);
 router.post("/signup", signUp);
+
 router.post("/signout", isLoggedIn, isAuthenticated, signOut);
 router.post("/refresh-token", hasRefreshToken, getNewAccessToken);
 router.post("/remove-device", isLoggedIn, isAuthenticated, removeDeviceAccessToken);

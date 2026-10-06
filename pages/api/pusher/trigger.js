@@ -1,29 +1,35 @@
 /**
  * Pusher event trigger endpoint.
  * Called by the frontend to emit real-time events (replaces socket.io emits).
- * Only authenticated requests can trigger events.
+ * 
+ * IMPORTANT: This endpoint must NEVER return 5xx — real-time events are
+ * best-effort and the main order flow must not be blocked by Pusher failures.
  */
 
 const buf = require('buffer');
 if (!buf.SlowBuffer) buf.SlowBuffer = Buffer;
 
-const Pusher = require('pusher');
-const { connectDB } = require('../../../src/backend/db/connect');
-const { getTenantIdFromQRCode } = require('../../../src/backend/services/settings.service');
-const mongoose = require('mongoose');
-
 let pusher = null;
 function getPusher() {
-  if (!pusher) {
-    pusher = new Pusher({
-      appId: process.env.PUSHER_APP_ID,
-      key: process.env.NEXT_PUBLIC_PUSHER_KEY,
-      secret: process.env.PUSHER_SECRET,
-      cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER || 'mt1',
-      useTLS: true,
-    });
+  try {
+    const appId = process.env.PUSHER_APP_ID;
+    const key = process.env.NEXT_PUBLIC_PUSHER_KEY || process.env.PUSHER_KEY;
+    const secret = process.env.PUSHER_SECRET;
+    if (!appId || !key || !secret) return null;
+    if (!pusher) {
+      const Pusher = require('pusher');
+      pusher = new Pusher({
+        appId,
+        key,
+        secret,
+        cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER || 'mt1',
+        useTLS: true,
+      });
+    }
+    return pusher;
+  } catch (e) {
+    return null;
   }
-  return pusher;
 }
 
 export default async function pusherTrigger(req, res) {
@@ -31,64 +37,78 @@ export default async function pusherTrigger(req, res) {
     return res.status(405).json({ message: 'Method not allowed' });
   }
 
-  const { event, payload, tenantId, qrcode } = req.body;
-
-  if (!event) {
-    return res.status(400).json({ message: 'event is required' });
-  }
-
   try {
-    const p = getPusher();
+    const { event, payload, tenantId, qrcode } = req.body || {};
 
-    // Map socket.io-style backend events to Pusher channel events
+    if (!event) {
+      return res.status(400).json({ message: 'event is required' });
+    }
+
+    const p = getPusher();
+    if (!p) {
+      // Pusher not configured — silently succeed so order flow is unaffected
+      return res.status(200).json({ success: true, warning: 'Pusher credentials not configured' });
+    }
+
     switch (event) {
       case 'new_order_backend': {
-        // Notify kitchen/orders page about a new order for this tenant
-        if (!tenantId) return res.status(400).json({ message: 'tenantId required' });
+        if (!tenantId) return res.status(200).json({ success: false, warning: 'tenantId required' });
         await p.trigger(`tenant-${tenantId}`, 'new_order', payload || {});
         break;
       }
 
       case 'new_qrorder_backend': {
-        // QR order: resolve tenant from qrcode, then notify
-        if (!qrcode) return res.status(400).json({ message: 'qrcode required' });
-        if (mongoose.connection.readyState !== 1) await connectDB();
-        const tid = await getTenantIdFromQRCode(qrcode);
-        if (tid) {
-          await p.trigger(`tenant-${tid}`, 'new_qrorder', payload || {});
+        // If tenantId is provided directly, use it; otherwise try to resolve from qrcode
+        if (tenantId) {
+          await p.trigger(`tenant-${tenantId}`, 'new_qrorder', payload || {});
+        } else if (qrcode) {
+          // Lazy-load DB dependency only when needed
+          try {
+            const mongoose = require('mongoose');
+            if (mongoose.connection.readyState !== 1) {
+              const { connectDB } = require('../../../src/backend/db/connect');
+              await connectDB();
+            }
+            const { getTenantIdFromQRCode } = require('../../../src/backend/services/settings.service');
+            const tid = await getTenantIdFromQRCode(qrcode);
+            if (tid) {
+              await p.trigger(`tenant-${tid}`, 'new_qrorder', payload || {});
+            }
+          } catch (dbErr) {
+            console.warn('Pusher new_qrorder DB resolution warning:', dbErr?.message);
+            // Non-fatal — real-time is best-effort
+          }
         }
         break;
       }
 
       case 'order_update_backend': {
-        // Notify all listeners of an order status change
-        if (!tenantId) return res.status(400).json({ message: 'tenantId required' });
+        if (!tenantId) return res.status(200).json({ success: false, warning: 'tenantId required' });
         await p.trigger(`tenant-${tenantId}`, 'order_update', payload || {});
         break;
       }
 
       case 'token_call_backend': {
-        // Kitchen calls a token number → notify token display screen
-        if (!tenantId) return res.status(400).json({ message: 'tenantId required' });
+        if (!tenantId) return res.status(200).json({ success: false, warning: 'tenantId required' });
         await p.trigger(`tenant-${tenantId}`, 'token_call', payload || {});
         break;
       }
 
       case 'cart_update_backend': {
-        // POS updates cart → notify customer-facing display screen
-        if (!tenantId) return res.status(400).json({ message: 'tenantId required' });
+        if (!tenantId) return res.status(200).json({ success: false, warning: 'tenantId required' });
         await p.trigger(`tenant-${tenantId}`, 'cart_update', payload || {});
         break;
       }
 
       default:
-        return res.status(400).json({ message: `Unknown event: ${event}` });
+        return res.status(200).json({ success: false, warning: `Unknown event: ${event}` });
     }
 
     return res.status(200).json({ success: true });
   } catch (err) {
-    console.error('Pusher trigger error:', err);
-    return res.status(500).json({ message: 'Failed to trigger event' });
+    // Always return 200 so frontend order flow is never blocked by Pusher errors
+    console.warn('Pusher trigger warning:', err?.message || err);
+    return res.status(200).json({ success: false, warning: 'Failed to trigger event' });
   }
 }
 
