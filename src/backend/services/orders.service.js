@@ -383,7 +383,7 @@ exports.createInvoiceDB = async (
       service_charge_total: Number(serviceChargeTotal) || 0,
       total: Number(total) || 0,
       created_at: date ? new Date(date) : new Date(),
-      payment_type_id: selectedPaymentType ? Number(selectedPaymentType) : null,
+      payment_type_id: selectedPaymentType ? Number(selectedPaymentType) : 1,
       tenant_id: tenantId,
       created_by: username,
     });

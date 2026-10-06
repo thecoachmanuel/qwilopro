@@ -939,8 +939,11 @@ export default function POSPage() {
 
     const { itemsTotal, taxTotal, serviceChargeTotal, deliveryFeeTotal, payableTotal } = calculateOrderSummary();
 
-    // Auto-select first payment type if none is selected
-    const defaultPayment = state.selectedPaymentType || (paymentTypes?.length > 0 ? paymentTypes[0].id : null);
+    // Auto-select first payment type if none is selected, with fallback to Cash
+    const availableTypes = (paymentTypes && paymentTypes.length > 0)
+      ? paymentTypes
+      : [{ id: 1, title: 'Cash', icon: 'cash' }];
+    const defaultPayment = state.selectedPaymentType || availableTypes[0]?.id || 1;
 
     setState({
       ...state,
@@ -954,9 +957,7 @@ export default function POSPage() {
     document.getElementById('modal-pay-and-send-kitchen-summary').showModal();
   }
   const btnPayAndSendToKitchen = async () => {
-    if(!state.selectedPaymentType) {
-      return toast.error(t('orders.select_payment_method'));
-    }
+    const activePaymentId = state.selectedPaymentType || (paymentTypes?.length > 0 ? paymentTypes[0]?.id : 1);
 
     const deliveryType = state.deliveryType || diningOptionRef.current?.value || "dinein";
     const tableId = (deliveryType === "delivery" || deliveryType === "takeaway") ? null : (state.selectedTableId || tableRef.current?.value || null);
@@ -968,7 +969,7 @@ export default function POSPage() {
     const page_format = printSettings?.page_format || null;
     const is_enable_print = printSettings?.is_enable_print || 0;
 
-    const paymentType = paymentTypes.find((v)=>v.id == state.selectedPaymentType);
+    const paymentType = (paymentTypes || []).find((v)=>v.id == activePaymentId);
     let paymentMethodText = paymentType ? paymentType.title : "Cash";
 
     // Handle offline flow directly
@@ -986,7 +987,7 @@ export default function POSPage() {
         taxTotal: state.taxTotal,
         serviceChargeTotal: state.serviceChargeTotal,
         payableTotal: state.payableTotal,
-        selectedPaymentType: state.selectedPaymentType,
+        selectedPaymentType: activePaymentId,
         selectedPaymentTitle: paymentMethodText,
       });
 
@@ -1037,7 +1038,7 @@ export default function POSPage() {
 
     try {
       toast.loading(t('pos.please_wait'));
-      const res = await createOrderAndInvoice(cartItems, deliveryType, customerType, customer, tableId, state.itemsTotal, state.taxTotal, state.serviceChargeTotal , state.payableTotal, state.selectedQrOrderItem, state.selectedPaymentType, deliveryFee, deliveryAddress);
+      const res = await createOrderAndInvoice(cartItems, deliveryType, customerType, customer, tableId, state.itemsTotal, state.taxTotal, state.serviceChargeTotal , state.payableTotal, state.selectedQrOrderItem, activePaymentId, deliveryFee, deliveryAddress);
       toast.dismiss();
       if(res.status == 200) {
         const data = res.data;
@@ -2149,14 +2150,13 @@ export default function POSPage() {
           </div>
 
           <div
-            className={`grid gap-2 grid-cols-3`
-          }
+            className={`grid gap-2 grid-cols-3`}
           >
-            {(paymentTypes || []).map((paymentType, i)=>{
+            {((paymentTypes && paymentTypes.length > 0) ? paymentTypes : [{ id: 1, title: 'Cash', icon: 'cash' }]).map((paymentType, i)=>{
               const uniqueId = `icon-${paymentType?.id}`;
               return <label key={i} className=''>
                 <input
-                checked={state?.selectedPaymentType == paymentType?.id}
+                checked={(state?.selectedPaymentType || 1) == paymentType?.id}
                 onChange={e=>{
                   setState({
                     ...state,
@@ -2164,7 +2164,7 @@ export default function POSPage() {
                   });
                 }} type="radio" name="payment_type" id={uniqueId} value={paymentType?.id} className='peer hidden' />
                 <label htmlFor={uniqueId} className='border dark:border-restro-gray rounded-2xl flex items-center justify-center gap-1 flex-col px-4 py-3 peer-checked:border-restro-green peer-checked:text-restro-green peer-checked:font-bold cursor-pointer transition'>
-                  {paymentType?.icon ? <div>{PAYMENT_ICONS[paymentType?.icon]}</div>:<></>}
+                  {paymentType?.icon ? <div>{PAYMENT_ICONS[paymentType?.icon] || PAYMENT_ICONS['cash']}</div>:<></>}
                   <p className='text-xs'>{paymentType.title}</p>
                 </label>
               </label>

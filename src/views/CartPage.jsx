@@ -281,7 +281,7 @@ const CartPage = () => {
       // Only redirect to /order-failed for server errors (5xx) or network failures
       // For 4xx (bad request, not found), just show the error and let user retry
       if (!statusCode || statusCode >= 500) {
-        navigate('/order-failed');
+        navigate('/order-failed', { state: { qrcode: storeSettings?.slug || qrcode } });
       }
     }
 

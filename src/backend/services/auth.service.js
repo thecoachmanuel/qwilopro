@@ -253,6 +253,13 @@ exports.signUpDB = async (bizName, username, password) => {
       show_notes: true,
     }).catch(() => {});
 
+    // Seed default payment methods
+    await PaymentType.insertMany([
+      { tenant_id: tenant.id, id: 1, title: "Cash", is_active: true, icon: "cash" },
+      { tenant_id: tenant.id, id: 2, title: "Debit / Credit Card", is_active: true, icon: "card" },
+      { tenant_id: tenant.id, id: 3, title: "Bank Transfer", is_active: true, icon: "bank" },
+    ]).catch(() => {});
+
     await InvoiceSequence.create({
       tenant_id: tenant.id,
       sequence_no: 0,

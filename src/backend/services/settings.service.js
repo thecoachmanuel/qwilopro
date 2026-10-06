@@ -60,13 +60,43 @@ exports.getTenantIdFromQRCode = async (qrcode) => {
 
     if (!store) {
       const slugified = cleanCode.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+      const withoutThe = cleanCode.replace(/^the-/, "");
+      const withThe = `the-${cleanCode}`;
+      const namePattern = cleanCode.replace(/[-_]+/g, "\\s*");
+
       store = await StoreDetails.findOne({
         $or: [
           { slug: slugified },
+          { slug: withoutThe },
+          { slug: withThe },
           { custom_domain: slugified },
+          { custom_domain: withoutThe },
           { store_name: new RegExp(`^${qrcode}$`, "i") },
+          { store_name: new RegExp(`^(the\\s+)?${namePattern}$`, "i") },
+          { store_name: new RegExp(namePattern, "i") },
         ],
       }).select("tenant_id slug unique_qr_code custom_domain").lean();
+    }
+
+    if (!store) {
+      // Resilient fallback: check all stores if slugified store_name matches cleanCode or prefix
+      const allStores = await StoreDetails.find({}).select("tenant_id store_name slug unique_qr_code").lean();
+      for (const s of allStores) {
+        if (!s.store_name) continue;
+        const sSlug = s.slug ? s.slug.toLowerCase() : "";
+        const sNameSlug = s.store_name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+        const sNameNoThe = sNameSlug.replace(/^the-/, "");
+
+        if (
+          cleanCode === sNameSlug ||
+          cleanCode === sNameNoThe ||
+          (sSlug && cleanCode.startsWith(sSlug)) ||
+          (sSlug && sSlug.startsWith(cleanCode))
+        ) {
+          store = s;
+          break;
+        }
+      }
     }
 
     return store?.tenant_id || null;
@@ -339,7 +369,22 @@ exports.getPaymentTypesDB = async (activeOnly = false, tenantId) => {
     if (activeOnly) {
       query.is_active = true;
     }
-    return await PaymentType.find(query).select("id title is_active icon").lean();
+    let types = await PaymentType.find(query).select("id title is_active icon").lean();
+
+    if (!types || types.length === 0) {
+      const anyExist = await PaymentType.countDocuments({ tenant_id: tenantId });
+      if (anyExist === 0) {
+        const defaultTypes = [
+          { tenant_id: tenantId, id: 1, title: "Cash", is_active: true, icon: "cash" },
+          { tenant_id: tenantId, id: 2, title: "Debit / Credit Card", is_active: true, icon: "card" },
+          { tenant_id: tenantId, id: 3, title: "Bank Transfer", is_active: true, icon: "bank" },
+        ];
+        await PaymentType.insertMany(defaultTypes).catch(() => {});
+        types = await PaymentType.find(query).select("id title is_active icon").lean();
+      }
+    }
+
+    return types || [];
   } catch (error) {
     console.error("getPaymentTypesDB Error:", error);
     throw error;

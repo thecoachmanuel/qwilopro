@@ -52,10 +52,10 @@ exports.createOrderDB = async (
     if (cartItems && cartItems.length > 0) {
       const orderItemsData = cartItems.map((item) => ({
         order_id: orderId,
-        item_id: item.id,
-        variant_id: item.variant_id || null,
-        price: item.price,
-        quantity: item.quantity,
+        item_id: Number(item.id) || 1,
+        variant_id: item.variant_id ? Number(item.variant_id) : null,
+        price: Number(item.price) || 0,
+        quantity: Number(item.quantity) || 1,
         notes: item.notes || "",
         addons: item?.addons_ids?.length > 0 ? JSON.stringify(item.addons_ids) : null,
         tenant_id: tenantId,
