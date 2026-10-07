@@ -79,7 +79,7 @@ exports.placeOrderViaQrMenu = async (req, res) => {
         });
       }
 
-      const {cartItems, customerType, customer, tableId, deliveryFee} = req.body || {};
+      const {cartItems, customerType, customer, tableId, deliveryFee, deliveryAddress} = req.body || {};
       let deliveryType = (req.body || {}).deliveryType;
 
       // Normalize delivery type: 'pickup' → 'takeaway'
@@ -96,6 +96,7 @@ exports.placeOrderViaQrMenu = async (req, res) => {
       // Safely extract customer fields — customer may be undefined (WALKIN)
       const customerPhone = customer?.phone || (typeof customer === 'string' ? customer : null) || null;
       const customerName  = customer?.name  || null;
+      const resolvedAddress = deliveryAddress || customer?.address || null;
 
       // Sanitize tableId — must be numeric
       const safeTableId = (tableId && !isNaN(Number(tableId))) ? Number(tableId) : null;
@@ -110,7 +111,8 @@ exports.placeOrderViaQrMenu = async (req, res) => {
         safeTableId,
         customerName,
         'pending',
-        safeDeliveryFee
+        safeDeliveryFee,
+        resolvedAddress
       );
 
       // Realtime notification to restaurant POS / Kitchen

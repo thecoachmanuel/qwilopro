@@ -443,6 +443,7 @@ const qrOrderSchema = new mongoose.Schema({
   table_id: { type: Number, default: null },
   token_no: { type: Number, default: 0 },
   delivery_fee: { type: Number, default: 0 },
+  delivery_address: { type: String, default: null },
   status: { type: String, enum: ["created", "completed", "cancelled"], default: "created" },
   payment_status: { type: String, enum: ["pending", "paid"], default: "pending" },
   tenant_id: { type: Number, required: true, index: true },

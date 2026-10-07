@@ -111,3 +111,13 @@ export async function payAndCompleteKitchenOrder(
         throw error;
     }
 }
+
+export async function getOrderDetail(orderId) {
+    try {
+        const res = await ApiClient.get(`/orders/${orderId}/detail`);
+        return res;
+    } catch (error) {
+        throw error;
+    }
+}
+

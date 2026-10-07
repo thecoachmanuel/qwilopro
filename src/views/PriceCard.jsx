@@ -1,6 +1,7 @@
 import { IconCheck } from "@tabler/icons-react";
 import React from "react";
 import { useTranslation } from "react-i18next";
+import { getUserDetailsInLocalStorage } from "../helpers/UserDetails";
 
 const PricingCard = ({
   plan,
@@ -14,6 +15,15 @@ const PricingCard = ({
   index,
   country,
 }) => {
+  const user = getUserDetailsInLocalStorage();
+  const hasAlreadyUsedTrial = Number(user?.hasTrial) === 1;
+  const isCurrentlySubscribed = Boolean(
+    user?.is_active == 1 &&
+    user?.subscription_end &&
+    new Date(user.subscription_end).getTime() > Date.now()
+  );
+  const isCurrentlyOnTrial = Boolean(user?.isTrialPlan == 1 && isCurrentlySubscribed);
+  const canStartTrial = Boolean(plan?.is_trial && !hasAlreadyUsedTrial && !isCurrentlySubscribed);
   const getPrice = (frequency) => {
     // 1. Always prioritize Nigerian Naira (NGN / ₦) as primary platform currency
     let price = plan?.prices?.find(
@@ -104,7 +114,7 @@ const PricingCard = ({
         ""
       )} */}
 
-      {plan.is_recommended || plan.is_trial ? (
+      {plan.is_recommended || (plan.is_trial && !hasAlreadyUsedTrial) ? (
         <div className="absolute -top-4 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 z-10">
           {plan.is_recommended ? (
             <span className="bg-restro-green text-white text-xs font-semibold px-4 py-1 rounded-full shadow">
@@ -114,7 +124,7 @@ const PricingCard = ({
             ""
           )}
 
-          {plan.is_trial ? (
+          {plan.is_trial && !hasAlreadyUsedTrial ? (
             <span className="bg-restro-green text-white text-xs font-semibold px-3 py-1 rounded-full shadow">
               {plan.trial_days} {t("inactive_subscription.days_free_trial")}
             </span>
@@ -178,23 +188,57 @@ const PricingCard = ({
         )}
       </div>
 
-      <button
-        className={`w-full py-3 px-6 rounded-lg font-semibold transition-all duration-300 mb-8 ${
-          plan?.is_recommended
-            ? "bg-restro-green text-white hover:opacity-90 shadow-lg"
-            : "bg-restro-green text-white hover:bg-muted"
-        }`}
-        onClick={() => {
-          setStripePriceId(priceId);
-          setIsTrial(plan?.is_trial);
-          setTrialDays(plan?.trial_days);
-          onClick(priceId, plan?.is_trial, plan?.trial_days, plan?.id);
-        }}
-      >
-        {plan?.is_trial
-          ? t("inactive_subscription.start_free_trial")
-          : t("inactive_subscription.subscribe")}
-      </button>
+      {canStartTrial ? (
+        <div className="space-y-2 mb-8">
+          <button
+            className={`w-full py-3 px-6 rounded-lg font-semibold transition-all duration-300 ${
+              plan?.is_recommended
+                ? "bg-restro-green text-white hover:opacity-90 shadow-lg"
+                : "bg-restro-green text-white hover:bg-muted"
+            }`}
+            onClick={() => {
+              setStripePriceId(priceId);
+              setIsTrial(true);
+              setTrialDays(plan?.trial_days || 14);
+              onClick(priceId, true, plan?.trial_days || 14, plan?.id);
+            }}
+          >
+            {t("inactive_subscription.start_free_trial")} ({plan?.trial_days || 14} {t("superadmin_plans.day")})
+          </button>
+          <button
+            type="button"
+            className="w-full text-xs text-center font-medium text-restro-green hover:underline py-1"
+            onClick={() => {
+              setStripePriceId(priceId);
+              setIsTrial(false);
+              setTrialDays(0);
+              onClick(priceId, false, 0, plan?.id);
+            }}
+          >
+            Or subscribe & pay directly
+          </button>
+        </div>
+      ) : (
+        <button
+          className={`w-full py-3 px-6 rounded-lg font-semibold transition-all duration-300 mb-8 ${
+            plan?.is_recommended
+              ? "bg-restro-green text-white hover:opacity-90 shadow-lg"
+              : "bg-restro-green text-white hover:bg-muted"
+          }`}
+          onClick={() => {
+            setStripePriceId(priceId);
+            setIsTrial(false);
+            setTrialDays(0);
+            onClick(priceId, false, 0, plan?.id);
+          }}
+        >
+          {isCurrentlySubscribed
+            ? isCurrentlyOnTrial
+              ? "Subscribe Now (Keep Trial Days)"
+              : "Top-up / Extend Subscription"
+            : t("inactive_subscription.subscribe")}
+        </button>
+      )}
 
       <div className="space-y-4">
         <p className="text-sm font-semibold text-foreground">

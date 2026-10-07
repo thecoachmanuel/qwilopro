@@ -10,6 +10,8 @@ const {
   MenuItemAddon,
   Tax,
   Invoice,
+  QROrder,
+  QROrderItem,
 } = require("../models");
 const { getNextSequenceValue } = require("../db/counter");
 
@@ -81,6 +83,10 @@ exports.getOrdersDB = async (tenantId) => {
         status: o.status,
         payment_status: o.payment_status,
         token_no: o.token_no,
+        delivery_fee: o.delivery_fee || 0,
+        delivery_address: o.delivery_address || null,
+        invoice_id: o.invoice_id || null,
+        created_by: o.created_by || null,
       };
     });
 
@@ -436,6 +442,113 @@ exports.completeOrdersAndSaveInvoiceIdDB = async (orderIds, invoiceId, tenantId)
     );
   } catch (error) {
     console.error("completeOrdersAndSaveInvoiceIdDB Error:", error);
+    throw error;
+  }
+};
+
+/**
+ * Get full detail of a single POS order (kitchen/orders view):
+ * includes items with addon titles, variant titles, customer info,
+ * table info, delivery address, and time placed.
+ */
+exports.getOrderDetailDB = async (orderId, tenantId) => {
+  try {
+    let order = await Order.findOne({ id: Number(orderId), tenant_id: tenantId }).lean();
+    let isQROrder = false;
+
+    if (!order) {
+      order = await QROrder.findOne({ id: Number(orderId), tenant_id: tenantId }).lean();
+      if (!order) return null;
+      isQROrder = true;
+    }
+
+    const [items, customerArr, tableArr] = await Promise.all([
+      isQROrder
+        ? QROrderItem.find({ order_id: order.id, tenant_id: tenantId }).lean()
+        : OrderItem.find({ order_id: order.id, tenant_id: tenantId }).lean(),
+      order.customer_id
+        ? Customer.find({ phone: order.customer_id, tenant_id: tenantId }).select("phone name email").lean()
+        : Promise.resolve([]),
+      order.table_id
+        ? StoreTable.find({ id: order.table_id, tenant_id: tenantId }).select("id table_title floor").lean()
+        : Promise.resolve([]),
+    ]);
+
+    const customer = customerArr[0] || null;
+    const table = tableArr[0] || null;
+
+    const itemIds = items.map((i) => i.item_id);
+    const variantIds = items.map((i) => i.variant_id).filter(Boolean);
+    const allAddonIds = [
+      ...new Set(
+        items.flatMap((i) => {
+          try { return i.addons ? JSON.parse(i.addons) : []; } catch { return []; }
+        })
+      ),
+    ];
+
+    const [menuItems, variants, addons] = await Promise.all([
+      MenuItem.find({ id: { $in: itemIds }, tenant_id: tenantId }).select("id title description price").lean(),
+      variantIds.length > 0
+        ? MenuItemVariant.find({ id: { $in: variantIds }, tenant_id: tenantId }).select("id item_id title price").lean()
+        : Promise.resolve([]),
+      allAddonIds.length > 0
+        ? MenuItemAddon.find({ id: { $in: allAddonIds }, tenant_id: tenantId }).select("id title price").lean()
+        : Promise.resolve([]),
+    ]);
+
+    const menuMap = new Map(menuItems.map((m) => [m.id, m]));
+    const variantMap = new Map(variants.map((v) => [v.id, v]));
+    const addonMap = new Map(addons.map((a) => [a.id, a]));
+
+    const formattedItems = items.map((oi) => {
+      const menuItem = menuMap.get(oi.item_id) || {};
+      const variant = oi.variant_id ? variantMap.get(oi.variant_id) : null;
+      let parsedAddonIds = [];
+      try { parsedAddonIds = oi.addons ? JSON.parse(oi.addons) : []; } catch { parsedAddonIds = []; }
+      const resolvedAddons = parsedAddonIds.map((id) => addonMap.get(id)).filter(Boolean);
+
+      return {
+        id: oi.id,
+        order_id: oi.order_id,
+        item_id: oi.item_id,
+        item_title: menuItem.title || "",
+        item_description: menuItem.description || "",
+        variant_id: oi.variant_id || null,
+        variant_title: variant?.title || null,
+        variant_price: variant?.price || null,
+        price: oi.price,
+        quantity: oi.quantity,
+        status: oi.status,
+        notes: oi.notes || "",
+        addons: resolvedAddons,
+        date: oi.date,
+      };
+    });
+
+    return {
+      id: order.id,
+      date: order.date, // full ISO timestamp — time placed
+      delivery_type: order.delivery_type,
+      delivery_fee: order.delivery_fee || 0,
+      delivery_address: order.delivery_address || null,
+      customer_type: order.customer_type,
+      status: order.status,
+      payment_status: order.payment_status,
+      token_no: order.token_no,
+      invoice_id: order.invoice_id || null,
+      created_by: order.created_by || (isQROrder ? "QR Online Storefront" : null),
+      source: isQROrder ? "qr_storefront" : "pos",
+      customer: customer
+        ? { id: customer.phone, name: customer.name, email: customer.email }
+        : { id: order.customer_id, name: order.customer_name || "Walk-in Customer", email: null },
+      table: table
+        ? { id: table.id, title: table.table_title, floor: table.floor }
+        : null,
+      items: formattedItems,
+    };
+  } catch (error) {
+    console.error("getOrderDetailDB Error:", error);
     throw error;
   }
 };

@@ -1,4 +1,4 @@
-const { getOrdersDB, updateOrderItemStatusDB, cancelOrderDB, completeOrderDB, getOrdersPaymentSummaryDB, createInvoiceDB, completeOrdersAndSaveInvoiceIdDB, getInvoiceIdFromOrderIdsDB, getEncryptedInvoiceIdDB } = require("../services/orders.service");
+const { getOrdersDB, updateOrderItemStatusDB, cancelOrderDB, completeOrderDB, getOrdersPaymentSummaryDB, createInvoiceDB, completeOrdersAndSaveInvoiceIdDB, getInvoiceIdFromOrderIdsDB, getEncryptedInvoiceIdDB, getOrderDetailDB } = require("../services/orders.service");
 const {
   getPaymentTypesDB,
   getPrintSettingDB,
@@ -388,3 +388,29 @@ exports.getInvoiceIdFromOrderId = async (req, res) => {
     });
   }
 };
+
+exports.getOrderDetail = async (req, res) => {
+  try {
+    const tenantId = req.user.tenant_id;
+    const orderId = req.params.id;
+
+    if (!orderId) {
+      return res.status(400).json({ success: false, message: req.__("invalid_request") });
+    }
+
+    const detail = await getOrderDetailDB(orderId, tenantId);
+
+    if (!detail) {
+      return res.status(404).json({ success: false, message: "Order not found" });
+    }
+
+    return res.status(200).json({ success: true, data: detail });
+  } catch (error) {
+    console.error("getOrderDetail Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: req.__("something_went_wrong_try_later"),
+    });
+  }
+};
+

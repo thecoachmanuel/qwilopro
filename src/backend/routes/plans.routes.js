@@ -22,6 +22,7 @@ const {
     deletePaystackPlan,
     generatePaystackManageSubscriptionLink,
     activateTrial,
+    updatePlanTrialDays,
 } = require("../controllers/plans.controller");
 
 const router = express.Router();
@@ -33,6 +34,7 @@ router.get("/country-details", getUserCountry);
 router.get("/:id", isLoggedIn, isAuthenticated, isSuperAdmin, getPlanById);
 router.post("/", isLoggedIn, isAuthenticated, isSuperAdmin, createPlan);
 router.put("/:id", isLoggedIn, isAuthenticated, isSuperAdmin, updatePlan);
+router.patch("/:id/trial-days", isLoggedIn, isAuthenticated, isSuperAdmin, updatePlanTrialDays);
 router.delete("/:id", isLoggedIn, isAuthenticated, isSuperAdmin, deletePlanById);
 router.post(
     "/stripe/manage-subscription",

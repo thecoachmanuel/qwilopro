@@ -19,6 +19,7 @@ const {
   getPaystackManageSubscriptionLink,
   deletePaystackPlanByIdDB,
   activateTrialDB,
+  updatePlanTrialDaysDB,
 } = require("../services/plans.service");
 
 
@@ -396,7 +397,7 @@ exports.generatePaystackManageSubscriptionLink = async (req, res) => {
 // paystack
 exports.createPaystackPlan = async (req, res) => {
   try {
-    const { title, features_description, features, is_recommended, discount, yearlyDiscount, currencies } = req.body;
+    const { title, features_description, features, is_recommended, discount, yearlyDiscount, currencies, trial_days, is_trial } = req.body;
 
     if (!title?.trim()) {
       return res.status(400).json({
@@ -426,7 +427,17 @@ exports.createPaystackPlan = async (req, res) => {
       });
     }
 
-    const result = await createPaystackPlanDB(title, features_description, features, is_recommended, discount, yearlyDiscount, currencies);
+    const result = await createPaystackPlanDB(
+      title,
+      features_description,
+      features,
+      is_recommended,
+      discount,
+      yearlyDiscount,
+      currencies,
+      trial_days,
+      is_trial
+    );
     return res.status(200).json(result);
   } catch (error) {
     console.error("createPaystackPlan error----------------->", error);
@@ -446,7 +457,7 @@ exports.createPaystackPlan = async (req, res) => {
 exports.updatePaystackPlan = async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, features_description, features, is_recommended, discount, yearlyDiscount } = req.body;
+    const { title, features_description, features, is_recommended, discount, yearlyDiscount, trial_days, is_trial } = req.body;
 
     if (!id) return res.status(400).json({ success: false, message: req.__("invalid_request") });
     if (!title?.trim()) return res.status(400).json({ success: false, message: req.__("title_required") });
@@ -460,6 +471,8 @@ exports.updatePaystackPlan = async (req, res) => {
       is_recommended,
       discount,
       yearlyDiscount,
+      trial_days,
+      is_trial,
     });
 
     if (!result.success) {
@@ -607,6 +620,53 @@ exports.activateTrial = async (req, res) => {
     return res.status(200).json(result);
   } catch (error) {
     console.error("activateTrial Controller Error:", error);
+
+    if (error.message === "TRIAL_ALREADY_USED") {
+      return res.status(409).json({
+        success: false,
+        message: "You have already used your free trial. Please choose a subscription plan to continue.",
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: error.message || req.__("something_went_wrong_try_later"),
+    });
+  }
+};
+
+exports.updatePlanTrialDays = async (req, res) => {
+  try {
+    const planId = req.params.id;
+    const { trialDays } = req.body;
+
+    if (!planId) {
+      return res.status(400).json({ success: false, message: req.__("invalid_request") });
+    }
+    if (trialDays === undefined || trialDays === null || trialDays === "") {
+      return res.status(400).json({ success: false, message: "Trial days value is required." });
+    }
+
+    const result = await updatePlanTrialDaysDB(planId, trialDays);
+
+    if (!result.success) {
+      const errMap = {
+        PLAN_NOT_FOUND: "Plan not found",
+        INVALID_TRIAL_DAYS: "Trial days must be a non-negative number",
+      };
+      return res.status(400).json({
+        success: false,
+        message: errMap[result.error] || req.__("something_went_wrong_try_later"),
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Trial days updated successfully.",
+      trial_days: result.trial_days,
+    });
+  } catch (error) {
+    console.error("updatePlanTrialDays Controller Error:", error);
     return res.status(500).json({
       success: false,
       message: error.message || req.__("something_went_wrong_try_later"),

@@ -551,7 +551,8 @@ exports.placeOrderViaQrMenuDB = async (
   tableId,
   customerName,
   paymentStatus = "pending",
-  deliveryFee = 0
+  deliveryFee = 0,
+  deliveryAddress = null
 ) => {
   try {
     const validTableId = (tableId && !isNaN(Number(tableId))) ? Number(tableId) : null;
@@ -561,6 +562,7 @@ exports.placeOrderViaQrMenuDB = async (
 
     const order = await QROrder.create({
       delivery_type: deliveryType,
+      delivery_address: deliveryAddress || null,
       customer_type: customerType,
       customer_id: customerId,
       customer_name: customerName || null,

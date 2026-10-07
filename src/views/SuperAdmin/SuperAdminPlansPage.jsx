@@ -40,6 +40,7 @@ import {
   getPlans,
   updatePlan,
   updatePaystackPlan,
+  updatePlanTrialDays,
 } from "../../controllers/plans.controller";
 import { PLAN_FEATURES, SCOPES } from "../../config/scopes";
 import { STRIPE_SUPPORTCURRENCIES, PAYSTACK_SUPPORTCURRENCIES } from "../../config/currencies.config";
@@ -82,6 +83,9 @@ export default function SuperAdminTenantsPage() {
   const ITEMS_PER_PAGE = 10;
   const [activePaymentGatewayName, setActivePaymentGatewayName] = useState("");
   const [editPlanId, setEditPlanId] = useState(null);
+  // Trial days quick-edit state
+  const [trialEditPlanId, setTrialEditPlanId] = useState(null);
+  const [trialEditValue, setTrialEditValue] = useState("");
 
   const CURRENCIESWITHNAME = useMemo(() => {
     const gatewayName = activePaymentGatewayName?.gateway_name?.toLowerCase();
@@ -166,6 +170,29 @@ export default function SuperAdminTenantsPage() {
     }
   };
 
+  const handleUpdateTrialDays = async () => {
+    if (!trialEditPlanId) return;
+    const days = Number(trialEditValue);
+    if (isNaN(days) || days < 0) {
+      return toast.error("Please enter a valid number of trial days (0 or more).");
+    }
+    try {
+      toast.loading("Updating trial days...");
+      const res = await updatePlanTrialDays(trialEditPlanId, days);
+      toast.dismiss();
+      if (res?.data?.success) {
+        toast.success(`Trial days updated to ${days} days.`);
+        await fetchPlans();
+        document.getElementById("modal-edit-trial-days")?.close();
+      } else {
+        toast.error(res?.data?.message || "Failed to update trial days");
+      }
+    } catch (err) {
+      toast.dismiss();
+      toast.error(err?.response?.data?.message || "Failed to update trial days");
+    }
+  };
+
   const resetAddPlanForm = () => {
     setTitle("");
     setFeaturesDescription([]);
@@ -188,13 +215,6 @@ export default function SuperAdminTenantsPage() {
     ]);
   };
 
-  // Reset trial when Paystack is selected
-  useEffect(() => {
-    if (isPaystack) {
-      setIsTrial(false);
-      setTrialDays("");
-    }
-  }, [isPaystack]);
 
   const fetchPlans = async () => {
     try {
@@ -311,8 +331,8 @@ export default function SuperAdminTenantsPage() {
         title,
         features_description: featuresDescription,
         features,
-        trial_days: isPaystack ? null : (isTrial ? Number(trialDays) : null),
-        is_trial: isPaystack ? 0 : (isTrial ? 1 : 0),
+        trial_days: isTrial ? Number(trialDays) : null,
+        is_trial: isTrial ? 1 : 0,
         is_recommended: isRecommended ? 1 : 0,
         discount: discount ? Number(discount) : 0,
         yearlyDiscount: yearlyDiscount ? Number(yearlyDiscount) : 0,
@@ -560,16 +580,30 @@ export default function SuperAdminTenantsPage() {
                     </td>
 
                     <td className="py-3 px-4 border-b border-gray-200">
-                      {plan.is_trial ? (
-                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-primary/10 text-primary">
-                          <IconClock className="w-3.5 h-3.5" />
-                          {plan.trial_days} {t("superadmin_plans.day")}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground text-sm">
-                          {t("superadmin_plans.no_trial")}
-                        </span>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {plan.is_trial ? (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-primary/10 text-primary">
+                            <IconClock className="w-3.5 h-3.5" />
+                            {plan.trial_days} {t("superadmin_plans.day")}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground text-sm">
+                            {t("superadmin_plans.no_trial")}
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          title="Change trial duration"
+                          onClick={() => {
+                            setTrialEditPlanId(plan.id);
+                            setTrialEditValue(plan.trial_days || 0);
+                            document.getElementById("modal-edit-trial-days")?.showModal();
+                          }}
+                          className="p-1 rounded-md text-xs text-primary hover:bg-restro-bg-gray transition"
+                        >
+                          <IconPencil size={14} stroke={iconStroke} />
+                        </button>
+                      </div>
                     </td>
 
                     <td className="py-3 px-4 border-b border-gray-200">
@@ -598,6 +632,17 @@ export default function SuperAdminTenantsPage() {
 
                     <td className="py-3 px-4 border-b border-gray-200">
                       <div className="flex gap-3">
+                        <button
+                          onClick={() => {
+                            setTrialEditPlanId(plan.id);
+                            setTrialEditValue(plan.trial_days || 0);
+                            document.getElementById("modal-edit-trial-days")?.showModal();
+                          }}
+                          title="Change Trial Days"
+                          className="rounded-[42px] bg-white dark:bg-restro-bg-gray p-3 text-restro-text hover:text-primary transition"
+                        >
+                          <IconClock size={24} stroke={iconStroke} />
+                        </button>
                         <button
                           onClick={() => openEditDialog(plan)}
                           className="rounded-[42px] bg-white dark:bg-restro-bg-gray p-3 text-restro-text"
@@ -1732,6 +1777,51 @@ export default function SuperAdminTenantsPage() {
               className="rounded-lg hover:bg-red-500 transition active:scale-95 hover:shadow-lg px-6 py-3 bg-red-700 text-white"
             >
               {t("superadmin_plans.yes_delete")}
+            </button>
+          </div>
+        </div>
+      </dialog>
+
+      {/* modal edit trial days */}
+      <dialog id="modal-edit-trial-days" className="modal modal-bottom sm:modal-middle">
+        <div className="modal-box bg-white dark:bg-restro-card-bg border border-restro-border-green rounded-2xl p-6">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center text-primary">
+              <IconClock size={22} stroke={iconStroke} />
+            </div>
+            <div>
+              <h3 className="font-bold text-lg text-foreground">Change Trial Duration</h3>
+              <p className="text-xs text-muted-foreground">Adjust trial days for this plan. Enter 0 to disable trial.</p>
+            </div>
+          </div>
+
+          <div className="mt-4">
+            <label className="block text-sm font-semibold mb-1 text-foreground">Trial Days</label>
+            <input
+              type="number"
+              min="0"
+              max="365"
+              value={trialEditValue}
+              onChange={(e) => setTrialEditValue(e.target.value)}
+              className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-restro-border-green dark:bg-restro-bg-gray focus:outline-none focus:ring-2 focus:ring-primary text-sm font-medium"
+              placeholder="e.g. 14"
+            />
+          </div>
+
+          <div className="flex justify-end gap-3 mt-6">
+            <button
+              type="button"
+              onClick={() => document.getElementById("modal-edit-trial-days")?.close()}
+              className="px-5 py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-restro-bg-gray transition"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleUpdateTrialDays}
+              className="px-5 py-2.5 rounded-xl bg-restro-green text-white text-sm font-semibold hover:bg-restro-green-button-hover active:scale-95 transition"
+            >
+              Save Changes
             </button>
           </div>
         </div>

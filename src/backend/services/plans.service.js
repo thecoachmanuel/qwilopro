@@ -668,7 +668,9 @@ exports.createPaystackPlanDB = async (
   is_recommended,
   discount,
   yearlyDiscount,
-  currencies
+  currencies,
+  trial_days = null,
+  is_trial = false
 ) => {
   try {
     let key = await getGatewayDB("paystack");
@@ -687,8 +689,8 @@ exports.createPaystackPlanDB = async (
       title,
       features_description: JSON.stringify(features_description || []),
       features: JSON.stringify(features || []),
-      trial_days: null,
-      is_trial: false,
+      trial_days: trial_days ? Number(trial_days) : null,
+      is_trial: Boolean(is_trial && Number(trial_days) > 0),
       is_recommended: !!is_recommended,
       discount: Number(discount) || 0,
       yearly_discount: Number(yearlyDiscount) || 0,
@@ -746,6 +748,8 @@ exports.updatePaystackPlanDB = async (id, payload) => {
     is_recommended,
     discount,
     yearlyDiscount,
+    trial_days,
+    is_trial,
   } = payload;
 
   try {
@@ -753,19 +757,26 @@ exports.updatePaystackPlanDB = async (id, payload) => {
     if (!plan) return { success: false, error: "PLAN_NOT_FOUND" };
     if (plan.payment_gateway !== "paystack") return { success: false, error: "NOT_PAYSTACK_PLAN" };
 
+    const updateFields = {
+      title,
+      features_description: JSON.stringify(features_description),
+      features: JSON.stringify(features),
+      is_recommended: !!is_recommended,
+      discount: Number(discount) || 0,
+      yearly_discount: Number(yearlyDiscount) || 0,
+      updated_at: new Date(),
+    };
+
+    if (trial_days !== undefined) {
+      updateFields.trial_days = trial_days ? Number(trial_days) : null;
+    }
+    if (is_trial !== undefined) {
+      updateFields.is_trial = Boolean(is_trial);
+    }
+
     await Plan.updateOne(
       { id: planId },
-      {
-        $set: {
-          title,
-          features_description: JSON.stringify(features_description),
-          features: JSON.stringify(features),
-          is_recommended: !!is_recommended,
-          discount: Number(discount) || 0,
-          yearly_discount: Number(yearlyDiscount) || 0,
-          updated_at: new Date(),
-        },
-      }
+      { $set: updateFields }
     );
 
     const prices = await PlanPrice.find({ plan_id: planId, is_active: true }).lean();
@@ -981,6 +992,7 @@ exports.verifyPaystackPaymentDB = async (reference, tenantId) => {
           payment_gateway_product_id: plan?.payment_gateway_product_id || null,
           payment_gateway: "paystack",
           hasTrial: 1,
+          isTrialPlan: 0,
         },
       }
     );
@@ -1050,10 +1062,30 @@ exports.getPaystackManageSubscriptionLink = async (subscriptionCode) => {
   return { link: data.data.link };
 };
 
+exports.updatePlanTrialDaysDB = async (planId, trialDays) => {
+  const plan = await Plan.findOne({ id: Number(planId), is_deleted: false });
+  if (!plan) return { success: false, error: "PLAN_NOT_FOUND" };
+
+  const days = Number(trialDays);
+  if (isNaN(days) || days < 0) return { success: false, error: "INVALID_TRIAL_DAYS" };
+
+  await Plan.updateOne(
+    { id: Number(planId) },
+    { $set: { trial_days: days, is_trial: days > 0, updated_at: new Date() } }
+  );
+
+  return { success: true, trial_days: days };
+};
+
 exports.activateTrialDB = async ({ tenantId, planId, trialDays = 14, username }) => {
   try {
     const tenant = await Tenant.findOne({ id: tenantId });
     if (!tenant) throw new Error("TENANT_NOT_FOUND");
+
+    // Industry-standard: one trial per tenant, ever
+    if (tenant.hasTrial === 1) {
+      throw new Error("TRIAL_ALREADY_USED");
+    }
 
     let plan = null;
     if (planId) {
@@ -1069,7 +1101,10 @@ exports.activateTrialDB = async ({ tenantId, planId, trialDays = 14, username })
     const subscriptionId = `trial_${tenantId}_${Date.now()}`;
 
     tenant.is_active = 1;
+    tenant.hasTrial = 1; // Mark trial as used — cannot be claimed again
+    tenant.isTrialPlan = 1;
     tenant.plan_id = plan ? plan.id : (tenant.plan_id || 1);
+    tenant.plan_title = plan?.title || tenant.plan_title;
     tenant.payment_gateway_product_id = plan?.payment_gateway_product_id || tenant.payment_gateway_product_id;
     tenant.subscription_start = startDate;
     tenant.subscription_end = endDate;

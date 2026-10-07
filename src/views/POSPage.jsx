@@ -1,7 +1,7 @@
 import React, { useContext, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next';
 import Page from "../components/Page";
-import { IconPlus, IconNotes, IconArmchair, IconScreenShare, IconSearch, IconDeviceFloppy, IconChefHat, IconCash, IconMinus, IconNote, IconTrash, IconFilter, IconPhoto, IconFilterFilled, IconClipboardList, IconX, IconClearAll, IconPencil, IconCheck, IconCarrot, IconRotate, IconQrcode, IconArmchair2, IconUser, IconCategory, IconGridDots, IconLayoutGrid, IconListDetails, IconListTree, IconMenu4, IconLayoutGridFilled, IconMenu2, IconLayoutList, IconLayout2, IconLayout2Filled, IconAlertTriangleFilled, IconWifiOff, IconVolume, IconVolumeOff, IconDevices, IconDeviceTv, IconTruckDelivery } from "@tabler/icons-react";
+import { IconPlus, IconNotes, IconArmchair, IconScreenShare, IconSearch, IconDeviceFloppy, IconChefHat, IconCash, IconMinus, IconNote, IconTrash, IconFilter, IconPhoto, IconFilterFilled, IconClipboardList, IconX, IconClearAll, IconPencil, IconCheck, IconCarrot, IconRotate, IconQrcode, IconArmchair2, IconUser, IconCategory, IconGridDots, IconLayoutGrid, IconListDetails, IconListTree, IconMenu4, IconLayoutGridFilled, IconMenu2, IconLayoutList, IconLayout2, IconLayout2Filled, IconAlertTriangleFilled, IconWifiOff, IconVolume, IconVolumeOff, IconDevices, IconDeviceTv, IconTruckDelivery, IconClock, IconMapPin } from "@tabler/icons-react";
 import { VITE_BACKEND_SOCKET_IO, iconStroke } from "../config/config";
 import { cancelAllQROrders, cancelQROrder, createOrder, createOrderAndInvoice, getDrafts, getQROrders, getQROrdersCount, initPOS, setDrafts } from "../controllers/pos.controller";
 import { CURRENCIES } from '../config/currencies.config';
@@ -808,6 +808,9 @@ export default function POSPage() {
       selectedQrOrderItem: qrOrder.id,
       customerType: qrOrder.customer_type,
       customer: {phone: qrOrder.customer_id, name: qrOrder.customer_name},
+      deliveryType: qrOrder.delivery_type || state.deliveryType,
+      deliveryAddress: qrOrder.delivery_address || "",
+      deliveryFee: Number(qrOrder.delivery_fee) || 0,
     })
     playTapSound();
 
@@ -2226,9 +2229,9 @@ export default function POSPage() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 px-6 pb-6">
             {state?.qrOrders?.map((qrOrder, index)=>{
-              const { customer_type, customer_id, customer_name, table_id, table_title, items, id, delivery_type, delivery_fee } = qrOrder;
+              const { customer_type, customer_id, customer_name, table_id, table_title, items, id, delivery_type, delivery_fee, delivery_address, date } = qrOrder;
 
-              return <div key={index} className='flex items-center gap-2 rounded-2xl p-3 border dark:border-restro-gray bg-white dark:bg-black/40 shadow-sm'>
+              return <div key={index} className='flex items-start gap-2 rounded-2xl p-3 border dark:border-restro-gray bg-white dark:bg-black/40 shadow-sm'>
                 <div className='w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center flex-shrink-0'>
                   <IconClipboardList stroke={iconStroke} size={22} />
                 </div>
@@ -2247,12 +2250,30 @@ export default function POSPage() {
                         🍽️ Table {table_title || "Dine-in"}
                       </span>
                     )}
+
+                    {date && (
+                      <span className="text-[10px] text-gray-400 flex items-center gap-0.5">
+                        <IconClock size={11} stroke={iconStroke} />
+                        {(() => {
+                          try {
+                            const d = new Date(date);
+                            return new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "numeric", hour12: true }).format(d);
+                          } catch { return ""; }
+                        })()}
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center gap-1 text-xs font-semibold text-gray-800 dark:text-gray-200 truncate">
                     <IconUser stroke={iconStroke} size={13} className="text-gray-400 flex-shrink-0" />
                     <p className='truncate'>{customer_type == "WALKIN" ? (customer_name || "Walk-in") : customer_name}</p>
                     {customer_id && <span className="text-[10px] text-gray-400 font-normal">({customer_id})</span>}
                   </div>
+                  {delivery_address && (
+                    <p className="text-[11px] text-emerald-700 dark:text-emerald-400 mt-0.5 truncate flex items-center gap-1">
+                      <IconMapPin size={11} stroke={iconStroke} className="flex-shrink-0" />
+                      <span className="truncate">{delivery_address}</span>
+                    </p>
+                  )}
                   <p className='text-[11px] text-gray-500 dark:text-gray-400 mt-0.5'>{items?.length || 0} {t('pos.cart_items')}</p>
                 </div>
                 <div className="flex flex-col gap-1.5">

@@ -187,6 +187,9 @@ exports.getPOSQROrdersDB = async (tenantId) => {
         floor: table?.floor || null,
         status: o.status,
         payment_status: o.payment_status,
+        delivery_address: o.delivery_address || null,
+        delivery_fee: o.delivery_fee || 0,
+        token_no: o.token_no || 0,
       };
     });
 

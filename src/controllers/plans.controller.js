@@ -169,3 +169,15 @@ export async function activateTrial(planId, trialDays = 14) {
     }
 }
 
+// SuperAdmin: update trial days for any plan
+export async function updatePlanTrialDays(planId, trialDays) {
+    axios.defaults.withCredentials = true;
+    try {
+        const response = await apiClient.patch(`/plans/${planId}/trial-days`, { trialDays });
+        return response;
+    } catch (error) {
+        throw error;
+    }
+}
+
+

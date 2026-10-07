@@ -10,6 +10,7 @@ import {
   getOrdersInit,
   payAndCompleteKitchenOrder,
   updateKitchenOrderItemStatus,
+  getOrderDetail,
 } from "../controllers/orders.controller";
 import { toast } from "react-hot-toast";
 import {
@@ -29,6 +30,11 @@ import {
   IconTruck,
   IconSearch,
   IconFilter,
+  IconEye,
+  IconMapPin,
+  IconUser,
+  IconPhone,
+  IconCalendarTime,
 } from "@tabler/icons-react";
 import { FRONTEND_DOMAIN, VITE_BACKEND_SOCKET_IO, iconStroke } from "../config/config";
 import { CURRENCIES } from "../config/currencies.config";
@@ -88,6 +94,58 @@ export default function OrdersPage() {
   const [activeTab, setActiveTab] = useState("all"); // "all" | "new" | "ongoing" | "completed"
   const [searchQuery, setSearchQuery] = useState("");
   const [deliveryFilter, setDeliveryFilter] = useState("all"); // "all" | "dinein" | "takeaway" | "delivery"
+  const [selectedOrderDetail, setSelectedOrderDetail] = useState(null);
+  const [isLoadingOrderDetail, setIsLoadingOrderDetail] = useState(false);
+
+  const formatOrderTime = (dateStr) => {
+    if (!dateStr) return { formatted: "", timeOnly: "", relative: "" };
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return { formatted: "", timeOnly: "", relative: "" };
+      const now = new Date();
+      const diffSec = Math.floor((now.getTime() - d.getTime()) / 1000);
+
+      let relative = "just now";
+      if (diffSec >= 86400) {
+        const days = Math.floor(diffSec / 86400);
+        relative = `${days}d ago`;
+      } else if (diffSec >= 3600) {
+        const hrs = Math.floor(diffSec / 3600);
+        relative = `${hrs}h ago`;
+      } else if (diffSec >= 60) {
+        const mins = Math.floor(diffSec / 60);
+        relative = `${mins}m ago`;
+      }
+
+      const timeStr = new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "numeric", hour12: true }).format(d);
+      const dateStrFormatted = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "numeric" }).format(d);
+      return { formatted: dateStrFormatted, timeOnly: timeStr, relative };
+    } catch {
+      return { formatted: "", timeOnly: "", relative: "" };
+    }
+  };
+
+  const btnShowOrderDetail = async (orderId, fallbackOrder = null) => {
+    setSelectedOrderDetail(fallbackOrder || null);
+    document.getElementById("modal-order-detail")?.showModal();
+    if (!orderId) return;
+
+    try {
+      setIsLoadingOrderDetail(true);
+      const res = await getOrderDetail(orderId);
+      if (res?.data?.success && res.data.order) {
+        setSelectedOrderDetail(res.data.order);
+      } else if (res?.data?.order) {
+        setSelectedOrderDetail(res.data.order);
+      } else if (res?.data?.id) {
+        setSelectedOrderDetail(res.data);
+      }
+    } catch (err) {
+      console.warn("Could not fetch detailed order from server:", err);
+    } finally {
+      setIsLoadingOrderDetail(false);
+    }
+  };
 
   useEffect(() => {
     _init();
@@ -948,6 +1006,16 @@ export default function OrdersPage() {
                     >
                       <li>
                         <button
+                          className="flex items-center gap-2 bg-transparent border-none shadow-none text-primary"
+                          onClick={() => {
+                            btnShowOrderDetail(orders[0]?.id, orders[0]);
+                          }}
+                        >
+                          <IconEye size={18} stroke={iconStroke} /> View Order Details
+                        </button>
+                      </li>
+                      <li>
+                        <button
                           className="flex items-center gap-2 bg-transparent border-none shadow-none "
                           onClick={() => {
                             btnPrintReceipt(order_ids, tokens);
@@ -1053,27 +1121,58 @@ export default function OrdersPage() {
                           )}
                         </div>
                         <div className="text-end">
-                          <p>
-                            {(() => {
-                              try {
-                                return date
-                                  ? new Intl.DateTimeFormat("en-US", { timeStyle: "short" }).format(new Date(date))
-                                  : "";
-                              } catch {
-                                return "";
-                              }
-                            })()}
-                          </p>
-                          <p className={clsx("flex gap-2 items-center text-sm", {
+                          <div className="flex items-center gap-1 justify-end text-xs font-semibold text-gray-700 dark:text-gray-300">
+                            <IconClock size={14} stroke={iconStroke} className="text-primary" />
+                            <span>
+                              {(() => {
+                                try {
+                                  return date
+                                    ? new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "numeric", hour12: true }).format(new Date(date))
+                                    : "";
+                                } catch {
+                                  return "";
+                                }
+                              })()}
+                            </span>
+                          </div>
+                          {(() => {
+                            const timeInfo = formatOrderTime(date);
+                            return timeInfo.relative ? (
+                              <span className="text-[10px] text-gray-400 block">{timeInfo.relative}</span>
+                            ) : null;
+                          })()}
+                          <p className={clsx("flex gap-1.5 items-center justify-end text-xs font-semibold mt-1", {
                             "text-amber-500": payment_status == "pending",
                             "text-restro-green": payment_status == "paid",
                           })}>
-                            {" "}
-                            <IconCash stroke={iconStroke} size={18} />{" "}
+                            <IconCash stroke={iconStroke} size={15} />
                             {(payment_status || "pending").toUpperCase()}
                           </p>
                         </div>
                       </div>
+
+                      {/* Delivery badge & address preview */}
+                      {delivery_type === "delivery" && (
+                        <div className="mt-2 p-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 text-xs">
+                          <div className="flex items-center justify-between font-bold text-emerald-700 dark:text-emerald-400">
+                            <span className="flex items-center gap-1">
+                              <IconTruck size={14} stroke={iconStroke} /> Home Delivery
+                            </span>
+                            {o.delivery_fee > 0 && <span className="font-normal text-[11px]">Fee: {currency}{o.delivery_fee}</span>}
+                          </div>
+                          {o.delivery_address && (
+                            <p className="mt-1 text-gray-700 dark:text-gray-300 flex items-start gap-1 text-[11px]">
+                              <IconMapPin size={13} stroke={iconStroke} className="flex-shrink-0 mt-0.5 text-emerald-600" />
+                              <span className="font-medium">{o.delivery_address}</span>
+                            </p>
+                          )}
+                          {(customer_name || customer_id) && (
+                            <p className="text-gray-500 dark:text-gray-400 text-[11px] mt-0.5 flex items-center gap-1">
+                              <IconUser size={12} stroke={iconStroke} /> {customer_name || "Customer"} {customer_id ? `(${customer_id})` : ""}
+                            </p>
+                          )}
+                        </div>
+                      )}
 
                       {/* order items */}
                       <div className="mt-4 flex flex-col divide-y divide-gray-200 dark:divide-gray-700">
@@ -1236,6 +1335,20 @@ export default function OrdersPage() {
                         })}
                       </div>
                       {/* order items */}
+
+                      {/* view full order detail button */}
+                      <div className="mt-3 pt-2 border-t border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                        <button
+                          type="button"
+                          onClick={() => btnShowOrderDetail(id, o)}
+                          className="text-xs font-semibold text-primary hover:underline flex items-center gap-1 py-1 px-2 rounded-lg hover:bg-primary/10 transition active:scale-95"
+                        >
+                          <IconEye size={15} stroke={iconStroke} /> View Full Order Details
+                        </button>
+                        <span className="text-[11px] text-gray-400">
+                          {items?.length || 0} item{items?.length === 1 ? "" : "s"}
+                        </span>
+                      </div>
                     </div>
                   );
                 })}
@@ -1442,6 +1555,224 @@ export default function OrdersPage() {
       </dialog>
       {/* dialog: complete order */}
 
+      {/* modal: rich order details (POS & QR storefront) */}
+      <dialog id="modal-order-detail" className="modal modal-bottom sm:modal-middle">
+        <div className="modal-box max-w-2xl bg-white dark:bg-restro-card-bg border border-restro-border-green rounded-2xl p-6">
+          <div className="flex items-center justify-between border-b pb-3 border-gray-100 dark:border-gray-800">
+            <div>
+              <h3 className="font-bold text-lg text-foreground flex items-center gap-2">
+                Order #{selectedOrderDetail?.id || selectedOrderDetail?.token_no || ""}
+                {selectedOrderDetail?.token_no ? (
+                  <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-primary/10 text-primary">
+                    Token #{selectedOrderDetail.token_no}
+                  </span>
+                ) : null}
+              </h3>
+              <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
+                {selectedOrderDetail?.source === "qr_storefront" ? (
+                  <span className="text-emerald-600 font-semibold">📱 QR Digital Menu Storefront Order</span>
+                ) : (
+                  <span className="text-blue-600 font-semibold">🖥️ POS Cashier In-Store Order</span>
+                )}
+                {selectedOrderDetail?.created_by && ` • by ${selectedOrderDetail.created_by}`}
+              </p>
+            </div>
+            <button
+              onClick={() => document.getElementById("modal-order-detail")?.close()}
+              className="btn btn-sm btn-circle btn-ghost"
+            >
+              <IconX size={18} stroke={iconStroke} />
+            </button>
+          </div>
+
+          {isLoadingOrderDetail ? (
+            <div className="py-12 text-center text-sm text-gray-500">
+              Loading full order details...
+            </div>
+          ) : (
+            <div className="py-4 space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+              {/* Timing & Badges banner */}
+              <div className="flex flex-wrap items-center justify-between gap-2 p-3 rounded-xl bg-gray-50 dark:bg-restro-gray text-xs">
+                <div className="flex items-center gap-1.5">
+                  <IconCalendarTime size={16} stroke={iconStroke} className="text-primary" />
+                  <span className="font-semibold text-gray-700 dark:text-gray-300">
+                    Placed: {formatOrderTime(selectedOrderDetail?.date).formatted || "N/A"}
+                  </span>
+                  {formatOrderTime(selectedOrderDetail?.date).relative && (
+                    <span className="text-gray-400 font-normal">
+                      ({formatOrderTime(selectedOrderDetail?.date).relative})
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={clsx("px-2.5 py-0.5 rounded-full font-bold text-xs", {
+                    "bg-amber-100 text-amber-700": selectedOrderDetail?.payment_status === "pending",
+                    "bg-emerald-100 text-emerald-700": selectedOrderDetail?.payment_status === "paid",
+                  })}>
+                    {(selectedOrderDetail?.payment_status || "pending").toUpperCase()}
+                  </span>
+                  <span className="px-2.5 py-0.5 rounded-full font-semibold text-xs bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                    {(selectedOrderDetail?.status || "created").toUpperCase()}
+                  </span>
+                </div>
+              </div>
+
+              {/* Delivery / Table / Customer Section */}
+              <div className="p-3.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-restro-gray/40 text-xs space-y-2">
+                <div className="flex items-center justify-between border-b pb-2 border-gray-100 dark:border-gray-800">
+                  <span className="font-bold text-gray-800 dark:text-gray-200 flex items-center gap-1.5">
+                    {selectedOrderDetail?.delivery_type === "delivery" ? (
+                      <>
+                        <IconTruck size={16} stroke={iconStroke} className="text-emerald-500" />
+                        Delivery Order Details
+                      </>
+                    ) : selectedOrderDetail?.table ? (
+                      <>
+                        <IconArmchair size={16} stroke={iconStroke} className="text-blue-500" />
+                        Dine-in Table Details
+                      </>
+                    ) : (
+                      <>
+                        <IconBoxSeam size={16} stroke={iconStroke} className="text-amber-500" />
+                        Takeaway / Pickup Order Details
+                      </>
+                    )}
+                  </span>
+                  {selectedOrderDetail?.delivery_fee > 0 && (
+                    <span className="font-semibold text-emerald-600">
+                      Delivery Fee: {currency}{selectedOrderDetail.delivery_fee}
+                    </span>
+                  )}
+                </div>
+
+                {selectedOrderDetail?.delivery_type === "delivery" && (
+                  <div className="p-2.5 rounded-lg bg-emerald-50/70 dark:bg-emerald-950/20 border border-emerald-200/60 dark:border-emerald-800/60">
+                    <p className="font-semibold text-emerald-800 dark:text-emerald-300 flex items-start gap-1">
+                      <IconMapPin size={15} stroke={iconStroke} className="flex-shrink-0 mt-0.5 text-emerald-600" />
+                      <span>Delivery Address: {selectedOrderDetail?.delivery_address || "No address specified on order"}</span>
+                    </p>
+                  </div>
+                )}
+
+                {selectedOrderDetail?.table && (
+                  <p className="text-gray-700 dark:text-gray-300">
+                    <span className="font-semibold">Table:</span> {selectedOrderDetail.table.title || selectedOrderDetail.table_title}{" "}
+                    {selectedOrderDetail.table.floor && `(${selectedOrderDetail.table.floor})`}
+                  </p>
+                )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 text-gray-600 dark:text-gray-300">
+                  <p className="flex items-center gap-1">
+                    <IconUser size={14} stroke={iconStroke} />
+                    <span className="font-semibold">Customer:</span>{" "}
+                    {selectedOrderDetail?.customer?.name || selectedOrderDetail?.customer_name || "Walk-in Customer"}
+                  </p>
+                  {(selectedOrderDetail?.customer?.phone || selectedOrderDetail?.customer_id) && (
+                    <p className="flex items-center gap-1">
+                      <IconPhone size={14} stroke={iconStroke} />
+                      <span className="font-semibold">Phone:</span>{" "}
+                      {selectedOrderDetail?.customer?.phone || selectedOrderDetail?.customer_id}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Items Breakdown */}
+              <div>
+                <h4 className="font-bold text-sm text-foreground mb-2">Order Items</h4>
+                <div className="border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden divide-y divide-gray-100 dark:divide-gray-800 text-xs">
+                  {(selectedOrderDetail?.items || []).map((item, idx) => {
+                    const addonsText = item?.addons?.length > 0
+                      ? item.addons.map((a) => (typeof a === "object" ? a.title : a)).join(", ")
+                      : null;
+                    const lineTotal = (Number(item?.price) || 0) * (Number(item?.quantity) || 1);
+
+                    return (
+                      <div key={idx} className="p-3 flex items-start justify-between gap-3 bg-white dark:bg-restro-card-bg">
+                        <div className="flex-1">
+                          <p className="font-semibold text-gray-900 dark:text-gray-100">
+                            {item?.item_title || item?.title || "Item"}{" "}
+                            {item?.variant_title && (
+                              <span className="text-muted-foreground font-normal">({item.variant_title})</span>
+                            )}
+                          </p>
+                          {addonsText && (
+                            <p className="text-gray-500 text-[11px] mt-0.5">
+                              Addons: {addonsText}
+                            </p>
+                          )}
+                          {item?.notes && (
+                            <p className="text-amber-600 dark:text-amber-400 text-[11px] mt-0.5 italic">
+                              Note: {item.notes}
+                            </p>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          <p className="font-bold text-gray-900 dark:text-gray-100">
+                            {currency}{lineTotal.toLocaleString()}
+                          </p>
+                          <p className="text-gray-400 text-[11px]">
+                            {item?.quantity} × {currency}{Number(item?.price || 0).toLocaleString()}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Order Financial Totals */}
+              <div className="p-3 rounded-xl bg-gray-50 dark:bg-restro-gray text-xs space-y-1.5">
+                <div className="flex justify-between text-gray-600 dark:text-gray-400">
+                  <span>Items Subtotal:</span>
+                  <span className="font-semibold">
+                    {currency}
+                    {(
+                      (selectedOrderDetail?.items || []).reduce(
+                        (sum, i) => sum + (Number(i.price) || 0) * (Number(i.quantity) || 1),
+                        0
+                      )
+                    ).toLocaleString()}
+                  </span>
+                </div>
+                {selectedOrderDetail?.delivery_fee > 0 && (
+                  <div className="flex justify-between text-emerald-600">
+                    <span>Delivery Fee:</span>
+                    <span className="font-semibold">+{currency}{selectedOrderDetail.delivery_fee}</span>
+                  </div>
+                )}
+                {selectedOrderDetail?.invoice_id && (
+                  <div className="flex justify-between text-gray-500 pt-1 border-t border-gray-200 dark:border-gray-700">
+                    <span>Invoice #:</span>
+                    <span className="font-semibold">#{selectedOrderDetail.invoice_id}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          <div className="modal-action flex justify-end gap-2 mt-4 pt-3 border-t border-gray-100 dark:border-gray-800">
+            <button
+              type="button"
+              onClick={() => {
+                const orderId = selectedOrderDetail?.id;
+                const token = selectedOrderDetail?.token_no;
+                if (orderId) btnPrintReceipt([orderId], token);
+              }}
+              className="btn btn-sm rounded-xl border bg-white dark:bg-restro-gray text-gray-700 dark:text-gray-200 hover:bg-gray-100"
+            >
+              <IconReceipt size={16} stroke={iconStroke} /> Print Receipt
+            </button>
+            <button
+              type="button"
+              onClick={() => document.getElementById("modal-order-detail")?.close()}
+              className="btn btn-sm rounded-xl bg-restro-green text-white hover:bg-restro-green-button-hover"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </dialog>
     </Page>
   );
 }
