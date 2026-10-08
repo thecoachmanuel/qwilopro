@@ -1,8 +1,9 @@
 import React from 'react';
 import { getImageURL } from '../helpers/ImageHelper';
-import { IconAlertTriangleFilled, IconCarrot } from "@tabler/icons-react";
+import { IconAlertTriangleFilled, IconCarrot, IconPlus } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 import { useTheme } from '../contexts/ThemeContext';
+import { iconStroke } from '../config/config';
 
 const POSMenuItemCompactView = ({ menuItems, selectedCategory, categories, searchQuery, currency, btnOpenVariantAndAddonModal, addItemToCart }) => {
   const { t } = useTranslation();
@@ -106,8 +107,23 @@ const POSMenuItemCompactView = ({ menuItems, selectedCategory, categories, searc
                   <p className='line-clamp-1 text-ellipsis text-sm font-semibold '>{title}</p>
                   {/* <p className="text-[10px] text-gray-500">{variants?.length > 0 && <span>{variants?.length} {t("pos_menu.variants")}</span>} {addons?.length > 0 && <span>{addons?.length} {t("pos_menu.addons")}</span>}</p> */}
                 </div>
-                <div>
-                  <p className='text-left text-restro-green font-bold text-sm mt-1'>{currency}{price}</p>
+                <div className='flex items-center justify-between mt-1'>
+                  <p className='text-left text-restro-green font-bold text-sm'>{currency}{price}</p>
+                  <button
+                    type="button"
+                    title={hasVariantOrAddon ? t("pos_menu.variants") : t("pos_menu.add")}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (hasVariantOrAddon) {
+                        btnOpenVariantAndAddonModal(id);
+                      } else {
+                        addItemToCart(menuItem);
+                      }
+                    }}
+                    className='w-7 h-7 rounded-lg flex items-center justify-center bg-restro-green hover:bg-restro-green-button-hover text-white transition active:scale-95 shadow-sm'
+                  >
+                    <IconPlus size={16} stroke={iconStroke || 2} />
+                  </button>
                 </div>
               </div>
             </div>
