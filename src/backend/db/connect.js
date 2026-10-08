@@ -33,8 +33,8 @@ const connectDB = async () => {
         bufferCommands: true, // Buffer commands gracefully so queries don't crash during reconnects
         family: 4, // Force IPv4 to prevent Windows Node.js dual-stack stalls/timeouts to Atlas
         maxPoolSize: 10,
-        serverSelectionTimeoutMS: 30000,
-        connectTimeoutMS: 30000,
+        serverSelectionTimeoutMS: process.env.VERCEL ? 5000 : 30000,
+        connectTimeoutMS: process.env.VERCEL ? 5000 : 30000,
         socketTimeoutMS: 45000,
       });
       isConnected = true;

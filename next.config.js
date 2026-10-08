@@ -7,16 +7,39 @@ const nextConfig = {
 
   // ─── Image Optimization ─────────────────────────────────────────────
   images: {
-    unoptimized: true,
+    unoptimized: process.env.NEXT_IMAGE_UNOPTIMIZED === 'true',
+    formats: ['image/avif', 'image/webp'],
     remotePatterns: [
       { protocol: 'http',  hostname: '**' },
       { protocol: 'https', hostname: '**' },
     ],
   },
 
-  // ─── Performance & Cache Headers ────────────────────────────────────
+  // ─── Performance, Security & Cache Headers ─────────────────────────
   async headers() {
     return [
+      // Global Security Headers
+      {
+        source: '/:path*',
+        headers: [
+          {
+            key: 'X-Frame-Options',
+            value: 'SAMEORIGIN',
+          },
+          {
+            key: 'X-Content-Type-Options',
+            value: 'nosniff',
+          },
+          {
+            key: 'Referrer-Policy',
+            value: 'strict-origin-when-cross-origin',
+          },
+          {
+            key: 'Permissions-Policy',
+            value: 'camera=(self), microphone=(), geolocation=()',
+          },
+        ],
+      },
       // Static JS/CSS/fonts — content-addressed, safe to cache forever
       {
         source: '/_next/static/:path*',

@@ -1,8 +1,9 @@
 const { addMenuItemDB, updateMenuItemDB, deleteMenuItemDB, addMenuItemAddonDB, updateMenuItemAddonDB, deleteMenuItemAddonDB, getMenuItemAddonsDB, getAllAddonsDB, addMenuItemVariantDB, updateMenuItemVariantDB, deleteMenuItemVariantDB, getMenuItemVariantsDB, getAllVariantsDB, getAllMenuItemsDB, getMenuItemDB, updateMenuItemImageDB, changeMenuItemVisibilityDB, getRecipeItemsDB, addRecipeItemDB, deleteRecipeItemDB, updateRecipeItemDB } = require("../services/menu_item.service");
 
-const path = require("path")
+const path = require("path");
 const fs = require("fs");
 const { getInventoryItemsDB } = require("../services/inventory.service");
+const { saveImageFile } = require("../utils/storage");
 
 exports.addMenuItem = async (req, res) => {
     try {
@@ -81,50 +82,13 @@ exports.uploadMenuItemPhoto = async (req, res) => {
             buffer = file.data;
         }
 
-        const mime = file.mimetype || "image/png";
-        let imageURL = null;
-
-        const isVercel = Boolean(process.env.VERCEL);
-        if (!isVercel) {
-            try {
-                const tenantPublicDir = path.resolve(process.cwd(), "public", String(tenantId));
-                if (!fs.existsSync(tenantPublicDir)) {
-                    fs.mkdirSync(tenantPublicDir, { recursive: true });
-                }
-
-                const ext = path.extname(file.name || "") || ".png";
-                const filename = `${id}${ext}`;
-                const imagePath = path.join(tenantPublicDir, filename);
-
-                // Remove any previous file variants
-                const possibleOldFiles = [
-                    path.join(tenantPublicDir, String(id)),
-                    path.join(tenantPublicDir, `${id}.png`),
-                    path.join(tenantPublicDir, `${id}.jpg`),
-                    path.join(tenantPublicDir, `${id}.jpeg`),
-                    path.join(tenantPublicDir, `${id}.webp`),
-                ];
-                for (const oldFile of possibleOldFiles) {
-                    if (oldFile !== imagePath && fs.existsSync(oldFile)) {
-                        try { fs.unlinkSync(oldFile); } catch(e) {}
-                    }
-                }
-
-                await file.mv(imagePath);
-                imageURL = `/public/${tenantId}/${filename}`;
-            } catch (err) {
-                console.warn("Local disk write failed, falling back to Data URL:", err.message);
-            }
-        }
-
-        // On Vercel or if local write failed, save as persistent Data URL in database
-        if (!imageURL && buffer) {
-            imageURL = `data:${mime};base64,${buffer.toString("base64")}`;
-        }
-
-        if (!imageURL) {
-            throw new Error("Failed to process image buffer");
-        }
+        const imageURL = await saveImageFile({
+            file,
+            buffer,
+            mimeType: file.mimetype,
+            filename: String(id),
+            tenantId,
+        });
 
         await updateMenuItemImageDB(id, imageURL, tenantId);
 

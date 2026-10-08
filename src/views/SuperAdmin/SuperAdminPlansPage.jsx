@@ -503,31 +503,31 @@ export default function SuperAdminTenantsPage() {
           <div className="overflow-x-auto">
             <table className="table-auto w-full border-separate border-spacing-y-1">
               <thead>
-                <tr className="border-b border-gray-200">
-                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground border-b border-gray-200">
+                <tr className="border-b border-restro-border-green dark:border-restro-border-dark-mode">
+                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground border-b border-restro-border-green dark:border-restro-border-dark-mode">
                     {t("superadmin_plans.plan_details")}
                   </th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground border-b border-gray-200">
+                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground border-b border-restro-border-green dark:border-restro-border-dark-mode">
                     {t("superadmin_plans.recommended")}
                   </th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground border-b border-gray-200">
+                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground border-b border-restro-border-green dark:border-restro-border-dark-mode">
                     {t("superadmin_plans.discount")}
                   </th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground border-b border-gray-200">
+                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground border-b border-restro-border-green dark:border-restro-border-dark-mode">
                     {t("superadmin_plans.trial")}
                   </th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground border-b border-gray-200">
+                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground border-b border-restro-border-green dark:border-restro-border-dark-mode">
                     {t("superadmin_plans.pricing")}
                   </th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground w-[100px] border-b border-gray-200">
+                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground w-[100px] border-b border-restro-border-green dark:border-restro-border-dark-mode">
                     {t("superadmin_plans.actions")}
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-500">
+              <tbody className="divide-y divide-restro-border-green/40 dark:divide-restro-border-dark-mode">
                 {paginatedPlans?.map((plan, index) => (
-                  <tr className="group animate-fade-in ">
-                    <td className="py-3 px-4 border-b border-gray-200">
+                  <tr key={plan.id || index} className="group animate-fade-in hover:bg-restro-gray/40 dark:hover:bg-restro-bg-hover-dark-mode/40 transition-colors">
+                    <td className="py-3 px-4 border-b border-restro-border-green dark:border-restro-border-dark-mode">
                       <div className="flex items-center gap-4">
                         <div className="w-12 h-12 rounded-xl bg-restro-green-10 flex items-center justify-center flex-shrink-0">
                           <IconCreditCard className="w-5 h-5 text-restro-green" />
@@ -553,12 +553,12 @@ export default function SuperAdminTenantsPage() {
                       </div>
                     </td>
 
-                    <td className="py-3 px-4 border-b border-gray-200">
+                    <td className="py-3 px-4 border-b border-restro-border-green dark:border-restro-border-dark-mode">
                       <span
                         className={
                           plan.is_recommended
                             ? "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors bg-restro-green-10 text-accent-foreground"
-                            : "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors bg-restro-bg-gray text-muted-foreground"
+                            : "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors bg-restro-bg-gray dark:bg-restro-bg-seconday-dark-mode text-muted-foreground"
                         }
                       >
                         {plan.is_recommended ? (
@@ -570,7 +570,7 @@ export default function SuperAdminTenantsPage() {
                       </span>
                     </td>
 
-                    <td className="py-3 px-4 border-b border-gray-200 space-x-1">
+                    <td className="py-3 px-4 border-b border-restro-border-green dark:border-restro-border-dark-mode space-x-1">
                       <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-success/10 text-success">
                         -{plan.discount || 0}%
                       </span>
@@ -579,7 +579,7 @@ export default function SuperAdminTenantsPage() {
                       </span>
                     </td>
 
-                    <td className="py-3 px-4 border-b border-gray-200">
+                    <td className="py-3 px-4 border-b border-restro-border-green dark:border-restro-border-dark-mode">
                       <div className="flex items-center gap-2">
                         {plan.is_trial ? (
                           <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-primary/10 text-primary">
@@ -599,19 +599,19 @@ export default function SuperAdminTenantsPage() {
                             setTrialEditValue(plan.trial_days || 0);
                             document.getElementById("modal-edit-trial-days")?.showModal();
                           }}
-                          className="p-1 rounded-md text-xs text-primary hover:bg-restro-bg-gray transition"
+                          className="p-1 rounded-md text-xs text-primary hover:bg-restro-bg-gray dark:hover:bg-restro-bg-hover-dark-mode transition"
                         >
                           <IconPencil size={14} stroke={iconStroke} />
                         </button>
                       </div>
                     </td>
 
-                    <td className="py-3 px-4 border-b border-gray-200">
+                    <td className="py-3 px-4 border-b border-restro-border-green dark:border-restro-border-dark-mode">
                       <div className="flex flex-wrap gap-1.5 max-w-[200px]">
                         {plan.prices?.slice(0, 2).map((c, i) => (
                           <div
                             key={i}
-                            className="text-xs bg-restro-bg-gray rounded-lg px-2 py-1.5 font-medium"
+                            className="text-xs bg-restro-bg-gray dark:bg-restro-bg-seconday-dark-mode border border-restro-border-green/30 dark:border-restro-border-dark-mode rounded-lg px-2 py-1.5 font-medium"
                           >
                             <span className="text-muted-foreground">
                               {c.symbol}
@@ -622,7 +622,7 @@ export default function SuperAdminTenantsPage() {
                           </div>
                         ))}
                         {plan.prices?.length > 2 && (
-                          <div className="text-xs bg-restro-gray rounded-lg px-2 py-1.5 font-medium text-muted-foreground">
+                          <div className="text-xs bg-restro-gray dark:bg-restro-bg-seconday-dark-mode rounded-lg px-2 py-1.5 font-medium text-muted-foreground">
                             +{plan.prices?.length - 2}{" "}
                             {t("superadmin_plans.more")}
                           </div>
@@ -630,8 +630,8 @@ export default function SuperAdminTenantsPage() {
                       </div>
                     </td>
 
-                    <td className="py-3 px-4 border-b border-gray-200">
-                      <div className="flex gap-3">
+                    <td className="py-3 px-4 border-b border-restro-border-green dark:border-restro-border-dark-mode">
+                      <div className="flex gap-2">
                         <button
                           onClick={() => {
                             setTrialEditPlanId(plan.id);
@@ -639,27 +639,30 @@ export default function SuperAdminTenantsPage() {
                             document.getElementById("modal-edit-trial-days")?.showModal();
                           }}
                           title="Change Trial Days"
-                          className="rounded-[42px] bg-white dark:bg-restro-bg-gray p-3 text-restro-text hover:text-primary transition"
+                          className="rounded-full bg-white dark:bg-restro-bg-seconday-dark-mode border border-restro-border-green/60 dark:border-restro-border-dark-mode p-2.5 text-restro-text hover:text-restro-green transition"
                         >
-                          <IconClock size={24} stroke={iconStroke} />
+                          <IconClock size={18} stroke={iconStroke} />
                         </button>
                         <button
                           onClick={() => openEditDialog(plan)}
-                          className="rounded-[42px] bg-white dark:bg-restro-bg-gray p-3 text-restro-text"
+                          title="Edit Plan"
+                          className="rounded-full bg-white dark:bg-restro-bg-seconday-dark-mode border border-restro-border-green/60 dark:border-restro-border-dark-mode p-2.5 text-restro-text hover:text-restro-green transition"
                         >
-                          <IconPencil size={24} stroke={iconStroke} />
+                          <IconPencil size={18} stroke={iconStroke} />
                         </button>
                         <Link
                           to={`/superadmin/dashboard/plans/${plan.id}`}
-                          className="rounded-[42px] flex items-center justify-center bg-white dark:bg-restro-bg-gray p-3 text-restro-text"
+                          title="View Details"
+                          className="rounded-full flex items-center justify-center bg-white dark:bg-restro-bg-seconday-dark-mode border border-restro-border-green/60 dark:border-restro-border-dark-mode p-2.5 text-restro-text hover:text-restro-green transition"
                         >
-                          <IconEye size={24} stroke={iconStroke} />
+                          <IconEye size={18} stroke={iconStroke} />
                         </Link>
                         <button
                           onClick={() => btnShowDelete(plan.id)}
-                          className="rounded-[42px] bg-white p-3 text-red-500 dark:bg-restro-gray"
+                          title="Delete Plan"
+                          className="rounded-full bg-white dark:bg-restro-bg-seconday-dark-mode border border-restro-border-green/60 dark:border-restro-border-dark-mode p-2.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 transition"
                         >
-                          <IconTrash size={24} stroke={iconStroke} />
+                          <IconTrash size={18} stroke={iconStroke} />
                         </button>
                       </div>
                     </td>

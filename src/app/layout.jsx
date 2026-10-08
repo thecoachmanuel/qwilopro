@@ -1,5 +1,13 @@
 import '../index.css';
 import ServiceWorkerRegistration from '../components/ServiceWorkerRegistration';
+import { Nunito } from 'next/font/google';
+
+const nunito = Nunito({
+  subsets: ['latin'],
+  weight: ['200', '300', '400', '500', '600', '700', '800', '900'],
+  variable: '--font-nunito',
+  display: 'swap',
+});
 
 export const metadata = {
   title: 'QwiloPro SaaS - Restaurant POS',
@@ -23,7 +31,7 @@ export const viewport = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en" data-theme="light">
+    <html lang="en" data-theme="light" className={nunito.variable}>
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
         <link rel="icon" type="image/png" sizes="64x64" href="/favicon.png" />
@@ -36,12 +44,6 @@ export default function RootLayout({ children }) {
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
 
         <meta name="apple-mobile-web-app-title" content="QwiloPro POS" />
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,200..1000;1,200..1000&display=swap"
-          rel="stylesheet"
-        />
         <script
           dangerouslySetInnerHTML={{
             __html: `
@@ -60,7 +62,7 @@ export default function RootLayout({ children }) {
           }}
         />
       </head>
-      <body className="bg-white dark:bg-black text-slate-800 dark:text-neutral-100 font-sans antialiased min-h-screen">
+      <body className={`${nunito.className} bg-white dark:bg-black text-slate-800 dark:text-neutral-100 font-sans antialiased min-h-screen`}>
         <ServiceWorkerRegistration />
         {children}
       </body>

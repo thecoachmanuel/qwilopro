@@ -6,10 +6,10 @@ import { Toaster } from "react-hot-toast";
 import PrivateRoute from "./helpers/PrivateRoute";
 import LoginPage from "./views/LoginPage";
 import DashboardLayout from "./views/DashboardLayout";
-import DashboardPage from "./views/DashboardPage";
-import POSPage from "./views/POSPage";
 
 // Code-split heavy routes for rapid initial app load speed
+const DashboardPage = lazy(() => import("./views/DashboardPage"));
+const POSPage = lazy(() => import("./views/POSPage"));
 const OrdersPage = lazy(() => import("./views/OrdersPage"));
 const KitchenPage = lazy(() => import("./views/KitchenPage"));
 const ReservationPage = lazy(() => import("./views/ReservationPage"));
@@ -66,6 +66,7 @@ const SuperAdminPlansPage = lazy(() => import("./views/SuperAdmin/SuperAdminPlan
 const SuperAdminPlanDetails = lazy(() => import("./views/SuperAdmin/SuperAdminPlanDetails"));
 const SuperAdminPaymentGatewaysPage = lazy(() => import("./views/SuperAdmin/SuperAdminPaymentGatewaysPage"));
 const SuperAdminWhatsAppPage = lazy(() => import("./views/SuperAdmin/SuperAdminWhatsAppPage"));
+const SuperAdminLanguagePage = lazy(() => import("./views/SuperAdmin/LanguagePage"));
 
 
 import { NavbarContext } from "./contexts/NavbarContext";
@@ -322,7 +323,7 @@ export default function App() {
             <Route path="plans/:id" element={<SuperAdminProtectedRoute><SuperAdminPlanDetails /></SuperAdminProtectedRoute>} />
             <Route path="reports" element={<SuperAdminProtectedRoute><SuperAdminReportsPage /></SuperAdminProtectedRoute>} />
             <Route path="contact-support" element={<SuperAdminProtectedRoute><SuperAdminContactSupportPage /></SuperAdminProtectedRoute>} />
-            <Route path="language" element={<LanguagePage />} />
+            <Route path="language" element={<SuperAdminLanguagePage />} />
           </Route>
 
           {/* superadmin backward-compatibility aliases */}
@@ -339,7 +340,7 @@ export default function App() {
             <Route path="plans/:id" element={<SuperAdminProtectedRoute><SuperAdminPlanDetails /></SuperAdminProtectedRoute>} />
             <Route path="reports" element={<SuperAdminProtectedRoute><SuperAdminReportsPage /></SuperAdminProtectedRoute>} />
             <Route path="contact-support" element={<SuperAdminProtectedRoute><SuperAdminContactSupportPage /></SuperAdminProtectedRoute>} />
-            <Route path="language" element={<LanguagePage />} />
+            <Route path="language" element={<SuperAdminLanguagePage />} />
           </Route>
 
           {/* admin / superadmin routes */}

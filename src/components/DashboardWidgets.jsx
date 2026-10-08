@@ -1,5 +1,5 @@
-import React, { useMemo } from "react";
-import Chart from "react-apexcharts";
+import React, { useMemo, lazy, Suspense } from "react";
+const Chart = lazy(() => import("react-apexcharts"));
 import {
   IconTrendingUp,
   IconTrendingDown,
@@ -262,7 +262,9 @@ export function PeakHoursChart({ data, currencySymbol }) {
         <h3 className="font-bold text-foreground">Peak Hours</h3>
         <span className="text-xs font-semibold text-restro-text">Today</span>
       </div>
-      <Chart options={options} series={series} type="bar" height={220} />
+      <Suspense fallback={<div className="h-[220px] flex items-center justify-center text-xs text-restro-text animate-pulse">Loading chart...</div>}>
+        <Chart options={options} series={series} type="bar" height={220} />
+      </Suspense>
     </div>
   );
 }
@@ -343,7 +345,9 @@ export function DonutWidget({ title, data, labelKey, valueKey, valuePrefix, isMo
   return (
     <div className="rounded-2xl border border-restro-border-green bg-background p-6 h-full">
       <h3 className="font-bold text-foreground mb-2">{title}</h3>
-      <Chart options={options} series={values} type="donut" height={260} />
+      <Suspense fallback={<div className="h-[260px] flex items-center justify-center text-xs text-restro-text animate-pulse">Loading chart...</div>}>
+        <Chart options={options} series={values} type="donut" height={260} />
+      </Suspense>
     </div>
   );
 }

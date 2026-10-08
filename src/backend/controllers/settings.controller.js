@@ -2,6 +2,7 @@ const { nanoid } = require("nanoid");
 const { getStoreSettingDB, setStoreSettingDB, uploadStoreImageDB, deleteStoreImageDB, getPrintSettingDB, setPrintSettingDB, getTaxesDB, addTaxDB, updateTaxDB, deleteTaxDB, getTaxDB, addPaymentTypeDB, getPaymentTypesDB, updatePaymentTypeDB, deletePaymentTypeDB, togglePaymentTypeDB, addStoreTableDB, getStoreTablesDB, updateStoreTableDB, deleteStoreTableDB, addCategoryDB, getCategoriesDB, updateCategoryDB, deleteCategoryDB, getQRMenuCodeDB, updateQRMenuCodeDB, changeCategoryVisibiltyDB, updateServiceChargeDB, getServiceChargeDB } = require("../services/settings.service");
 const path = require("path");
 const fs = require("fs");
+const { saveImageFile } = require("../utils/storage");
 
 const STORE_IMAGE_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
 
@@ -137,36 +138,13 @@ exports.uploadStoreImage = async (req, res) => {
             buffer = file.data;
         }
 
-        const mime = file.mimetype || "image/png";
-        let imageURL = null;
-
-        const isVercel = Boolean(process.env.VERCEL);
-        if (!isVercel) {
-            try {
-                const tenantPublicDir = getTenantPublicDir(tenantId);
-                const ext = path.extname(file.name || "") || ".png";
-                const filename = `${uniqueId}${ext}`;
-                const imagePath = path.join(tenantPublicDir, filename);
-
-                if (!fs.existsSync(tenantPublicDir)) {
-                    fs.mkdirSync(tenantPublicDir, { recursive: true });
-                }
-
-                await file.mv(imagePath);
-                imageURL = `/public/${tenantId}/${filename}`;
-            } catch (err) {
-                console.warn("Local disk write failed, falling back to Data URL:", err.message);
-            }
-        }
-
-        // On Vercel or if filesystem is read-only, use persistent Data URL in database
-        if (!imageURL && buffer) {
-            imageURL = `data:${mime};base64,${buffer.toString("base64")}`;
-        }
-
-        if (!imageURL) {
-            throw new Error("Failed to process image buffer");
-        }
+        const imageURL = await saveImageFile({
+            file,
+            buffer,
+            mimeType: file.mimetype,
+            filename: String(uniqueId),
+            tenantId,
+        });
 
         await uploadStoreImageDB(imageURL, uniqueId, tenantId);
 

@@ -19,8 +19,11 @@ async function ensureDB() {
   const conn = await connectDB();
   if (conn && !_dbReady) {
     _dbReady = true;
-    // Run seed non-blocking in background so API requests are not delayed
-    seedDatabase().catch((err) => console.error("Database seed error:", err));
+    // In serverless production, avoid firing seedDatabase on every cold container boot
+    // Seeding runs in server.js on startup, or explicitly when RUN_DB_SEED=true
+    if (process.env.RUN_DB_SEED === "true" || process.env.NODE_ENV !== "production") {
+      seedDatabase().catch((err) => console.error("Database seed error:", err));
+    }
   }
 }
 

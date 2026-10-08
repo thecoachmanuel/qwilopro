@@ -7,6 +7,9 @@ module.exports = {
   darkMode: "class",
   theme: {
     extend: {
+      fontFamily: {
+        sans: ['var(--font-nunito)', 'Nunito', 'sans-serif'],
+      },
       colors: {
         'restro-green-light': 'var(--restro-green-light)',
         'restro-green': 'var(--restro-green)',
