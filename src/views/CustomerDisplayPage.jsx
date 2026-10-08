@@ -142,6 +142,16 @@ export default function CustomerDisplayPage() {
     };
   }, [socket, resolvedTenantId]);
 
+  // Auto-clear order success view after 10 seconds to return to welcome screen
+  useEffect(() => {
+    if (cartData?.orderSuccess) {
+      const timer = setTimeout(() => {
+        setCartData((prev) => (prev ? { ...prev, orderSuccess: null } : null));
+      }, 10000);
+      return () => clearTimeout(timer);
+    }
+  }, [cartData?.orderSuccess]);
+
   const isDark = theme === 'black';
   const cart = cartData?.cart || [];
   const summary = cartData?.summary || {};
@@ -229,29 +239,56 @@ export default function CustomerDisplayPage() {
               </div>
             )}
 
-            <h2 className="text-3xl md:text-5xl font-black mb-2 tracking-tight text-white">
-              {customer?.name ? `Hello, ${customer.name}!` : 'Welcome!'}
-            </h2>
-            <p className="text-white/80 text-sm md:text-base mb-8 font-medium">
-              {customer?.phone
-                ? customer.phone
-                : `Thank you for choosing ${storeName}`}
-            </p>
-
-            {/* Total Card */}
-            <div className="w-full p-6 md:p-8 rounded-3xl bg-black/25 backdrop-blur-xl border border-white/15 shadow-2xl text-center">
-              <p className="text-white/70 text-xs font-bold uppercase tracking-widest mb-1.5">
-                Total Payable
-              </p>
-              <p className="text-4xl md:text-6xl font-black text-white tracking-tight">
-                {currency}{Number(summary.payableTotal || 0).toFixed(2)}
-              </p>
-              {Number(summary.itemsTotal || 0) > 0 && (
-                <p className="text-xs text-white/70 mt-2 font-medium">
-                  {cart.reduce((acc, it) => acc + (Number(it.quantity) || 1), 0)} items in your order
+            {cartData?.orderSuccess ? (
+              <div className="flex flex-col items-center text-center w-full animate-fade-in">
+                <div className="w-20 h-20 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white text-4xl mb-4 shadow-xl">
+                  ✓
+                </div>
+                <h2 className="text-3xl md:text-5xl font-black mb-2 tracking-tight text-white">
+                  Order Placed!
+                </h2>
+                <p className="text-white/90 text-sm md:text-base mb-6 font-medium">
+                  Thank you for your order!
                 </p>
-              )}
-            </div>
+                <div className="w-full p-6 md:p-8 rounded-3xl bg-black/25 backdrop-blur-xl border border-white/20 shadow-2xl text-center">
+                  <p className="text-white/70 text-xs font-bold uppercase tracking-widest mb-1.5">
+                    Your Token Number
+                  </p>
+                  <p className="text-5xl md:text-7xl font-black text-white tracking-tight">
+                    #{cartData.orderSuccess.tokenNo || cartData.orderSuccess.orderId}
+                  </p>
+                  <p className="text-xs text-white/80 mt-3 font-medium">
+                    Please collect your meal when your token is called.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <>
+                <h2 className="text-3xl md:text-5xl font-black mb-2 tracking-tight text-white">
+                  {customer?.name ? `Hello, ${customer.name}!` : 'Welcome!'}
+                </h2>
+                <p className="text-white/80 text-sm md:text-base mb-8 font-medium">
+                  {customer?.phone
+                    ? customer.phone
+                    : `Thank you for choosing ${storeName}`}
+                </p>
+
+                {/* Total Card */}
+                <div className="w-full p-6 md:p-8 rounded-3xl bg-black/25 backdrop-blur-xl border border-white/15 shadow-2xl text-center">
+                  <p className="text-white/70 text-xs font-bold uppercase tracking-widest mb-1.5">
+                    Total Payable
+                  </p>
+                  <p className="text-4xl md:text-6xl font-black text-white tracking-tight">
+                    {currency}{Number(summary.payableTotal || 0).toFixed(2)}
+                  </p>
+                  {Number(summary.itemsTotal || 0) > 0 && (
+                    <p className="text-xs text-white/70 mt-2 font-medium">
+                      {cart.reduce((acc, it) => acc + (Number(it.quantity) || 1), 0)} items in your order
+                    </p>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         </section>
 

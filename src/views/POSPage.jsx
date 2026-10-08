@@ -149,10 +149,31 @@ export default function POSPage() {
     };
   }, []);
 
-  const sendCartUpdateEvent = (cart, summary) => {
+  const sendCartUpdateEvent = (cart, summary, orderSuccess = null) => {
     const tenantId = user?.tenant_id;
     if (!tenantId) return;
-    socket?.emit?.('cart_update_backend', { cart, summary, customer: state.customer, customerType: state.customerType }, tenantId);
+    socket?.emit?.('cart_update_backend', {
+      cart,
+      summary,
+      customer: state.customer,
+      customerType: state.customerType,
+      storeSettings: state.storeSettings,
+      orderSuccess,
+      tenantId,
+    }, tenantId);
+  };
+
+  const btnOpenCustomerDisplay = () => {
+    const tid = user?.tenant_id;
+    const url = tid ? `/display/customer?tenant_id=${tid}` : '/display/customer';
+    const displayWin = window.open(
+      url,
+      'RestroProCustomerDisplay',
+      'toolbar=no,location=no,status=no,menubar=no,scrollbars=yes,resizable=yes,width=1200,height=800'
+    );
+    if (displayWin) {
+      displayWin.focus();
+    }
   };
 
   // Restore persisted ongoing checkout cart across navigation
@@ -218,7 +239,7 @@ export default function POSPage() {
         livePayableTotal += sc;
       }
 
-      const currentDeliveryType = state.deliveryType || "dinein";
+      const currentDeliveryType = diningOptionRef.current?.value || state.deliveryType || "dinein";
       if (currentDeliveryType === "delivery" && state.storeSettings?.delivery_fee) {
         liveDeliveryFeeTotal = Number(state.storeSettings.delivery_fee) || 0;
         livePayableTotal += liveDeliveryFeeTotal;
@@ -651,7 +672,7 @@ export default function POSPage() {
   };
 
   const btnInitNewOrder = () => {
-    if (diningOptionRef.current) diningOptionRef.current.value = "dinein";
+    if (diningOptionRef.current) diningOptionRef.current.value = "";
     if (tableRef.current) tableRef.current.value = "";
     setState({
       ...state,
@@ -659,11 +680,35 @@ export default function POSPage() {
       customer: null,
       customerType: "WALKIN",
       selectedQrOrderItem: null,
-      deliveryType: "dinein",
+      deliveryType: "",
       deliveryAddress: "",
       deliveryFeeTotal: 0,
       selectedTableId: null,
     });
+
+    const idlePayload = {
+      cart: [],
+      summary: {
+        itemsTotal: 0,
+        taxTotal: 0,
+        serviceChargeTotal: 0,
+        deliveryFeeTotal: 0,
+        payableTotal: 0,
+        currency: state.currency,
+      },
+      customer: null,
+      customerType: "WALKIN",
+      storeSettings: state.storeSettings,
+      tenantId: user?.tenant_id,
+      orderSuccess: null,
+      timestamp: Date.now(),
+    };
+    try {
+      localStorage.setItem("RESTROPROSAAS__CUSTOMER_DISPLAY_PAYLOAD", JSON.stringify(idlePayload));
+      window.dispatchEvent(new Event("storage"));
+    } catch {}
+    sendCartUpdateEvent([], idlePayload.summary, null);
+
     playTapSound();
   }
 
@@ -776,8 +821,11 @@ export default function POSPage() {
   const btnSelectQROrder = (qrOrder) => {
     console.log(qrOrder);
 
-    if(qrOrder.table_id) {
+    if(qrOrder.table_id && tableRef.current) {
       tableRef.current.value = qrOrder.table_id;
+    }
+    if(qrOrder.delivery_type && diningOptionRef.current) {
+      diningOptionRef.current.value = qrOrder.delivery_type;
     }
 
     // const itemCart = {...selectedItem, price: price, variant_id: selectedVariantId, variant: selectedVariant, addons_ids: selectedAddonsId, addons: selectedAddons}
@@ -1016,6 +1064,32 @@ export default function POSPage() {
         paymentMethod: paymentMethodText
       });
 
+      if (diningOptionRef.current) diningOptionRef.current.value = "";
+      if (tableRef.current) tableRef.current.value = "";
+
+      const offlineSuccessPayload = {
+        cart: [],
+        summary: {
+          itemsTotal: 0,
+          taxTotal: 0,
+          serviceChargeTotal: 0,
+          deliveryFeeTotal: 0,
+          payableTotal: 0,
+          currency: state.currency,
+        },
+        customer: null,
+        customerType: "WALKIN",
+        storeSettings: state.storeSettings,
+        tenantId: user?.tenant_id,
+        orderSuccess: { tokenNo: offlineResult.tokenNo, orderId: offlineResult.orderId },
+        timestamp: Date.now(),
+      };
+      try {
+        localStorage.setItem("RESTROPROSAAS__CUSTOMER_DISPLAY_PAYLOAD", JSON.stringify(offlineSuccessPayload));
+        window.dispatchEvent(new Event("storage"));
+      } catch {}
+      sendCartUpdateEvent([], offlineSuccessPayload.summary, offlineSuccessPayload.orderSuccess);
+
       setState((prev) => ({
         ...prev,
         cartItems: [],
@@ -1071,6 +1145,32 @@ export default function POSPage() {
           newQROrderItemCount -= 1;
           newQROrders = state?.qrOrders?.filter((item)=>item.id != state.selectedQrOrderItem);
         }
+
+        if (diningOptionRef.current) diningOptionRef.current.value = "";
+        if (tableRef.current) tableRef.current.value = "";
+
+        const successPayload = {
+          cart: [],
+          summary: {
+            itemsTotal: 0,
+            taxTotal: 0,
+            serviceChargeTotal: 0,
+            deliveryFeeTotal: 0,
+            payableTotal: 0,
+            currency: state.currency,
+          },
+          customer: null,
+          customerType: "WALKIN",
+          storeSettings: state.storeSettings,
+          tenantId: user?.tenant_id,
+          orderSuccess: { tokenNo: data.tokenNo, orderId: data.orderId },
+          timestamp: Date.now(),
+        };
+        try {
+          localStorage.setItem("RESTROPROSAAS__CUSTOMER_DISPLAY_PAYLOAD", JSON.stringify(successPayload));
+          window.dispatchEvent(new Event("storage"));
+        } catch {}
+        sendCartUpdateEvent([], successPayload.summary, successPayload.orderSuccess);
 
         setState((prev) => ({
           ...prev,
@@ -1238,6 +1338,32 @@ export default function POSPage() {
         orderId: offlineResult.orderId,
       });
 
+      if (diningOptionRef.current) diningOptionRef.current.value = "";
+      if (tableRef.current) tableRef.current.value = "";
+
+      const offlineSuccessPayload = {
+        cart: [],
+        summary: {
+          itemsTotal: 0,
+          taxTotal: 0,
+          serviceChargeTotal: 0,
+          deliveryFeeTotal: 0,
+          payableTotal: 0,
+          currency: state.currency,
+        },
+        customer: null,
+        customerType: "WALKIN",
+        storeSettings: state.storeSettings,
+        tenantId: user?.tenant_id,
+        orderSuccess: { tokenNo: offlineResult.tokenNo, orderId: offlineResult.orderId },
+        timestamp: Date.now(),
+      };
+      try {
+        localStorage.setItem("RESTROPROSAAS__CUSTOMER_DISPLAY_PAYLOAD", JSON.stringify(offlineSuccessPayload));
+        window.dispatchEvent(new Event("storage"));
+      } catch {}
+      sendCartUpdateEvent([], offlineSuccessPayload.summary, offlineSuccessPayload.orderSuccess);
+
       setState((prev) => ({
         ...prev,
         cartItems: [],
@@ -1291,6 +1417,32 @@ export default function POSPage() {
           newQROrderItemCount -= 1;
           newQROrders = state?.qrOrders?.filter((item)=>item.id != state.selectedQrOrderItem);
         }
+
+        if (diningOptionRef.current) diningOptionRef.current.value = "";
+        if (tableRef.current) tableRef.current.value = "";
+
+        const successPayload = {
+          cart: [],
+          summary: {
+            itemsTotal: 0,
+            taxTotal: 0,
+            serviceChargeTotal: 0,
+            deliveryFeeTotal: 0,
+            payableTotal: 0,
+            currency: state.currency,
+          },
+          customer: null,
+          customerType: "WALKIN",
+          storeSettings: state.storeSettings,
+          tenantId: user?.tenant_id,
+          orderSuccess: { tokenNo: data.tokenNo, orderId: data.orderId },
+          timestamp: Date.now(),
+        };
+        try {
+          localStorage.setItem("RESTROPROSAAS__CUSTOMER_DISPLAY_PAYLOAD", JSON.stringify(successPayload));
+          window.dispatchEvent(new Event("storage"));
+        } catch {}
+        sendCartUpdateEvent([], successPayload.summary, successPayload.orderSuccess);
 
         setState((prev) => ({
           ...prev,
@@ -1469,15 +1621,12 @@ export default function POSPage() {
 
           {/* Customer Facing Display Screen */}
           <button
-            onClick={() => {
-              const tid = user?.tenant_id;
-              window.open(tid ? `/display/customer?tenant_id=${tid}` : '/display/customer', '_blank');
-            }}
-            title="Launch Customer Display Screen"
+            onClick={btnOpenCustomerDisplay}
+            title={t('pos.customer_display') || "Customer Display (Dual Screen)"}
             className="relative text-sm rounded-lg border transition active:scale-95 hover:shadow-lg text-gray-500 px-2 py-1 flex items-center gap-1 text-restro-text bg-restro-gray border-restro-border-green hover:bg-restro-button-hover"
           >
-            <IconDevices size={18} stroke={iconStroke} />
-            <span className="hidden xl:inline">Customer Screen</span>
+            <IconScreenShare size={18} stroke={iconStroke} />
+            <span className="hidden xl:inline">{t('pos.customer_display') || "Customer Screen"}</span>
           </button>
 
           {/* Sound Toggle */}
@@ -1605,75 +1754,25 @@ export default function POSPage() {
             </div>
             {/* search customer */}
 
-            {/* dining option */}
-            <div className="mt-3 flex flex-col gap-2">
-              <select
-                ref={diningOptionRef}
-                value={state.deliveryType || "dinein"}
-                onChange={(e) => {
-                  const newType = e.target.value;
-                  setState((prev) => ({
-                    ...prev,
-                    deliveryType: newType,
-                    selectedTableId: (newType === "delivery" || newType === "takeaway") ? null : prev.selectedTableId,
-                  }));
-                }}
-                className="text-sm w-full border rounded-lg px-4 py-2 justify-center bg-restro-gray border-restro-border-green hover:bg-restro-button-hover focus:outline-restro-border-green font-medium cursor-pointer"
-              >
-                <option value="dinein">🍽️ {t('pos.dinein') || 'Dine In'}</option>
-                <option value="delivery">🚚 {t('pos.delivery') || 'Delivery'}</option>
-                <option value="takeaway">🛍️ {t('pos.takeaway') || 'Takeaway'}</option>
-              </select>
+            {/* delivery type */}
+            <select ref={diningOptionRef} className="mt-3 text-sm w-full border rounded-lg px-4 py-2 justify-center bg-restro-gray border-restro-border-green hover:bg-restro-button-hover focus:outline-restro-border-green">
+              <option value="">{t('pos.select_dining_option')}</option>
+              <option value="dinein">{t('pos.dinein')}</option>
+              <option value="delivery">{t('pos.delivery')}</option>
+              <option value="takeaway">{t('pos.takeaway')}</option>
+            </select>
+            {/* delivery type */}
 
-              {/* Conditional Table or Delivery info */}
-              {(state.deliveryType || "dinein") === "delivery" ? (
-                <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-2.5 flex flex-col gap-1.5 transition-all">
-                  <div className="flex items-center justify-between text-xs font-bold text-emerald-700 dark:text-emerald-300">
-                    <span className="flex items-center gap-1">
-                      🚚 Off-Premise Delivery
-                    </span>
-                    {Number(storeSettings?.delivery_fee || 0) > 0 && (
-                      <span className="bg-emerald-600 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">
-                        Fee: {currency}{Number(storeSettings?.delivery_fee).toFixed(2)}
-                      </span>
-                    )}
-                  </div>
-                  <input
-                    type="text"
-                    value={state.deliveryAddress || ""}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setState((prev) => ({ ...prev, deliveryAddress: val }));
-                    }}
-                    placeholder="Enter delivery address & instructions..."
-                    className="text-xs w-full px-3 py-2 border rounded-lg bg-white dark:bg-black border-restro-border-green focus:outline-restro-border-green placeholder:text-gray-400"
-                  />
-                </div>
-              ) : (state.deliveryType || "dinein") === "takeaway" ? (
-                <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-2.5 flex items-center justify-between text-xs font-semibold text-amber-700 dark:text-amber-300">
-                  <span>🛍️ Takeaway / Pickup Order</span>
-                  <span className="text-[10px] bg-amber-500/20 px-2 py-0.5 rounded-full">No table needed</span>
-                </div>
-              ) : (
-                <select
-                  ref={tableRef}
-                  value={state.selectedTableId || ""}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setState((prev) => ({ ...prev, selectedTableId: val }));
-                  }}
-                  className="text-sm w-full border rounded-lg px-4 py-2 justify-center bg-restro-gray border-restro-border-green hover:bg-restro-button-hover focus:outline-restro-border-green font-medium cursor-pointer"
-                >
-                  <option value="">{t('pos.select_table')}</option>
-                  {(storeTables || []).map((table, index) => (
-                    <option value={table.id} key={index}>
-                      {table.table_title} ({table.seating_capacity} {t('pos.person')}) - {table.floor}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
-            {/* dining option & table selection */}
+            {/* table selection */}
+            <select ref={tableRef} className="mt-3 text-sm w-full border rounded-lg px-4 py-2 justify-center bg-restro-gray border-restro-border-green hover:bg-restro-button-hover focus:outline-restro-border-green">
+              <option value="">{t('pos.select_table')}</option>
+              {
+                (storeTables || []).map((table, index)=>{
+                  return <option value={table.id} key={index}>{table.table_title} ({table.seating_capacity} {t('pos.person')}) - {table.floor}</option>
+                })
+              }
+            </select>
+            {/* table selection */}
           </div>
 
 

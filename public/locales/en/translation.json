@@ -1251,6 +1251,8 @@
     "delivery": "Delivery",
     "takeaway": "Take Away",
     "select_table": "Select Table",
+    "customer_display": "Customer Screen",
+    "token_display": "Token Display",
     "cart_is_empty": "Cart is empty.",
     "draft": "Draft",
     "send_to_kitchen": "Send to Kitchen",
