@@ -200,3 +200,41 @@ export async function cancelWhatsAppJob(jobId) {
   }
 }
 
+/**
+ * Fetch tenants audience list and statistics for WhatsApp broadcasting
+ * @param {string} status 'all' | 'active' | 'trial' | 'expired'
+ */
+export async function getTenantAudience(status = "all") {
+  try {
+    const response = await apiClient.get(`/whatsapp/tenants-audience?status=${status}`);
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+}
+
+/**
+ * Send anti-ban paced WhatsApp broadcast to tenants
+ * @param {Object} payload { templateMessage: string, filterStatus?: string, options?: object, tenantIds?: number[] }
+ */
+export async function sendTenantBroadcast(payload) {
+  try {
+    const response = await apiClient.post("/whatsapp/tenants-broadcast", payload);
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+}
+
+/**
+ * Trigger immediate check and dispatch of subscription expiry WhatsApp reminders
+ */
+export async function triggerSubscriptionExpiryCheck() {
+  try {
+    const response = await apiClient.post("/whatsapp/trigger-expiry-check");
+    return response.data;
+  } catch (error) {
+    throw error;
+  }
+}
+

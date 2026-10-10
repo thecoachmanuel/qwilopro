@@ -26,6 +26,8 @@ import {
   IconCircleCheck,
   IconAlertCircle,
   IconExternalLink,
+  IconBuildingStore,
+  IconShieldCheck,
 } from "@tabler/icons-react";
 import { iconStroke } from "../../config/config";
 import { toast } from "react-hot-toast";
@@ -49,6 +51,9 @@ import {
   getGatewayInfo,
   getWhatsAppJob,
   cancelWhatsAppJob,
+  getTenantAudience,
+  sendTenantBroadcast,
+  triggerSubscriptionExpiryCheck,
 } from "../../controllers/whatsapp.controller";
 
 const NECTAR_GROUP_CODE = [
@@ -118,9 +123,52 @@ export default function SuperAdminWhatsAppPage() {
   const [isBroadcasting, setIsBroadcasting] = useState(false);
   const [broadcastProgress, setBroadcastProgress] = useState(null);
   const [activeJob, setActiveJob] = useState(null); // background job tracking
-  const [activeTab, setActiveTab] = useState("connect"); // connect, leads, groups, broadcast, guide
+  const [activeTab, setActiveTab] = useState("connect"); // connect, tenants, leads, groups, broadcast, guide
   const [createdGroups, setCreatedGroups] = useState([]);
   const [isGuideOpen, setIsGuideOpen] = useState(false);
+
+  // ─── Tenant Broadcast & Expiry Automation States ────────────────────────────
+  const [tenantAudience, setTenantAudience] = useState([]);
+  const [tenantCounts, setTenantCounts] = useState({ all: 0, active: 0, trial: 0, expired: 0, validPhones: 0 });
+  const [tenantFilterStatus, setTenantFilterStatus] = useState("all");
+  const [selectedTenantIds, setSelectedTenantIds] = useState(new Set());
+  const [tenantSearchQuery, setTenantSearchQuery] = useState("");
+  const [isTenantAudienceLoading, setIsTenantAudienceLoading] = useState(false);
+  const [isTenantBroadcasting, setIsTenantBroadcasting] = useState(false);
+  const [isCheckingExpiries, setIsCheckingExpiries] = useState(false);
+
+  // Anti-Ban Pacing Settings
+  const [antiBanMinDelay, setAntiBanMinDelay] = useState(4); // seconds
+  const [antiBanMaxDelay, setAntiBanMaxDelay] = useState(8); // seconds
+  const [batchCooldownSize, setBatchCooldownSize] = useState(10); // messages
+  const [cooldownSeconds, setCooldownSeconds] = useState(18); // seconds
+
+  const [tenantTemplate, setTenantTemplate] = useState(
+    "{Hello|Hi|Greetings} {tenant_name}! 🚀\n\nThis is an official update from QwiloPRO for *{store_name}*.\n\nVisit your dashboard at https://qwilo.site to check your latest sales, POS orders, and reporting tools.\n\n_Thank you for choosing QwiloPRO!_ 💚\n— *Team QwiloPRO*"
+  );
+
+  const TENANT_TEMPLATES = [
+    {
+      label: "Onboarding & Best Use Guide",
+      value:
+        "🎉 {Hello|Hi|Greetings} *{tenant_name}* ({store_name})!\n\nHere are quick tips to make the best use of *QwiloPRO* for your restaurant/cafe:\n\n📱 *POS Terminal*: Instant table and counter cashiering\n📋 *Digital QR Menu*: Contactless customer ordering\n⚡ *Kitchen Screen*: Paperless orders straight to chefs\n📊 *Daily Analytics*: Track your margins & bestsellers\n\n👉 *Watch setup guides and tutorials:* https://qwilo.site\n👉 *Need priority help?* https://qwilo.site/contact\n\n_Cheers to higher sales!_ 💚\n— *Team QwiloPRO*",
+    },
+    {
+      label: "Subscription Renewal / Expiry Reminder",
+      value:
+        "🔔 {Hello|Hi|Greetings} *{tenant_name}*!\n\nFriendly reminder that your QwiloPRO subscription for *{store_name}* expires on *{expiry}*.\n\nTo ensure your POS cashiering and digital QR menus stay live without interruption, please renew your plan:\n👉 *https://qwilo.site/dashboard/subscription*\n\nIf you've already renewed, kindly disregard this notice.\n\n_Thank you for partnering with QwiloPRO!_ 💚",
+    },
+    {
+      label: "New Feature Announcement",
+      value:
+        "🚀 {Exciting news|Great update|Hello} *{tenant_name}*!\n\nWe just launched major speed & management upgrades on *QwiloPRO*! Your POS checkout is now 3x faster, with enhanced stock controls and automated receipts.\n\n👉 *Log in now to experience it:* https://qwilo.site\n\n_Have feedback or need a custom feature?_ Reach out anytime at https://qwilo.site/contact 💚",
+    },
+    {
+      label: "Special Discount / Upgrade Offer",
+      value:
+        "🎁 *Special Partner Offer for {store_name}!* 🎁\n\n{Hello|Hi|Dear} *{tenant_name}*,\n\nUpgrade your plan this week and get exclusive access to Multi-Branch management, Custom Domain branding, and VIP support.\n\n👉 *Claim upgrade now:* https://qwilo.site/dashboard/subscription\n\n_Best wishes from Team QwiloPRO!_",
+    },
+  ];
 
   // Polling refs for QR, connection status, and background jobs
   const pollTimerRef = useRef(null);
@@ -132,6 +180,7 @@ export default function SuperAdminWhatsAppPage() {
     loadSavedBatches();
     loadGatewayInfo();
     loadGroups();
+    loadTenantAudience("all");
 
     return () => {
       if (pollTimerRef.current) clearInterval(pollTimerRef.current);
@@ -547,6 +596,7 @@ export default function SuperAdminWhatsAppPage() {
             clearInterval(jobPollRef.current);
             setIsBroadcasting(false);
             setIsAddingContacts(false);
+            setIsTenantBroadcasting(false);
             if (job.status === "completed") {
               toast.success(`✅ Done! ${job.sentCount} sent, ${job.failedCount} failed.`);
             } else if (job.status === "cancelled") {
@@ -621,6 +671,128 @@ export default function SuperAdminWhatsAppPage() {
     } catch (err) {
       toast.error(err?.response?.data?.message || "Failed to send broadcast");
       setIsBroadcasting(false);
+    }
+  };
+
+  // ─── Tenant Broadcast Handlers ─────────────────────────────────────────────
+  const loadTenantAudience = async (status = "all") => {
+    setIsTenantAudienceLoading(true);
+    try {
+      const res = await getTenantAudience(status);
+      if (res?.success) {
+        setTenantAudience(res.audience || []);
+        if (res.counts) setTenantCounts(res.counts);
+        const validIds = new Set((res.audience || []).filter((t) => t.phone).map((t) => t.id));
+        setSelectedTenantIds(validIds);
+      }
+    } catch (err) {
+      console.warn("Tenant audience load error:", err?.message);
+    } finally {
+      setIsTenantAudienceLoading(false);
+    }
+  };
+
+  const filteredTenants = tenantAudience.filter((t) => {
+    if (!tenantSearchQuery) return true;
+    const q = tenantSearchQuery.toLowerCase();
+    return (
+      t.name?.toLowerCase().includes(q) ||
+      t.store_name?.toLowerCase().includes(q) ||
+      t.phone?.includes(q) ||
+      t.rawPhone?.includes(q) ||
+      t.plan_title?.toLowerCase().includes(q)
+    );
+  });
+
+  const handleSelectAllTenants = () => {
+    const validIds = new Set(filteredTenants.filter((t) => t.phone).map((t) => t.id));
+    if (selectedTenantIds.size === validIds.size) {
+      setSelectedTenantIds(new Set());
+    } else {
+      setSelectedTenantIds(validIds);
+    }
+  };
+
+  const handleToggleTenant = (id) => {
+    const next = new Set(selectedTenantIds);
+    if (next.has(id)) {
+      next.delete(id);
+    } else {
+      next.add(id);
+    }
+    setSelectedTenantIds(next);
+  };
+
+  const handleTriggerExpiryScan = async () => {
+    setIsCheckingExpiries(true);
+    try {
+      const res = await triggerSubscriptionExpiryCheck();
+      if (res?.success) {
+        toast.success(`✅ Expiry scan complete! Checked ${res.checked || 0}, sent ${res.sentCount || 0} reminders.`);
+      }
+    } catch (err) {
+      toast.error(err?.response?.data?.message || "Failed to run expiry scan");
+    } finally {
+      setIsCheckingExpiries(false);
+    }
+  };
+
+  const handleSendTenantBroadcast = async () => {
+    if (!isConnected) {
+      toast.error("Please connect your Qwilo Pro WhatsApp number first!");
+      setActiveTab("connect");
+      return;
+    }
+
+    if (!tenantTemplate.trim()) {
+      toast.error("Please enter a message template to broadcast");
+      return;
+    }
+
+    const recipientIds = Array.from(selectedTenantIds);
+    if (recipientIds.length === 0) {
+      toast.error("Please select at least 1 tenant with a valid WhatsApp number");
+      return;
+    }
+
+    const confirmMsg = `Send anti-ban paced WhatsApp broadcast to ${recipientIds.length} tenant(s)?\n\n🛡️ Anti-ban pacing: ${antiBanMinDelay}s–${antiBanMaxDelay}s delays + ${cooldownSeconds}s cooldown after every ${batchCooldownSize} messages.\n\nThe job runs on the server in the background — you can safely close this tab!`;
+
+    if (!window.confirm(confirmMsg)) {
+      return;
+    }
+
+    setIsTenantBroadcasting(true);
+    setBroadcastProgress({
+      sent: 0,
+      total: recipientIds.length,
+      processed: 0,
+      status: "running",
+      failedCount: 0,
+    });
+
+    try {
+      const res = await sendTenantBroadcast({
+        templateMessage: tenantTemplate,
+        filterStatus: tenantFilterStatus,
+        tenantIds: recipientIds,
+        options: {
+          minDelayMs: antiBanMinDelay * 1000,
+          maxDelayMs: antiBanMaxDelay * 1000,
+          batchCooldownSize,
+          cooldownMs: cooldownSeconds * 1000,
+        },
+      });
+
+      if (res?.backgroundJob && res?.jobId) {
+        toast.success(`✅ Tenant broadcast launched in background for ${recipientIds.length} tenants!`);
+        startJobPolling(res.jobId, "tenantBroadcast");
+      } else if (res?.success) {
+        toast.success(res.message);
+        setIsTenantBroadcasting(false);
+      }
+    } catch (err) {
+      toast.error(err?.response?.data?.message || "Failed to start tenant broadcast");
+      setIsTenantBroadcasting(false);
     }
   };
 
@@ -710,6 +882,27 @@ export default function SuperAdminWhatsAppPage() {
         >
           <IconDeviceMobile stroke={iconStroke} size={18} />
           WhatsApp Connection {isConnected && <span className="w-2 h-2 rounded-full bg-emerald-500" />}
+        </button>
+
+        <button
+          onClick={() => {
+            setActiveTab("tenants");
+            loadTenantAudience(tenantFilterStatus);
+          }}
+          className={clsx(
+            "flex items-center gap-2 py-3 px-4 font-medium text-sm transition-all border-b-2 whitespace-nowrap",
+            activeTab === "tenants"
+              ? "border-restro-green text-restro-green font-semibold"
+              : "border-transparent text-gray-500 hover:text-restro-text dark:hover:text-white"
+          )}
+        >
+          <IconBuildingStore stroke={iconStroke} size={18} />
+          Tenant Broadcast & Automation
+          {tenantCounts.all > 0 && (
+            <span className="text-xs bg-emerald-600 text-white rounded-full px-2 py-0.2">
+              {tenantCounts.all}
+            </span>
+          )}
         </button>
 
         <button
@@ -942,6 +1135,396 @@ export default function SuperAdminWhatsAppPage() {
                   </button>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── TAB: Tenant Broadcast & Automation ────────────────────────────────── */}
+      {activeTab === "tenants" && (
+        <div className="flex flex-col gap-6">
+          {/* Top Bar: Action Row & Expiry Reminder Scan */}
+          <div className="bg-white dark:bg-black border border-restro-border-green rounded-2xl p-5 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+              <h2 className="text-lg font-bold text-restro-text dark:text-white flex items-center gap-2">
+                <IconBuildingStore className="text-emerald-500" stroke={iconStroke} />
+                Tenants Broadcast & Anti-Ban Automation
+              </h2>
+              <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1">
+                Reach active stores, trial accounts, or expired tenants with personalized Spintax messaging and randomized delays to prevent WhatsApp account flags.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 w-full md:w-auto">
+              <button
+                onClick={handleTriggerExpiryScan}
+                disabled={isCheckingExpiries || !isConnected}
+                className="flex-1 md:flex-none bg-amber-500 hover:bg-amber-600 text-white rounded-xl py-2.5 px-4 text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2 disabled:opacity-50 shadow-sm"
+                title="Runs automated check for restaurants whose trials or subscriptions expire in 3 days, 1 day, or today"
+              >
+                <IconClock stroke={iconStroke} size={16} className={clsx({ "animate-spin": isCheckingExpiries })} />
+                {isCheckingExpiries ? "Scanning Expiries..." : "Run Expiry Reminders Scan"}
+              </button>
+              <button
+                onClick={() => loadTenantAudience(tenantFilterStatus)}
+                disabled={isTenantAudienceLoading}
+                className="p-2.5 border border-restro-border-green rounded-xl hover:bg-restro-green-light dark:hover:bg-restro-gray text-restro-text dark:text-white transition"
+                title="Refresh Tenants Audience"
+              >
+                <IconRefresh stroke={iconStroke} size={16} className={clsx({ "animate-spin": isTenantAudienceLoading })} />
+              </button>
+            </div>
+          </div>
+
+          {/* Quick Metrics Cards */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+            <div
+              onClick={() => { setTenantFilterStatus("all"); loadTenantAudience("all"); }}
+              className={clsx(
+                "p-4 rounded-2xl border transition-all cursor-pointer",
+                tenantFilterStatus === "all"
+                  ? "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-500 shadow-sm ring-1 ring-emerald-500"
+                  : "bg-white dark:bg-black border-restro-border-green hover:border-emerald-400"
+              )}
+            >
+              <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">
+                All Tenants
+              </div>
+              <div className="text-2xl font-bold text-restro-text dark:text-white">
+                {tenantCounts.all}
+              </div>
+              <div className="text-[11px] text-gray-400 mt-1">
+                {tenantCounts.validPhones} with verified numbers
+              </div>
+            </div>
+
+            <div
+              onClick={() => { setTenantFilterStatus("active"); loadTenantAudience("active"); }}
+              className={clsx(
+                "p-4 rounded-2xl border transition-all cursor-pointer",
+                tenantFilterStatus === "active"
+                  ? "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-500 shadow-sm ring-1 ring-emerald-500"
+                  : "bg-white dark:bg-black border-restro-border-green hover:border-emerald-400"
+              )}
+            >
+              <div className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider mb-1">
+                Active Subscribers
+              </div>
+              <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
+                {tenantCounts.active}
+              </div>
+              <div className="text-[11px] text-gray-400 mt-1">
+                Paying restaurant accounts
+              </div>
+            </div>
+
+            <div
+              onClick={() => { setTenantFilterStatus("trial"); loadTenantAudience("trial"); }}
+              className={clsx(
+                "p-4 rounded-2xl border transition-all cursor-pointer",
+                tenantFilterStatus === "trial"
+                  ? "bg-blue-50 dark:bg-blue-950/30 border-blue-500 shadow-sm ring-1 ring-blue-500"
+                  : "bg-white dark:bg-black border-restro-border-green hover:border-blue-400"
+              )}
+            >
+              <div className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-1">
+                Free Trial Users
+              </div>
+              <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                {tenantCounts.trial}
+              </div>
+              <div className="text-[11px] text-gray-400 mt-1">
+                Trial ongoing
+              </div>
+            </div>
+
+            <div
+              onClick={() => { setTenantFilterStatus("expired"); loadTenantAudience("expired"); }}
+              className={clsx(
+                "p-4 rounded-2xl border transition-all cursor-pointer",
+                tenantFilterStatus === "expired"
+                  ? "bg-rose-50 dark:bg-rose-950/30 border-rose-500 shadow-sm ring-1 ring-rose-500"
+                  : "bg-white dark:bg-black border-restro-border-green hover:border-rose-400"
+              )}
+            >
+              <div className="text-xs font-semibold text-rose-600 dark:text-rose-400 uppercase tracking-wider mb-1">
+                Expired / Inactive
+              </div>
+              <div className="text-2xl font-bold text-rose-600 dark:text-rose-400">
+                {tenantCounts.expired}
+              </div>
+              <div className="text-[11px] text-gray-400 mt-1">
+                Due for renewal outreach
+              </div>
+            </div>
+          </div>
+
+          {/* Main 2-Column Workspace */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* Left: Tenant Audience List & Selection (5 cols) */}
+            <div className="lg:col-span-5 bg-white dark:bg-black border border-restro-border-green rounded-2xl p-5 shadow-sm flex flex-col h-[700px]">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-bold text-sm text-restro-text dark:text-white flex items-center gap-1.5">
+                  <IconUsers size={18} className="text-emerald-500" />
+                  Target Tenants ({filteredTenants.length})
+                </h3>
+                <button
+                  onClick={handleSelectAllTenants}
+                  className="text-xs text-restro-green hover:underline font-semibold"
+                >
+                  {selectedTenantIds.size === filteredTenants.filter((t) => t.phone).length && selectedTenantIds.size > 0
+                    ? "Deselect All"
+                    : "Select All Valid"}
+                </button>
+              </div>
+
+              {/* Search input */}
+              <div className="relative mb-3">
+                <input
+                  type="text"
+                  placeholder="Search store name, tenant, or phone..."
+                  value={tenantSearchQuery}
+                  onChange={(e) => setTenantSearchQuery(e.target.value)}
+                  className="w-full bg-gray-50 dark:bg-restro-gray/40 border border-restro-border-green rounded-xl py-2 pl-9 pr-3 text-xs text-restro-text dark:text-white placeholder-gray-400 focus:outline-none focus:border-restro-green"
+                />
+                <IconSearch size={14} className="absolute left-3 top-2.5 text-gray-400" />
+              </div>
+
+              {/* Scrollable List */}
+              <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+                {isTenantAudienceLoading ? (
+                  <div className="flex items-center justify-center h-48 text-gray-400 text-xs">
+                    <IconRefresh className="animate-spin mr-2" size={16} /> Loading tenants...
+                  </div>
+                ) : filteredTenants.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-48 text-gray-400 text-xs text-center px-4">
+                    <IconAlertCircle size={24} className="mb-2 text-gray-400" />
+                    No tenants found for this filter or query.
+                  </div>
+                ) : (
+                  filteredTenants.map((t) => {
+                    const hasPhone = !!t.phone;
+                    const isSelected = selectedTenantIds.has(t.id);
+                    return (
+                      <div
+                        key={t.id}
+                        onClick={() => hasPhone && handleToggleTenant(t.id)}
+                        className={clsx(
+                          "p-3 rounded-xl border transition flex items-start gap-3",
+                          hasPhone ? "cursor-pointer" : "opacity-60 cursor-not-allowed bg-gray-50/50 dark:bg-restro-gray/20",
+                          isSelected
+                            ? "bg-emerald-50/80 dark:bg-emerald-950/30 border-emerald-400 dark:border-emerald-800"
+                            : "border-restro-border-green hover:bg-gray-50 dark:hover:bg-restro-gray/40"
+                        )}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          disabled={!hasPhone}
+                          onChange={() => handleToggleTenant(t.id)}
+                          onClick={(e) => e.stopPropagation()}
+                          className="mt-0.5 rounded text-emerald-600 focus:ring-emerald-500"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="font-semibold text-xs text-restro-text dark:text-white truncate">
+                              {t.store_name}
+                            </span>
+                            <span
+                              className={clsx(
+                                "text-[10px] font-semibold px-2 py-0.5 rounded-full",
+                                t.status === "active"
+                                  ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300"
+                                  : t.status === "trial"
+                                  ? "bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300"
+                                  : "bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300"
+                              )}
+                            >
+                              {t.status}
+                            </span>
+                          </div>
+
+                          <div className="text-[11px] text-gray-500 dark:text-gray-400 truncate mt-0.5">
+                            {t.name} • {t.plan_title}
+                          </div>
+
+                          <div className="flex items-center gap-1.5 mt-1 text-[11px] font-mono text-gray-600 dark:text-gray-300">
+                            <IconBrandWhatsapp size={12} className={hasPhone ? "text-emerald-500" : "text-gray-400"} />
+                            {hasPhone ? t.displayPhone : <span className="text-rose-400 italic">No phone entered</span>}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {/* Bottom selection counter */}
+              <div className="pt-3 border-t border-restro-border-green mt-2 flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+                <span>Selected: <strong className="text-emerald-600 dark:text-emerald-400">{selectedTenantIds.size}</strong> recipients</span>
+                <span>{tenantCounts.validPhones} reachable via WhatsApp</span>
+              </div>
+            </div>
+
+            {/* Right: Anti-Ban Template Composer & Safety Engine (7 cols) */}
+            <div className="lg:col-span-7 bg-white dark:bg-black border border-restro-border-green rounded-2xl p-5 sm:p-6 shadow-sm flex flex-col justify-between">
+              <div>
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-4">
+                  <div>
+                    <h3 className="font-bold text-sm text-restro-text dark:text-white flex items-center gap-2">
+                      <IconSparkles size={18} className="text-amber-500" />
+                      Anti-Ban Template Composer
+                    </h3>
+                    <p className="text-xs text-gray-400">
+                      Supports Spintax syntax <code className="text-emerald-600 dark:text-emerald-400 font-mono">{"{Hi|Hello|Dear}"}</code> & dynamic personal tags.
+                    </p>
+                  </div>
+
+                  {/* Preset Selector */}
+                  <select
+                    onChange={(e) => {
+                      const found = TENANT_TEMPLATES.find((t) => t.label === e.target.value);
+                      if (found) setTenantTemplate(found.value);
+                    }}
+                    defaultValue=""
+                    className="bg-gray-50 dark:bg-restro-gray/40 border border-restro-border-green rounded-xl py-1.5 px-3 text-xs text-restro-text dark:text-white focus:outline-none"
+                  >
+                    <option value="" disabled>Load Pre-built Template...</option>
+                    {TENANT_TEMPLATES.map((tmpl) => (
+                      <option key={tmpl.label} value={tmpl.label}>
+                        {tmpl.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Variable insertion tags */}
+                <div className="flex flex-wrap items-center gap-1.5 mb-3">
+                  <span className="text-[11px] text-gray-400 mr-1">Insert tag:</span>
+                  {[
+                    { tag: "{tenant_name}", label: "Tenant Name" },
+                    { tag: "{store_name}", label: "Store Name" },
+                    { tag: "{plan}", label: "Plan Title" },
+                    { tag: "{expiry}", label: "Expiry Date" },
+                    { tag: "{phone}", label: "Phone" },
+                    { tag: "{Hi|Hello|Greetings}", label: "Spintax Greeting" },
+                  ].map((v) => (
+                    <button
+                      key={v.tag}
+                      type="button"
+                      onClick={() => setTenantTemplate((prev) => prev + " " + v.tag)}
+                      className="px-2 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 text-[11px] font-medium border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 transition"
+                    >
+                      +{v.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Textarea */}
+                <textarea
+                  rows={8}
+                  value={tenantTemplate}
+                  onChange={(e) => setTenantTemplate(e.target.value)}
+                  placeholder="Compose broadcast message..."
+                  className="w-full bg-gray-50 dark:bg-restro-gray/30 border border-restro-border-green rounded-xl p-3.5 text-xs sm:text-sm text-restro-text dark:text-white focus:outline-none focus:border-restro-green leading-relaxed font-sans mb-4"
+                />
+
+                {/* Anti-Ban Pacing & Cooldown Controls Card */}
+                <div className="bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/60 rounded-xl p-4 mb-4">
+                  <div className="flex items-center gap-2 mb-2 text-emerald-700 dark:text-emerald-300 font-semibold text-xs sm:text-sm">
+                    <IconShieldCheck size={18} />
+                    Anti-Ban Pacing & Cooldown Protection
+                  </div>
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400 mb-3">
+                    Mimics natural human interaction so WhatsApp does not detect botting or ban your superadmin number.
+                  </p>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <label className="text-[11px] font-medium text-gray-600 dark:text-gray-300 block mb-1">
+                        Randomized Interval Delay: {antiBanMinDelay}s – {antiBanMaxDelay}s
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="range"
+                          min={2}
+                          max={15}
+                          value={antiBanMinDelay}
+                          onChange={(e) => {
+                            const val = Number(e.target.value);
+                            setAntiBanMinDelay(val);
+                            if (val >= antiBanMaxDelay) setAntiBanMaxDelay(val + 3);
+                          }}
+                          className="w-full accent-emerald-600"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-medium text-gray-600 dark:text-gray-300 block mb-1">
+                        Batch Cooldown: Pause {cooldownSeconds}s every {batchCooldownSize} msgs
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="range"
+                          min={10}
+                          max={60}
+                          value={cooldownSeconds}
+                          onChange={(e) => setCooldownSeconds(Number(e.target.value))}
+                          className="w-full accent-emerald-600"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Active Job Monitor */}
+                {activeJob && activeJob.type === "tenant_broadcast" && (
+                  <div className="p-4 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-emerald-50/70 dark:bg-emerald-950/40 text-xs mb-4">
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="font-semibold text-emerald-800 dark:text-emerald-200">
+                        🚀 Tenant Broadcast in Progress
+                      </span>
+                      <span className="font-mono text-emerald-700 dark:text-emerald-300">
+                        {activeJob.processed} / {activeJob.total} (Sent: {activeJob.sentCount}, Failed: {activeJob.failedCount})
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 my-2 overflow-hidden">
+                      <div
+                        className="bg-emerald-500 h-2 rounded-full transition-all"
+                        style={{
+                          width: `${activeJob.total ? (activeJob.processed / activeJob.total) * 100 : 0}%`,
+                        }}
+                      />
+                    </div>
+                    <div className="flex justify-between items-center mt-2">
+                      <span className="text-gray-500 dark:text-gray-400 capitalize">
+                        Status: <strong>{activeJob.status}</strong>
+                      </span>
+                      {activeJob.status === "running" && (
+                        <button
+                          onClick={handleCancelJob}
+                          className="text-rose-500 hover:text-rose-600 font-bold flex items-center gap-1"
+                        >
+                          <IconX size={14} /> Stop Job
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Action Button */}
+              <button
+                onClick={handleSendTenantBroadcast}
+                disabled={isTenantBroadcasting || !tenantTemplate.trim() || selectedTenantIds.size === 0}
+                className="w-full bg-restro-green hover:bg-restro-green-dark text-white rounded-xl py-3 px-6 font-semibold transition flex items-center justify-center gap-2 disabled:opacity-50 mt-2 shadow-sm"
+              >
+                <IconSend stroke={iconStroke} size={18} />
+                {isTenantBroadcasting
+                  ? "Dispatching Anti-Ban Broadcast..."
+                  : `Launch Anti-Ban Broadcast to ${selectedTenantIds.size} Tenant(s)`}
+              </button>
             </div>
           </div>
         </div>

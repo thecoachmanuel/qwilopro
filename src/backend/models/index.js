@@ -34,6 +34,8 @@ const tenantSchema = new mongoose.Schema({
   token_version: { type: Number, default: 1 },
   stripe_next_price_id: { type: String, default: null },
   custom_domain: { type: String, default: null, index: true },
+  last_expiry_reminder_date: { type: String, default: null },
+  last_expiry_reminder_level: { type: String, default: null },
 });
 applyAutoIncrementId(tenantSchema, "tenants");
 
@@ -78,6 +80,8 @@ const storeDetailsSchema = new mongoose.Schema({
   delivery_fee: { type: Number, default: 0 },
   unique_id: { type: String, default: null },
   service_charge: { type: Number, default: 0 },
+  is_welcome_message_sent: { type: Boolean, default: false },
+  welcome_message_sent_at: { type: Date, default: null },
 });
 
 // 5. StoreTable

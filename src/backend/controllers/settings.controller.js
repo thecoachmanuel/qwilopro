@@ -102,6 +102,18 @@ exports.setStoreDetails = async (req, res) => {
         }
         await setStoreSettingDB(storeName, address, phone, email, currency, isQRMenuEnabled, isQROrderEnabled, activeQRCode, isFeedbackEnabled, tenantId, slug, custom_domain, isDeliveryEnabled, deliveryFee);
 
+        // Automated WhatsApp Welcome message on first-time store phone update
+        if (phone) {
+            try {
+                const { sendStoreWelcomeMessage } = require("../services/whatsapp.service");
+                sendStoreWelcomeMessage(tenantId, phone, storeName).catch((err) => {
+                    console.warn("[setStoreDetails] Welcome message dispatch warning:", err.message);
+                });
+            } catch (wErr) {
+                console.warn("[setStoreDetails] Welcome WhatsApp error:", wErr.message);
+            }
+        }
+
         return res.status(200).json({
             success: true,
             message: req.__("details_saved_successfully"),

@@ -557,6 +557,23 @@ exports.updateTenantDB = async (
     status: selectedPlan ? "plan_changed" : isActive ? "updated" : "cancelled",
   }).catch((e) => console.error("Subscription history log error:", e));
 
+  // If subscription was activated or plan updated by superadmin, dispatch WhatsApp invoice
+  if (isActive && (selectedPlan || subscription_end)) {
+    try {
+      const { sendSubscriptionInvoiceWhatsApp } = require("./whatsapp.service");
+      sendSubscriptionInvoiceWhatsApp(tId, {
+        plan_title: selectedPlan?.title || tenantUpdates.plan_title || tenant.plan_title || "Standard Plan",
+        amount: 0,
+        currency: "NGN",
+        reference: `ADMIN-SUB-${tId}-${Date.now().toString().slice(-6)}`,
+        start_date: new Date(effectiveStarts).toLocaleDateString(),
+        end_date: effectiveExpires ? new Date(effectiveExpires).toLocaleDateString() : "Active",
+      }).catch((e) => console.warn("[updateTenantDB] WhatsApp invoice error:", e.message));
+    } catch (invErr) {
+      console.warn("[updateTenantDB] WhatsApp invoice warning:", invErr.message);
+    }
+  }
+
   if (currentUser) {
     const updates = {};
     if (currentUser.name !== name) {

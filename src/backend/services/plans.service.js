@@ -1009,6 +1009,21 @@ exports.verifyPaystackPaymentDB = async (reference, tenantId) => {
       amount: (data.amount || 0) / 100,
     });
 
+    // Dispatch automated WhatsApp official subscription invoice
+    try {
+      const { sendSubscriptionInvoiceWhatsApp } = require("./whatsapp.service");
+      sendSubscriptionInvoiceWhatsApp(effectiveTenantId, {
+        plan_title: plan?.title || "Starter",
+        amount: (data.amount || 0) / 100,
+        currency: data.currency || "NGN",
+        reference: reference,
+        start_date: startDateStr,
+        end_date: endDateStr,
+      }).catch((e) => console.warn("[verifyPaystackPaymentDB] WhatsApp invoice error:", e.message));
+    } catch (invErr) {
+      console.warn("[verifyPaystackPaymentDB] WhatsApp invoice dispatch warning:", invErr.message);
+    }
+
     const updatedTenant = await Tenant.findOne({ id: effectiveTenantId }).lean();
 
     return {
@@ -1124,6 +1139,21 @@ exports.activateTrialDB = async ({ tenantId, planId, trialDays = 14, username })
       payment_gateway: "trial",
       created_at: new Date(),
     }).catch((e) => console.warn("SubscriptionHistory creation warning:", e.message));
+
+    // Dispatch automated WhatsApp trial invoice & welcome notice
+    try {
+      const { sendSubscriptionInvoiceWhatsApp } = require("./whatsapp.service");
+      sendSubscriptionInvoiceWhatsApp(tenantId, {
+        plan_title: `${plan?.title || tenant.plan_title || "Starter"} (Free Trial)`,
+        amount: 0,
+        currency: "NGN",
+        reference: subscriptionId,
+        start_date: startDate.toLocaleDateString(),
+        end_date: endDate.toLocaleDateString(),
+      }).catch((e) => console.warn("[activateTrialDB] WhatsApp trial invoice error:", e.message));
+    } catch (trialErr) {
+      console.warn("[activateTrialDB] WhatsApp trial invoice dispatch warning:", trialErr.message);
+    }
 
     const { getUserDB } = require("./auth.service");
     const freshUser = await getUserDB(username, tenantId);

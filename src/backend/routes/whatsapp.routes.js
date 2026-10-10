@@ -17,6 +17,9 @@ const {
   listJobs,
   getJobStatus,
   cancelJob,
+  getTenantAudience,
+  broadcastToTenants,
+  triggerExpiryCheck,
 } = require("../controllers/whatsapp.controller");
 
 const router = Router();
@@ -30,6 +33,11 @@ router.get("/qr", superAdminAuth, getWhatsAppQR);
 router.post("/connect", superAdminAuth, connectSession);
 router.post("/disconnect", superAdminAuth, disconnectSession);
 router.get("/gateway-info", superAdminAuth, getGatewayInfo);
+
+// ─── Tenant Broadcast & Automation ───────────────────────────────────────────
+router.get("/tenants-audience", superAdminAuth, getTenantAudience);
+router.post("/tenants-broadcast", superAdminAuth, broadcastToTenants);
+router.post("/trigger-expiry-check", superAdminAuth, triggerExpiryCheck);
 
 // ─── Lead Management ─────────────────────────────────────────────────────────
 router.post("/leads/upload", superAdminAuth, uploadLeads);

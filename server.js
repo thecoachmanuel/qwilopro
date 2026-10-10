@@ -43,6 +43,7 @@ const feedbackRoutes = require("./src/backend/routes/feedback.routes");
 const superAdminRoutes = require("./src/backend/routes/superadmin.routes");
 const inventoryRoutes = require("./src/backend/routes/inventory.routes");
 const planRoutes = require("./src/backend/routes/plans.routes");
+const whatsappRoutes = require("./src/backend/routes/whatsapp.routes");
 
 const dev = process.env.NODE_ENV !== "production";
 const app = next({ dev });
@@ -143,6 +144,7 @@ app.prepare().then(async () => {
   server.use("/api/v1/admin", superAdminRoutes);
   server.use("/api/v1/inventory", inventoryRoutes);
   server.use("/api/v1/plans", planRoutes);
+  server.use("/api/v1/whatsapp", whatsappRoutes);
 
   // Fallback all other routes to Next.js App Router
   server.all("*", (req, res) => {
@@ -217,6 +219,23 @@ app.prepare().then(async () => {
     // Retry DB seed after server is up (in case DB connected after server started)
     if (mongoose.connection.readyState === 1) {
       seedDatabase().catch(console.error);
+    }
+
+    // Start automated trial / subscription expiry reminder background routine
+    try {
+      const { processSubscriptionExpiryReminders } = require("./src/backend/services/whatsapp.service");
+      setTimeout(() => {
+        processSubscriptionExpiryReminders().catch((e) =>
+          console.warn("[Expiry Reminders Initial Run Error]:", e.message)
+        );
+      }, 45000);
+      setInterval(() => {
+        processSubscriptionExpiryReminders().catch((e) =>
+          console.warn("[Expiry Reminders Interval Error]:", e.message)
+        );
+      }, 12 * 60 * 60 * 1000);
+    } catch (schedErr) {
+      console.warn("Expiry reminder scheduler setup warning:", schedErr.message);
     }
   });
 });

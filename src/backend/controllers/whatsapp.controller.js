@@ -578,7 +578,16 @@ async function listJobs(req, res) {
 // ─── GET /api/v1/whatsapp/jobs/:jobId ────────────────────────────────────────
 async function getJobStatus(req, res) {
   try {
-    const job = await waJobs.getJob(req.params.jobId);
+    let job = await waJobs.getJob(req.params.jobId);
+    if (!job) {
+      // Check tenant broadcast job registry
+      const { tenantBroadcastJobs } = require("../services/whatsapp.service");
+      job = tenantBroadcastJobs.get(req.params.jobId);
+      if (!job) {
+        const setting = await SystemSetting.findOne({ key: "whatsapp_tenant_broadcast_jobs" }).lean();
+        job = setting?.value?.[req.params.jobId] || null;
+      }
+    }
     if (!job) {
       return res.status(404).json({ success: false, message: "Job not found." });
     }
@@ -591,7 +600,15 @@ async function getJobStatus(req, res) {
 // ─── POST /api/v1/whatsapp/jobs/:jobId/cancel ────────────────────────────────
 async function cancelJob(req, res) {
   try {
-    const cancelled = await waJobs.cancelJob(req.params.jobId);
+    let cancelled = await waJobs.cancelJob(req.params.jobId);
+    if (!cancelled) {
+      const { tenantBroadcastJobs } = require("../services/whatsapp.service");
+      const job = tenantBroadcastJobs.get(req.params.jobId);
+      if (job) {
+        job.cancelRequested = true;
+        cancelled = true;
+      }
+    }
     if (!cancelled) {
       return res.status(404).json({ success: false, message: "Job not found or already finished." });
     }
@@ -601,7 +618,6 @@ async function cancelJob(req, res) {
   }
 }
 
-
 // ─── GET /api/v1/whatsapp/gateway-info ───────────────────────────────────────
 async function getGatewayInfo(req, res) {
   return res.json({
@@ -610,6 +626,202 @@ async function getGatewayInfo(req, res) {
     sessionId: WA_SESSION_ID,
     apiSecretConfigured: !!WA_API_SECRET,
   });
+}
+
+// ─── GET /api/v1/whatsapp/tenants-audience ───────────────────────────────────
+async function getTenantAudience(req, res) {
+  try {
+    const { Tenant, StoreDetails, User } = require("../models");
+    const { status = "all" } = req.query;
+
+    const tenants = await Tenant.find({}).sort({ id: -1 }).lean();
+    const tenantIds = tenants.map((t) => t.id);
+
+    const [stores, adminUsers] = await Promise.all([
+      StoreDetails.find({ tenant_id: { $in: tenantIds } }).lean(),
+      User.find({ tenant_id: { $in: tenantIds }, role: "admin" }).lean(),
+    ]);
+
+    const storeMap = new Map();
+    stores.forEach((s) => storeMap.set(s.tenant_id, s));
+
+    const userMap = new Map();
+    adminUsers.forEach((u) => userMap.set(u.tenant_id, u));
+
+    const now = new Date();
+    let audience = [];
+    const counts = {
+      all: tenants.length,
+      active: 0,
+      trial: 0,
+      expired: 0,
+      validPhones: 0,
+    };
+
+    for (const t of tenants) {
+      const store = storeMap.get(t.id);
+      const admin = userMap.get(t.id);
+      const rawPhone = store?.phone || admin?.phone || "";
+      const normalized = normalizePhoneNumber(rawPhone);
+
+      let tenantStatus = "active";
+      const isTrial = Boolean(t.isTrialPlan);
+      const isExpired = t.subscription_end && new Date(t.subscription_end) < now;
+
+      if (isTrial) {
+        tenantStatus = "trial";
+        counts.trial++;
+      } else if (isExpired || t.is_active === 0) {
+        tenantStatus = "expired";
+        counts.expired++;
+      } else {
+        tenantStatus = "active";
+        counts.active++;
+      }
+
+      if (normalized) {
+        counts.validPhones++;
+      }
+
+      const item = {
+        id: t.id,
+        name: t.name,
+        store_name: store?.store_name || t.name,
+        phone: normalized,
+        displayPhone: normalized ? `+${normalized}` : "No phone",
+        rawPhone: rawPhone,
+        plan_title: t.plan_title || "Standard",
+        isTrialPlan: isTrial,
+        subscription_end: t.subscription_end,
+        status: tenantStatus,
+        email: admin?.email || store?.email || "",
+      };
+
+      if (status === "all" || status === tenantStatus) {
+        audience.push(item);
+      }
+    }
+
+    return res.json({
+      success: true,
+      audience,
+      counts,
+    });
+  } catch (err) {
+    console.error("getTenantAudience error:", err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+}
+
+// ─── POST /api/v1/whatsapp/tenants-broadcast ──────────────────────────────────
+async function broadcastToTenants(req, res) {
+  try {
+    const { templateMessage, filterStatus = "all", options = {}, tenantIds } = req.body;
+    if (!templateMessage || !templateMessage.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide a message template for the broadcast.",
+      });
+    }
+
+    const { Tenant, StoreDetails, User } = require("../models");
+    const { startTenantBroadcastJob } = require("../services/whatsapp.service");
+
+    const query = {};
+    if (Array.isArray(tenantIds) && tenantIds.length > 0) {
+      query.id = { $in: tenantIds.map(Number) };
+    }
+
+    const tenants = await Tenant.find(query).lean();
+    const tIds = tenants.map((t) => t.id);
+
+    const [stores, adminUsers] = await Promise.all([
+      StoreDetails.find({ tenant_id: { $in: tIds } }).lean(),
+      User.find({ tenant_id: { $in: tIds }, role: "admin" }).lean(),
+    ]);
+
+    const storeMap = new Map();
+    stores.forEach((s) => storeMap.set(s.tenant_id, s));
+
+    const userMap = new Map();
+    adminUsers.forEach((u) => userMap.set(u.tenant_id, u));
+
+    const now = new Date();
+    const cleanAudience = [];
+    const seenPhones = new Set();
+
+    for (const t of tenants) {
+      const store = storeMap.get(t.id);
+      const admin = userMap.get(t.id);
+      const rawPhone = store?.phone || admin?.phone || "";
+      const normalized = normalizePhoneNumber(rawPhone);
+      if (!normalized) continue;
+
+      if (seenPhones.has(normalized)) continue;
+      seenPhones.add(normalized);
+
+      let tenantStatus = "active";
+      const isTrial = Boolean(t.isTrialPlan);
+      const isExpired = t.subscription_end && new Date(t.subscription_end) < now;
+      if (isTrial) tenantStatus = "trial";
+      else if (isExpired || t.is_active === 0) tenantStatus = "expired";
+
+      if (filterStatus !== "all" && filterStatus !== tenantStatus) {
+        continue;
+      }
+
+      cleanAudience.push({
+        id: t.id,
+        name: t.name,
+        store_name: store?.store_name || t.name,
+        contact_name: admin?.name || t.name,
+        phone: normalized,
+        plan_title: t.plan_title || "Standard",
+        subscription_end: t.subscription_end,
+      });
+    }
+
+    if (cleanAudience.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No valid tenant phone numbers found for the selected filter.",
+      });
+    }
+
+    const job = startTenantBroadcastJob(cleanAudience, templateMessage, {
+      minDelayMs: Number(options.minDelayMs) || 4000,
+      maxDelayMs: Number(options.maxDelayMs) || 8000,
+      batchCooldownSize: Number(options.batchCooldownSize) || 10,
+      cooldownMs: Number(options.cooldownMs) || 18000,
+    });
+
+    return res.json({
+      success: true,
+      backgroundJob: true,
+      jobId: job.id,
+      total: job.total,
+      message: `✅ Tenant broadcast started for ${job.total} tenant(s). Anti-ban pacing & batch cooldowns enabled. You can safely close this page.`,
+    });
+  } catch (err) {
+    console.error("broadcastToTenants error:", err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
+}
+
+// ─── POST /api/v1/whatsapp/trigger-expiry-check ──────────────────────────────
+async function triggerExpiryCheck(req, res) {
+  try {
+    const { processSubscriptionExpiryReminders } = require("../services/whatsapp.service");
+    const result = await processSubscriptionExpiryReminders();
+    return res.json({
+      success: true,
+      message: `Checked ${result.checked || 0} subscriptions. Sent ${result.sentCount || 0} WhatsApp expiry reminders.`,
+      ...result,
+    });
+  } catch (err) {
+    console.error("triggerExpiryCheck error:", err);
+    return res.status(500).json({ success: false, message: err.message });
+  }
 }
 
 module.exports = {
@@ -629,4 +841,7 @@ module.exports = {
   listJobs,
   getJobStatus,
   cancelJob,
+  getTenantAudience,
+  broadcastToTenants,
+  triggerExpiryCheck,
 };
