@@ -162,6 +162,18 @@ exports.setStoreSettingDB = async (
     if (custom_domain !== undefined) {
       updateDoc.custom_domain = custom_domain;
     }
+
+    // Preserve first_uploaded_phone history: If the store already had an existing phone saved,
+    // lock that as their initial number and ensure is_welcome_message_sent is preserved as true so number updates never trigger welcome
+    const existingStore = await StoreDetails.findOne({ tenant_id: tenantId })
+      .select("phone first_uploaded_phone is_welcome_message_sent")
+      .lean();
+
+    if (phone && !existingStore?.first_uploaded_phone && existingStore?.phone) {
+      updateDoc.first_uploaded_phone = existingStore.phone;
+      updateDoc.is_welcome_message_sent = true;
+    }
+
     await StoreDetails.findOneAndUpdate(
       { tenant_id: tenantId },
       { $set: updateDoc },

@@ -92,20 +92,74 @@ async function sendDirectWhatsApp(phone, message) {
 }
 
 /**
- * Triggered when a store updates their phone number for the first time.
- * Sends the official QwiloPRO automated welcome & onboarding message.
+ * Triggered when a store uploads their phone number for the very first time.
+ * GUARANTEE: The welcome message is ONLY sent to the first number a business uploads ONCE.
+ * It will NEVER be resent if they change or update their phone number later.
  */
 async function sendStoreWelcomeMessage(tenantId, phone, storeName) {
   try {
+    const tId = Number(tenantId);
+    if (!tId) return;
+
     const cleanPhone = normalizePhone(phone);
     if (!cleanPhone) return;
 
-    const store = await StoreDetails.findOne({ tenant_id: Number(tenantId) });
-    if (store && store.is_welcome_message_sent) {
-      return; // Already welcomed previously
+    // 1. Fetch both Tenant and StoreDetails to check welcome history
+    const [tenant, store] = await Promise.all([
+      Tenant.findOne({ id: tId }),
+      StoreDetails.findOne({ tenant_id: tId }),
+    ]);
+
+    // 2. Strict Check: If welcome message was ALREADY sent to this business/tenant, STOP IMMEDIATELY.
+    if (store?.is_welcome_message_sent || tenant?.is_welcome_message_sent) {
+      console.log(`[sendStoreWelcomeMessage] Skipped for tenant ${tId}: Welcome message was already sent previously.`);
+      return { success: false, reason: "Already sent" };
     }
 
-    const businessName = storeName || store?.store_name || "Partner";
+    // 3. Strict Check: If the business already had a first_uploaded_phone recorded (or existing phone),
+    // and this is a phone update or number change, DO NOT send a welcome message.
+    if (store?.first_uploaded_phone || tenant?.first_uploaded_phone) {
+      console.log(`[sendStoreWelcomeMessage] Skipped for tenant ${tId}: Business already has initial phone recorded. This is a phone update.`);
+      return { success: false, reason: "Already has initial uploaded phone" };
+    }
+
+    // 4. ATOMIC CLAIM: Atomically claim the one-time welcome dispatch slot in StoreDetails
+    // This completely eliminates race conditions if multiple requests hit simultaneously.
+    const claimedStore = await StoreDetails.findOneAndUpdate(
+      {
+        tenant_id: tId,
+        is_welcome_message_sent: { $ne: true },
+        first_uploaded_phone: null,
+      },
+      {
+        $set: {
+          is_welcome_message_sent: true,
+          welcome_message_sent_at: new Date(),
+          first_uploaded_phone: cleanPhone,
+        },
+      },
+      { new: true }
+    );
+
+    if (!claimedStore) {
+      console.log(`[sendStoreWelcomeMessage] Skipped for tenant ${tId}: Welcome slot was already claimed.`);
+      return { success: false, reason: "Welcome slot already claimed" };
+    }
+
+    // Also persist the lock to Tenant document permanently
+    await Tenant.updateOne(
+      { id: tId },
+      {
+        $set: {
+          is_welcome_message_sent: true,
+          welcome_message_sent_at: new Date(),
+          first_uploaded_phone: cleanPhone,
+        },
+      }
+    ).catch(() => {});
+
+    // 5. Build and send the one-time welcome message
+    const businessName = storeName || claimedStore?.store_name || "Partner";
 
     const welcomeMsg = [
       `🎉 *Welcome to QwiloPRO, ${businessName}!*`,
@@ -129,18 +183,7 @@ async function sendStoreWelcomeMessage(tenantId, phone, storeName) {
     ].join("\n");
 
     const result = await sendDirectWhatsApp(cleanPhone, welcomeMsg);
-
-    // Record welcome message status
-    await StoreDetails.updateOne(
-      { tenant_id: Number(tenantId) },
-      {
-        $set: {
-          is_welcome_message_sent: true,
-          welcome_message_sent_at: new Date(),
-        },
-      }
-    );
-
+    console.log(`[sendStoreWelcomeMessage] Welcome message sent to initial number ${cleanPhone} for tenant ${tId}:`, result?.success ? "Success" : result?.error);
     return result;
   } catch (error) {
     console.error("[sendStoreWelcomeMessage Error]:", error.message);

@@ -36,6 +36,9 @@ const tenantSchema = new mongoose.Schema({
   custom_domain: { type: String, default: null, index: true },
   last_expiry_reminder_date: { type: String, default: null },
   last_expiry_reminder_level: { type: String, default: null },
+  is_welcome_message_sent: { type: Boolean, default: false },
+  welcome_message_sent_at: { type: Date, default: null },
+  first_uploaded_phone: { type: String, default: null },
 });
 applyAutoIncrementId(tenantSchema, "tenants");
 
@@ -82,6 +85,7 @@ const storeDetailsSchema = new mongoose.Schema({
   service_charge: { type: Number, default: 0 },
   is_welcome_message_sent: { type: Boolean, default: false },
   welcome_message_sent_at: { type: Date, default: null },
+  first_uploaded_phone: { type: String, default: null },
 });
 
 // 5. StoreTable
