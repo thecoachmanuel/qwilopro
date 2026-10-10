@@ -1,5 +1,4 @@
-/* QwiloPro SaaS Service Worker - Offline Resilience & PWA Support */
-const CACHE_NAME = 'qwilopro-pwa-v1';
+const CACHE_NAME = 'qwilopro-pwa-v2';
 
 const STATIC_PRECACHE = [
   '/',
@@ -8,7 +7,8 @@ const STATIC_PRECACHE = [
   '/logo_192.png',
   '/tap.mp3',
   '/new_order_sound.mp3',
-  '/manifest.json'
+  '/manifest.json',
+  '/locales/en/translation.json'
 ];
 
 self.addEventListener('install', (event) => {
@@ -70,17 +70,23 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Handle static assets (_next/static, chunks, fonts, images, sounds)
+  // Handle static assets (_next/static, chunks, fonts, images, sounds, translations)
   const isStaticAsset =
     url.pathname.startsWith('/_next/static/') ||
+    url.pathname.startsWith('/locales/') ||
+    url.pathname.startsWith('/assets/') ||
     url.pathname.endsWith('.js') ||
     url.pathname.endsWith('.css') ||
     url.pathname.endsWith('.png') ||
     url.pathname.endsWith('.jpg') ||
+    url.pathname.endsWith('.jpeg') ||
+    url.pathname.endsWith('.webp') ||
+    url.pathname.endsWith('.avif') ||
     url.pathname.endsWith('.svg') ||
     url.pathname.endsWith('.woff2') ||
     url.pathname.endsWith('.woff') ||
-    url.pathname.endsWith('.mp3');
+    url.pathname.endsWith('.mp3') ||
+    url.pathname.endsWith('.json');
 
   if (isStaticAsset) {
     event.respondWith(

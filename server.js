@@ -9,6 +9,7 @@ const { createServer } = require("http");
 const { parse } = require("url");
 const next = require("next");
 const express = require("express");
+const compression = require("compression");
 const cookieParser = require("cookie-parser");
 const fileUpload = require("express-fileupload");
 const userAgent = require("express-useragent");
@@ -56,6 +57,13 @@ app.prepare().then(async () => {
 
   const server = express();
 
+  // Enable high-performance gzip compression for API responses & server-rendered content
+  server.use(
+    compression({
+      threshold: 1024,
+    })
+  );
+
   // i18n configuration
   i18n.configure({
     locales: LANGUAGES,
@@ -88,6 +96,14 @@ app.prepare().then(async () => {
     })
   );
   const fs = require("fs");
+  server.use(
+    "/assets",
+    express.static(path.resolve(process.cwd(), "public", "assets"), { maxAge: "30d" })
+  );
+  server.use(
+    "/locales",
+    express.static(path.resolve(process.cwd(), "public", "locales"), { maxAge: "7d" })
+  );
   server.use(
     "/public",
     express.static(path.resolve(process.cwd(), "public"), { maxAge: "7d" })

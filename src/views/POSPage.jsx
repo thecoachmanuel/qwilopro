@@ -54,47 +54,53 @@ export default function POSPage() {
   const searchCustomerRef = useRef(null);
   // dialog: search customer
 
-  const [state, setState] = useState({
-    view:"detailed",
-    categories: [],
-    menuItems: [],
-    paymentTypes: [],
-    printSettings: null,
-    storeSettings: null,
-    storeTables: [],
-    serviceCharge:null,
-    currency: "",
-    isLoading: true,
+  const [state, setState] = useState(() => {
+    const cached = typeof localStorage !== 'undefined' ? getPOSSnapshot() : null;
+    const savedView = (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('view')) || 'detailed';
+    const currency = cached ? CURRENCIES.find((c) => c.cc == cached?.storeSettings?.currency) : null;
 
-    cartItems: [],
-    customerType: "WALKIN",
-    customer: null,
-    addCustomerDefaultValue: null,
+    return {
+      view: savedView,
+      categories: Array.isArray(cached?.categories) ? cached.categories : [],
+      menuItems: Array.isArray(cached?.menuItems) ? cached.menuItems : [],
+      paymentTypes: Array.isArray(cached?.paymentTypes) ? cached.paymentTypes : [],
+      printSettings: cached?.printSettings || null,
+      storeSettings: cached?.storeSettings || null,
+      storeTables: Array.isArray(cached?.storeTables) ? cached.storeTables : [],
+      serviceCharge: cached?.serviceCharge || null,
+      currency: currency?.symbol || "₦",
+      isLoading: !cached,
 
-    searchQuery: "",
-    selectedCategory: "all",
+      cartItems: [],
+      customerType: "WALKIN",
+      customer: null,
+      addCustomerDefaultValue: null,
 
-    selectedItemId: null,
+      searchQuery: "",
+      selectedCategory: "all",
 
-    drafts: [],
+      selectedItemId: null,
 
-    itemsTotal: 0,
-    taxTotal: 0,
-    serviceChargeTotal:0,
-    payableTotal: 0,
+      drafts: [],
 
-    orderId: null,
-    tokenNo: null,
+      itemsTotal: 0,
+      taxTotal: 0,
+      serviceChargeTotal: 0,
+      payableTotal: 0,
 
-    qrOrdersCount: 0,
-    qrOrders: [],
-    selectedQrOrderItem: null,
+      orderId: null,
+      tokenNo: null,
 
-    selectedPaymentType: null,
-    deliveryType: "dinein",
-    deliveryAddress: "",
-    deliveryFeeTotal: 0,
-    selectedTableId: null,
+      qrOrdersCount: 0,
+      qrOrders: [],
+      selectedQrOrderItem: null,
+
+      selectedPaymentType: null,
+      deliveryType: "dinein",
+      deliveryAddress: "",
+      deliveryFeeTotal: 0,
+      selectedTableId: null,
+    };
   });
 
   const [isSoundMuted, setIsSoundMuted] = useState(() => {
@@ -324,21 +330,21 @@ export default function POSPage() {
     }
 
     try {
-      const res = await initPOS();
-      let totalQROrders = 0;
+      // Parallelize initPOS and getQROrdersCount concurrently for 2x faster network resolution
+      const [res, qrOrdersRes] = await Promise.all([
+        initPOS(),
+        getQROrdersCount().catch((err) => {
+          console.warn("QR orders count non-blocking error:", err);
+          return null;
+        }),
+      ]);
 
-      if(res.status == 200) {
+      if (res && res.status == 200) {
         const data = res.data;
-        savePOSSnapshot(data); // Persist snapshot for offline business continuity
+        savePOSSnapshot(data); // Persist snapshot for offline business continuity & instant reload
 
-        const currency = CURRENCIES.find((c)=>c.cc==data?.storeSettings?.currency);
-
-        try {
-          totalQROrders = await _getQROrdersCount();
-        } catch (error) {
-          console.log(error);
-        }
-
+        const currency = CURRENCIES.find((c) => c.cc == data?.storeSettings?.currency);
+        const totalQROrders = qrOrdersRes?.data?.totalQROrders || 0;
         const savedView = (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('view')) || 'detailed';
 
         setState((prev) => ({
@@ -352,7 +358,7 @@ export default function POSPage() {
           storeTables: Array.isArray(data?.storeTables) ? data.storeTables : [],
           serviceCharge: data?.serviceCharge || null,
           currency: currency?.symbol || "₦",
-          qrOrdersCount: totalQROrders || 0,
+          qrOrdersCount: totalQROrders,
           isLoading: false,
         }));
       }

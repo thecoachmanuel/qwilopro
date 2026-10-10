@@ -50,7 +50,27 @@ const nextConfig = {
           },
         ],
       },
-      // Images
+      // Assets & illustrations
+      {
+        source: '/assets/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=2592000, stale-while-revalidate=86400',
+          },
+        ],
+      },
+      // Localization / translation files
+      {
+        source: '/locales/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=604800, stale-while-revalidate=86400',
+          },
+        ],
+      },
+      // Images & Media
       {
         source: '/images/:path*',
         headers: [
@@ -62,7 +82,7 @@ const nextConfig = {
       },
       // ALL HTML pages — must never be stale so every deploy is instant
       {
-        source: '/((?!_next/static|_next/image|favicon.ico|images/).*)',
+        source: '/((?!_next/static|_next/image|favicon.ico|images/|assets/|locales/|.*\\.(?:png|jpg|jpeg|svg|webp|avif|mp3|ico|json)).*)',
         headers: [
           {
             key: 'Cache-Control',

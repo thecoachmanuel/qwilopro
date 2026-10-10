@@ -20,6 +20,7 @@
     "bcrypt": "^5.1.1",
     "browser-image-compression": "^2.0.2",
     "clsx": "^2.1.0",
+    "compression": "^1.8.2",
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
     "daisyui": "^4.6.1",

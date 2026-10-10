@@ -136,6 +136,7 @@ const menuItemVariantSchema = new mongoose.Schema({
   tenant_id: { type: Number, required: true, index: true },
 });
 applyAutoIncrementId(menuItemVariantSchema, "menu_item_variants");
+menuItemVariantSchema.index({ tenant_id: 1, item_id: 1 });
 
 // 10. MenuItemAddon
 const menuItemAddonSchema = new mongoose.Schema({
@@ -146,6 +147,7 @@ const menuItemAddonSchema = new mongoose.Schema({
   tenant_id: { type: Number, required: true, index: true },
 });
 applyAutoIncrementId(menuItemAddonSchema, "menu_item_addons");
+menuItemAddonSchema.index({ tenant_id: 1, item_id: 1 });
 
 // 11. MenuItemRecipe
 const menuItemRecipeSchema = new mongoose.Schema({
@@ -160,6 +162,7 @@ const menuItemRecipeSchema = new mongoose.Schema({
   updated_at: { type: Date, default: Date.now },
 });
 applyAutoIncrementId(menuItemRecipeSchema, "menu_item_recipes");
+menuItemRecipeSchema.index({ tenant_id: 1, menu_item_id: 1 });
 
 // 12. Customer
 const customerSchema = new mongoose.Schema({
@@ -449,6 +452,7 @@ const qrOrderSchema = new mongoose.Schema({
   tenant_id: { type: Number, required: true, index: true },
 });
 applyAutoIncrementId(qrOrderSchema, "qr_orders");
+qrOrderSchema.index({ tenant_id: 1, status: 1 });
 
 
 // 32. QROrderItem

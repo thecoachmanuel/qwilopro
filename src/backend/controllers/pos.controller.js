@@ -17,59 +17,109 @@ const { createInvoiceDB } = require("../services/orders.service");
 const { getPrinterConfigsDB, addPrinterConfigDB, updatePrinterConfigDB, deletePrinterConfigDB } = require("../services/printer.service");
 const { QROrder } = require("../models");
 
+// In-memory cache for POS Init Data per tenant (30s TTL for instant repeated loads)
+const posInitCache = new Map();
+const POS_CACHE_TTL_MS = 30000;
+
+exports.invalidatePOSInitCache = (tenantId) => {
+  if (tenantId) {
+    posInitCache.delete(Number(tenantId));
+  } else {
+    posInitCache.clear();
+  }
+};
+
 exports.getPOSInitData = async (req, res) => {
   try {
-    const tenantId = req.user.tenant_id;
+    const tenantId = Number(req.user.tenant_id);
 
-    const [categories, paymentTypes, printSettings, storeSettings, storeTables, serviceCharge, printerConfigs] = await Promise.all([
+    // Check high-speed in-memory cache first
+    const cachedEntry = posInitCache.get(tenantId);
+    if (cachedEntry && Date.now() - cachedEntry.timestamp < POS_CACHE_TTL_MS) {
+      res.setHeader("Cache-Control", "private, max-age=5, stale-while-revalidate=30");
+      return res.status(200).json(cachedEntry.data);
+    }
+
+    // Run ALL 11 database queries in a SINGLE parallel Promise.all batch
+    const [
+      categories,
+      paymentTypes,
+      printSettings,
+      storeSettings,
+      storeTables,
+      serviceCharge,
+      printerConfigs,
+      menuItems,
+      addons,
+      variants,
+      recipeItems,
+    ] = await Promise.all([
       getCategoriesDB(tenantId),
       getPaymentTypesDB(true, tenantId),
       getPrintSettingDB(tenantId),
       getStoreSettingDB(tenantId),
       getStoreTablesDB(tenantId),
       getServiceChargeDB(tenantId),
-      getPrinterConfigsDB(tenantId)
-    ]);
-
-    const [menuItems, addons, variants, recipeItems] = await Promise.all([
+      getPrinterConfigsDB(tenantId),
       getAllMenuItemsDB(tenantId),
       getAllAddonsDB(tenantId),
       getAllVariantsDB(tenantId),
-      getAllRecipeItemsDB(tenantId)
+      getAllRecipeItemsDB(tenantId),
     ]);
 
-    const formattedMenuItems = menuItems.map((item) => {
-      const itemAddons = addons.filter((addon) => addon.item_id == item.id);
-      const itemVariants = variants.filter(
-        (variant) => variant.item_id == item.id
-      );
-      const itemRecipeItems = recipeItems.filter(
-        (recipeItem) => recipeItem.menu_item_id == item.id
-      );
+    // O(N) grouping via Maps instead of O(N*M) nested filter scans
+    const addonsByItem = new Map();
+    for (const addon of addons || []) {
+      const key = addon.item_id;
+      if (!addonsByItem.has(key)) addonsByItem.set(key, []);
+      addonsByItem.get(key).push(addon);
+    }
 
-      return {
-        ...item,
-        addons: [...itemAddons],
-        variants: [...itemVariants],
-        recipeItems: [...itemRecipeItems]
-      };
-    });
+    const variantsByItem = new Map();
+    for (const variant of variants || []) {
+      const key = variant.item_id;
+      if (!variantsByItem.has(key)) variantsByItem.set(key, []);
+      variantsByItem.get(key).push(variant);
+    }
 
-    return res.status(200).json({
-      categories,
-      paymentTypes,
-      printSettings,
-      storeSettings,
-      storeTables,
+    const recipesByItem = new Map();
+    for (const recipe of recipeItems || []) {
+      const key = recipe.menu_item_id;
+      if (!recipesByItem.has(key)) recipesByItem.set(key, []);
+      recipesByItem.get(key).push(recipe);
+    }
+
+    const formattedMenuItems = (menuItems || []).map((item) => ({
+      ...item,
+      addons: addonsByItem.get(item.id) || [],
+      variants: variantsByItem.get(item.id) || [],
+      recipeItems: recipesByItem.get(item.id) || [],
+    }));
+
+    const responseData = {
+      categories: categories || [],
+      paymentTypes: paymentTypes || [],
+      printSettings: printSettings || null,
+      storeSettings: storeSettings || null,
+      storeTables: storeTables || [],
       menuItems: formattedMenuItems,
-      serviceCharge,
-      printerConfigs
+      serviceCharge: serviceCharge || null,
+      printerConfigs: printerConfigs || [],
+    };
+
+    // Cache the assembled payload in memory
+    posInitCache.set(tenantId, {
+      timestamp: Date.now(),
+      data: responseData,
     });
+
+    res.setHeader("Cache-Control", "private, max-age=5, stale-while-revalidate=30");
+    return res.status(200).json(responseData);
   } catch (error) {
-    console.error(error);
+    console.error("getPOSInitData Error:", error);
     return res.status(500).json({
       success: false,
-      message: req.__("something_went_wrong_try_later"), // Translate message
+      message: req.__("something_went_wrong_try_later"),
     });
   }
 };

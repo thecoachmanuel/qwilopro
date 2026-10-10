@@ -228,6 +228,23 @@ export default function Navbar() {
     }
   };
 
+  const handlePreload = (path) => {
+    if (path === "/dashboard/pos") {
+      import("../views/POSPage").catch(() => {});
+    } else if (path === "/dashboard/orders") {
+      import("../views/OrdersPage").catch(() => {});
+    } else if (path === "/dashboard/kitchen") {
+      import("../views/KitchenPage").catch(() => {});
+    }
+  };
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      import("../views/POSPage").catch(() => {});
+    }, 1200);
+    return () => clearTimeout(timer);
+  }, []);
+
   if (isNavbarCollapsed) {
     return (
       <div className="flex flex-col items-start gap-4 h-screen px-5 py-6 overflow-y-auto fixed left-0 top-0 bg-restro-green-light">
@@ -241,6 +258,8 @@ export default function Navbar() {
           return (
             <Link
               key={index}
+              onMouseEnter={() => handlePreload(item.path)}
+              onTouchStart={() => handlePreload(item.path)}
               className={clsx(
                 `w-12 h-12 flex items-center justify-center rounded-full transition`,
                 {
@@ -310,6 +329,8 @@ export default function Navbar() {
               <Link
                 key={index}
                 to={item.path}
+                onMouseEnter={() => handlePreload(item.path)}
+                onTouchStart={() => handlePreload(item.path)}
                 className={clsx(
                   `w-12 h-12 md:w-full flex justify-center md:justify-normal items-center md:gap-1 md:px-4 md:py-3 rounded-full transition group`,
                   {
