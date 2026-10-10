@@ -1,4 +1,5 @@
 const axios = require("axios");
+const qrcode = require("qrcode");
 const { SystemSetting } = require("../models");
 const waJobs = require("../services/whatsapp.jobs");
 
@@ -7,14 +8,34 @@ const WA_GATEWAY_URL =
   process.env.WHATSAPP_GATEWAY_URL || "https://nectar-58qj.onrender.com";
 const WA_API_SECRET = process.env.WHATSAPP_API_SECRET || "";
 const WA_SESSION_ID =
-  process.env.WHATSAPP_SESSION_ID || "qwilopro";
-
+  process.env.WHATSAPP_SESSION_ID || "default";
 
 function waHeaders() {
   return {
     "x-api-secret": WA_API_SECRET,
     "Content-Type": "application/json",
   };
+}
+
+// ─── Helper to ensure QR code string is a displayable Data URL ──────────────
+async function formatQRDataUrl(rawQr) {
+  if (!rawQr) return null;
+  const str = String(rawQr).trim();
+  if (str.startsWith("data:image/")) {
+    return str;
+  }
+  // If raw base64 PNG without data: prefix
+  if (str.startsWith("iVBORw0KGgo")) {
+    return `data:image/png;base64,${str}`;
+  }
+  // If raw Baileys pairing string (e.g. 2@...)
+  try {
+    const dataUrl = await qrcode.toDataURL(str, { width: 300, margin: 2 });
+    return dataUrl;
+  } catch (err) {
+    console.warn("Failed to generate QR DataURL from raw string:", err.message);
+    return str;
+  }
 }
 
 // ─── Phone Normalization Helper ─────────────────────────────────────────────
@@ -115,22 +136,68 @@ async function getWhatsAppStatus(req, res) {
   try {
     let statusData = null;
 
+    // 1. Try configured session status
     try {
       const sessionRes = await axios.get(
         `${WA_GATEWAY_URL}/sessions/${WA_SESSION_ID}/status`,
         { headers: waHeaders(), timeout: 10000 }
       );
-      statusData = sessionRes.data;
-    } catch (err) {
-      // Fallback to global /status if session route fails
+      if (
+        sessionRes.data &&
+        (sessionRes.data.connected ||
+          sessionRes.data.qrReady ||
+          sessionRes.data.connection === "open" ||
+          sessionRes.data.connection === "qr_pending")
+      ) {
+        statusData = sessionRes.data;
+      }
+    } catch (_) {}
+
+    // 2. Fallback to default session if configured session isn't ready/open
+    if (
+      !statusData ||
+      (!statusData.connected &&
+        !statusData.qrReady &&
+        statusData.connection !== "open" &&
+        statusData.connection !== "qr_pending")
+    ) {
+      if (WA_SESSION_ID !== "default") {
+        try {
+          const defaultRes = await axios.get(
+            `${WA_GATEWAY_URL}/sessions/default/status`,
+            { headers: waHeaders(), timeout: 10000 }
+          );
+          if (
+            defaultRes.data &&
+            (defaultRes.data.connected ||
+              defaultRes.data.qrReady ||
+              defaultRes.data.connection === "open" ||
+              defaultRes.data.connection === "qr_pending")
+          ) {
+            statusData = defaultRes.data;
+          }
+        } catch (_) {}
+      }
+    }
+
+    // 3. Fallback to global /status
+    if (
+      !statusData ||
+      (!statusData.connected &&
+        !statusData.qrReady &&
+        statusData.connection !== "open" &&
+        statusData.connection !== "qr_pending")
+    ) {
       try {
         const globalRes = await axios.get(`${WA_GATEWAY_URL}/status`, {
           headers: waHeaders(),
           timeout: 10000,
         });
-        statusData = globalRes.data;
-      } catch (innerErr) {
-        throw err;
+        if (globalRes.data) {
+          statusData = globalRes.data;
+        }
+      } catch (err) {
+        if (!statusData) throw err;
       }
     }
 
@@ -165,27 +232,62 @@ async function getWhatsAppQR(req, res) {
   try {
     let qrData = null;
 
+    // 1. Try configured session QR
     try {
       const sessionRes = await axios.get(
         `${WA_GATEWAY_URL}/sessions/${WA_SESSION_ID}/qr`,
         { headers: waHeaders(), timeout: 10000 }
       );
-      qrData = sessionRes.data;
-    } catch (err) {
+      if (sessionRes.data && sessionRes.data.qr) {
+        qrData = sessionRes.data;
+      }
+    } catch (_) {}
+
+    // 2. Fallback to default session QR
+    if (!qrData || !qrData.qr) {
+      if (WA_SESSION_ID !== "default") {
+        try {
+          const defaultRes = await axios.get(
+            `${WA_GATEWAY_URL}/sessions/default/qr`,
+            { headers: waHeaders(), timeout: 10000 }
+          );
+          if (defaultRes.data && defaultRes.data.qr) {
+            qrData = defaultRes.data;
+          }
+        } catch (_) {}
+      }
+    }
+
+    // 3. Fallback to global /qr
+    if (!qrData || !qrData.qr) {
       try {
         const globalRes = await axios.get(`${WA_GATEWAY_URL}/qr`, {
           headers: waHeaders(),
           timeout: 10000,
         });
-        qrData = globalRes.data;
+        if (globalRes.data && globalRes.data.qr) {
+          qrData = globalRes.data;
+        }
       } catch (innerErr) {
-        throw err;
+        if (!qrData) throw innerErr;
       }
     }
 
-    return res.json({
-      success: true,
-      data: qrData,
+    if (qrData && qrData.qr) {
+      const formattedQr = await formatQRDataUrl(qrData.qr);
+      return res.json({
+        success: true,
+        data: {
+          ...qrData,
+          qr: formattedQr,
+        },
+      });
+    }
+
+    return res.status(202).json({
+      success: false,
+      message: "QR code generating... please refresh in a moment.",
+      data: qrData || { connection: "connecting" },
     });
   } catch (err) {
     const status = err?.response?.status || 503;
@@ -210,12 +312,25 @@ async function connectSession(req, res) {
       );
       responseData = response.data;
     } catch (err) {
-      // Fallback
-      const globalRes = await axios.get(`${WA_GATEWAY_URL}/status`, {
-        headers: waHeaders(),
-        timeout: 10000,
-      });
-      responseData = globalRes.data;
+      // Fallback to default session start
+      try {
+        const defRes = await axios.post(
+          `${WA_GATEWAY_URL}/sessions/default/start`,
+          {},
+          { headers: waHeaders(), timeout: 15000 }
+        );
+        responseData = defRes.data;
+      } catch (_) {
+        const globalRes = await axios.get(`${WA_GATEWAY_URL}/status`, {
+          headers: waHeaders(),
+          timeout: 10000,
+        });
+        responseData = globalRes.data;
+      }
+    }
+
+    if (responseData?.qr) {
+      responseData.qr = await formatQRDataUrl(responseData.qr);
     }
 
     return res.json({
@@ -243,18 +358,20 @@ async function disconnectSession(req, res) {
         { headers: waHeaders(), timeout: 15000 }
       );
       result = sessionRes.data;
-    } catch (err) {
+    } catch (_) {}
+
+    try {
       const globalRes = await axios.post(
         `${WA_GATEWAY_URL}/logout`,
         {},
         { headers: waHeaders(), timeout: 15000 }
       );
-      result = globalRes.data;
-    }
+      result = result || globalRes.data;
+    } catch (_) {}
 
     return res.json({
       success: true,
-      message: "Qwilo Pro WhatsApp disconnected successfully.",
+      message: "Qwilo Pro WhatsApp disconnected successfully. QR code will regenerate.",
       data: result,
     });
   } catch (err) {

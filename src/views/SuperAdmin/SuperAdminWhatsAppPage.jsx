@@ -188,13 +188,13 @@ export default function SuperAdminWhatsAppPage() {
     };
   }, []);
 
-  // Poll status when in connecting state
+  // Poll status when in connecting or qr_pending state
   useEffect(() => {
-    if (connectionStatus === "connecting" || (!isConnected && qrCodeImg)) {
+    if (!isConnected && (connectionStatus === "connecting" || connectionStatus === "qr_pending" || qrCodeImg)) {
       if (pollTimerRef.current) clearInterval(pollTimerRef.current);
       pollTimerRef.current = setInterval(() => {
         checkStatusSilently();
-      }, 3500);
+      }, 3000);
     } else {
       if (pollTimerRef.current) clearInterval(pollTimerRef.current);
     }
@@ -216,7 +216,7 @@ export default function SuperAdminWhatsAppPage() {
         setConnectionStatus(connected ? "open" : data?.connection || "disconnected");
         setPhoneInfo(data?.phone || null);
 
-        if (!connected && (data?.qrReady || data?.connection === "connecting")) {
+        if (!connected) {
           fetchQR();
         } else if (connected) {
           setQrCodeImg(null);
@@ -242,7 +242,7 @@ export default function SuperAdminWhatsAppPage() {
           setQrCodeImg(null);
           toast.success("Qwilo Pro WhatsApp connected successfully!");
           if (pollTimerRef.current) clearInterval(pollTimerRef.current);
-        } else if (!qrCodeImg && data?.qrReady) {
+        } else if (!qrCodeImg && (data?.qrReady || data?.connection === "qr_pending" || data?.connection === "connecting")) {
           fetchQR();
         }
       }
@@ -255,7 +255,7 @@ export default function SuperAdminWhatsAppPage() {
       const res = await getWhatsAppQR();
       if (res?.success && res.data?.qr) {
         setQrCodeImg(res.data.qr);
-        setConnectionStatus("connecting");
+        setConnectionStatus("qr_pending");
       }
     } catch (err) {
       console.warn("QR fetch warning:", err?.message);
@@ -273,10 +273,14 @@ export default function SuperAdminWhatsAppPage() {
       toast.success(res?.message || "Session started. Fetching QR code...");
       setConnectionStatus("connecting");
 
-      // Wait a moment for Baileys to output the QR string
-      setTimeout(() => {
+      if (res?.data?.qr) {
+        setQrCodeImg(res.data.qr);
+        setConnectionStatus("qr_pending");
+      } else {
         fetchQR();
-      }, 1500);
+        setTimeout(fetchQR, 2000);
+        setTimeout(fetchQR, 4000);
+      }
     } catch (err) {
       toast.dismiss();
       toast.error(err?.response?.data?.message || "Failed to start WhatsApp session");
@@ -1111,8 +1115,20 @@ export default function SuperAdminWhatsAppPage() {
                     disabled={isQrLoading}
                     className="text-xs text-restro-green hover:underline flex items-center gap-1"
                   >
-                    <IconRefresh size={14} /> Refresh QR Code if expired
+                    <IconRefresh size={14} className={clsx({ "animate-spin": isQrLoading })} /> Refresh QR Code if expired
                   </button>
+                </div>
+              ) : isQrLoading || isConnecting ? (
+                <div className="flex flex-col items-center py-12">
+                  <div className="w-20 h-20 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-500 flex items-center justify-center mb-4">
+                    <IconRefresh stroke={iconStroke} size={36} className="animate-spin" />
+                  </div>
+                  <h3 className="text-lg font-bold text-restro-text dark:text-white mb-2">
+                    Loading WhatsApp QR Code...
+                  </h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 max-w-xs mb-6">
+                    Connecting to the WhatsApp gateway session. Your scan code will appear here in just a moment.
+                  </p>
                 </div>
               ) : (
                 <div className="flex flex-col items-center py-12">

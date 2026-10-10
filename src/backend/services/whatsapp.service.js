@@ -5,7 +5,7 @@ const { Tenant, StoreDetails, User, SystemSetting } = require("../models");
 const WA_GATEWAY_URL =
   process.env.WHATSAPP_GATEWAY_URL || "https://nectar-58qj.onrender.com";
 const WA_API_SECRET = process.env.WHATSAPP_API_SECRET || "";
-const WA_SESSION_ID = process.env.WHATSAPP_SESSION_ID || "qwilopro";
+const WA_SESSION_ID = process.env.WHATSAPP_SESSION_ID || "default";
 
 function waHeaders() {
   return {
@@ -64,6 +64,17 @@ async function sendDirectWhatsApp(phone, message) {
     );
     return { success: true, data: res.data };
   } catch (err) {
+    // Try default session route
+    if (WA_SESSION_ID !== "default") {
+      try {
+        const res = await axios.post(
+          `${WA_GATEWAY_URL}/sessions/default/send`,
+          { phone: cleanPhone, message },
+          { headers: waHeaders(), timeout: 20000 }
+        );
+        return { success: true, data: res.data };
+      } catch (_) {}
+    }
     // Fallback to root /send if session route fails
     try {
       const res = await axios.post(

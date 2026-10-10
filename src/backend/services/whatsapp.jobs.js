@@ -17,7 +17,7 @@ const { SystemSetting } = require("../models");
 const WA_GATEWAY_URL =
   process.env.WHATSAPP_GATEWAY_URL || "https://nectar-58qj.onrender.com";
 const WA_API_SECRET = process.env.WHATSAPP_API_SECRET || "";
-const WA_SESSION_ID = process.env.WHATSAPP_SESSION_ID || "qwilopro";
+const WA_SESSION_ID = process.env.WHATSAPP_SESSION_ID || "default";
 
 function waHeaders() {
   return {
@@ -139,19 +139,34 @@ async function runBroadcastJob(job, phones, message, minDelayMs, maxDelayMs) {
       );
       job.sentCount++;
     } catch (err) {
-      try {
-        await axios.post(
-          `${WA_GATEWAY_URL}/send`,
-          { phone, message },
-          { headers: waHeaders(), timeout: 15000 }
-        );
-        job.sentCount++;
-      } catch (innerErr) {
-        job.failedCount++;
-        job.errors.push({
-          phone,
-          error: innerErr?.response?.data?.message || innerErr.message,
-        });
+      let sent = false;
+      if (WA_SESSION_ID !== "default") {
+        try {
+          await axios.post(
+            `${WA_GATEWAY_URL}/sessions/default/send`,
+            { phone, message },
+            { headers: waHeaders(), timeout: 15000 }
+          );
+          job.sentCount++;
+          sent = true;
+        } catch (_) {}
+      }
+
+      if (!sent) {
+        try {
+          await axios.post(
+            `${WA_GATEWAY_URL}/send`,
+            { phone, message },
+            { headers: waHeaders(), timeout: 15000 }
+          );
+          job.sentCount++;
+        } catch (innerErr) {
+          job.failedCount++;
+          job.errors.push({
+            phone,
+            error: innerErr?.response?.data?.message || innerErr.message,
+          });
+        }
       }
     }
 
